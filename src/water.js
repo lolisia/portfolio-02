@@ -1,0 +1,123 @@
+import * as T from 'three';
+import {Reflector} from 'three/addons/objects/Reflector.js';
+
+export function makeWater(height,level){
+  const geometry=new T.PlaneGeometry(10,9,136,120);
+  const positions=geometry.attributes.position,depth=[];
+  for(let i=0;i<positions.count;i++)depth.push(level-height(10+positions.getX(i),6.1-positions.getY(i)));
+  geometry.setAttribute('bedDepth',new T.Float32BufferAttribute(depth,1));
+  const water=new Reflector(geometry,{textureWidth:640,textureHeight:512,multisample:0,clipBias:.001});
+  water.rotation.x=-Math.PI/2;water.position.set(10,level,6.1);
+  water.userData.impacts=Array.from({length:18},()=>new T.Vector4(0,0,-100,0));
+  water.userData.freeze={value:0};
+  let nextImpact=0;
+  water.userData.splash=(x,z,seconds,power)=>{
+    water.userData.impacts[nextImpact].set(x,z,seconds,power);
+    nextImpact=(nextImpact+1)%water.userData.impacts.length;
+  };
+  const savedClear=new T.Color();
+  water.userData.reflection=water.material.uniforms;
+  water.material=new T.MeshStandardMaterial({color:0xffffff,roughness:.17,transparent:true,depthWrite:true});
+  water.receiveShadow=true;water.renderOrder=1;
+  const reflect=water.onBeforeRender;
+  water.onBeforeRender=function(renderer,scene,camera){
+    const background=scene.background;
+    const alpha=renderer.getClearAlpha();renderer.getClearColor(savedClear);
+    scene.background=null;renderer.setClearColor(0,0);
+    try{reflect.call(this,renderer,scene,camera)}finally{
+      scene.background=background;renderer.setClearColor(savedClear,alpha);
+    }
+  };
+  return water;
+}
+
+// Advected, differently oriented noise patches have finite crests and no common wavelength.
+const waves=`
+  float pondHash(vec2 q){
+    vec3 p=fract(q.xyx*vec3(.1031,.1030,.0973));p+=dot(p,p.yzx+33.33);
+    return fract((p.x+p.y)*p.z);
+  }
+  vec3 pondNoise(vec2 p){
+    vec2 i=floor(p),f=fract(p),u=f*f*f*(f*(f*6.-15.)+10.);
+    vec2 du=30.*f*f*(f-1.)*(f-1.);
+    float a=pondHash(i),b=pondHash(i+vec2(1,0)),c=pondHash(i+vec2(0,1)),d=pondHash(i+1.);
+    float k=a-b-c+d;
+    return vec3(a+(b-a)*u.x+(c-a)*u.y+k*u.x*u.y-.5,
+      du.x*(b-a+k*u.y),du.y*(c-a+k*u.x));
+  }
+  vec3 waterWaves(vec2 q,float t,float windPower){
+    vec3 total=vec3(0.);
+    mat2 axes=mat2(.86,.51,-.51,.86);
+    float freq=.88,amp=.045;
+    for(int i=0;i<4;i++){
+      mat2 m=mat2(1.,0.,0.,1.48)*axes*freq;
+      vec3 n=pondNoise(m*q+vec2(-.28,.17)*t*(.7+.24*float(i))+vec2(float(i)*31.71));
+      total+=amp*vec3(n.x,n.yz*m);
+      axes=axes*mat2(.48,.877,-.877,.48);freq*=2.03;amp*=.43;
+    }
+    return total*(.34+windPower*1.12);
+  }`;
+export function shadeWater(shader,water){
+  const capture=water.userData.reflection;
+  shader.uniforms.pondIce=water.userData.freeze;
+  Object.assign(shader.uniforms,{impacts:{value:water.userData.impacts},reflectionMap:capture.tDiffuse,reflectionMatrix:capture.textureMatrix,radianceMap:{value:water.userData.skyTexture}});
+  shader.vertexShader=waves+'uniform float pondIce; attribute float bedDepth; varying float depthBelow; varying vec4 mirrorCoord; uniform mat4 reflectionMatrix;\n'+shader.vertexShader.replace('#include <begin_vertex>',`
+    #include <begin_vertex>
+    vec3 base=(modelMatrix*vec4(position,1.)).xyz;
+    float bank=smoothstep(.0,.24,bedDepth)*(1.-smoothstep(14.45,15.,base.x));
+    transformed.z+=waterWaves(base.xz,elapsed,breeze).x*bank*(1.-pondIce);
+    depthBelow=bedDepth;mirrorCoord=reflectionMatrix*vec4(transformed,1.);`);
+  shader.fragmentShader=waves+'uniform float pondIce; uniform vec4 impacts[18]; uniform sampler2D radianceMap; uniform sampler2D reflectionMap; varying float depthBelow; varying vec4 mirrorCoord;\n'+shader.fragmentShader;
+  shader.fragmentShader=shader.fragmentShader.replace('#include <color_fragment>',`
+    #include <color_fragment>
+    vec2 q=landPosition.xz;
+    float depth=max(0.,depthBelow);
+    vec2 slope=waterWaves(q,elapsed,breeze).yz;
+    float footprint=max(length(dFdx(q)),length(dFdy(q)));
+    float resolved=1.-smoothstep(.022,.11,footprint);
+    vec3 fine=pondNoise(q*vec2(23.,18.)+vec2(-1.1,.75)*elapsed);
+    slope+=fine.yz*.024*resolved*breeze;
+    float unresolved=(1.-resolved)*.004*breeze;
+    for(int i=0;i<18;i++){
+      float age=elapsed-impacts[i].z;
+      if(age>=0.&&age<1.2){
+        vec2 delta=q-impacts[i].xy;float r=length(delta),crest=r-age*.78;
+        float pulse=sin(crest*57.)*exp(-abs(crest)*22.)*(1.-smoothstep(.0,1.2,age));
+        slope+=delta/max(.016,r)*pulse*impacts[i].w;
+      }
+    }
+    slope*=1.-pondIce;unresolved*=1.-pondIce;
+    vec3 waterNormal=normalize(vec3(-slope.x,1.,-slope.y));
+    float shallow=exp(-7.5*depth);
+    diffuseColor.rgb=mix(vec3(.003,.020,.038),vec3(.07,.146,.132),shallow);
+    diffuseColor.a=mix(.85,.36,shallow);
+    vec2 cell=floor(q*1.3),local=fract(q*1.3);
+    float nearest=10.,second=10.;
+    for(int ix=-1;ix<=1;ix++)for(int iz=-1;iz<=1;iz++){
+      vec2 offset=vec2(float(ix),float(iz));
+      vec2 seed=vec2(pondHash(cell+offset),pondHash(cell+offset+19.7));
+      float dist=length(offset+seed-local);
+      if(dist<nearest){second=nearest;nearest=dist;}else second=min(second,dist);
+    }
+    float fracture=1.-smoothstep(.008,.038,second-nearest);
+    float frost=smoothstep(-.3,.38,pondNoise(q*.85).x);
+    vec3 iceColor=vec3(.24,.38,.40)+frost*vec3(.20,.23,.23)+fracture*.11;
+    diffuseColor.rgb=mix(diffuseColor.rgb,iceColor,pondIce);
+    diffuseColor.a=mix(diffuseColor.a,1.,pondIce);`);
+  shader.fragmentShader=shader.fragmentShader.replace('#include <lights_physical_fragment>',
+    'roughnessFactor=clamp(sqrt(roughnessFactor*roughnessFactor+unresolved*.48),.065,.48);roughnessFactor=mix(roughnessFactor,.46,pondIce);\n#include <lights_physical_fragment>');
+  shader.fragmentShader=shader.fragmentShader.replace('#include <normal_fragment_maps>',`
+    #include <normal_fragment_maps>
+    normal=normalize(mat3(viewMatrix)*waterNormal);`);
+  shader.fragmentShader=shader.fragmentShader.replace('#include <opaque_fragment>',`
+    vec4 capture=texture2D(reflectionMap,clamp(mirrorCoord.xy/mirrorCoord.w+(mat3(viewMatrix)*vec3(-slope.x,0.,-slope.y)).xy*.036,.002,.998));
+    vec3 eye=inverseTransformDirection(vec3(0.,0.,1.),viewMatrix);
+    vec3 skyRay=reflect(-eye,waterNormal);
+    vec3 sky=texture2D(radianceMap,equirectUv(skyRay)).rgb;
+    vec3 reflected=capture.rgb+sky*(1.-capture.a);
+    float fresnel=.022+.978*pow(1.-max(0.,dot(waterNormal,eye)),5.);
+    vec3 body=outgoingLight-reflectedLight.directSpecular-reflectedLight.indirectSpecular;
+    outgoingLight=mix(body,reflected,fresnel*(1.-pondIce*.8))+reflectedLight.directSpecular*mix(.60,.3,pondIce);
+    #include <opaque_fragment>`);
+}
+

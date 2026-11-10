@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#a7bac6"><title>숲속 농가 · 타일 디오라마</title>
+<link rel="stylesheet" href="/src/style.css">
+</head>
+<body><main>
+<canvas id="world" aria-label="드래그로 회전하고 스크롤로 확대하는 숲속 농가 디오라마"></canvas>
+<section id="panel" aria-label="환경 제어">
+  <button type="button" id="panelToggle" aria-expanded="false" aria-controls="panelBody">
+    <span>환경 설정</span><span class="toggle-action"><span id="toggleLabel">펼치기</span><i aria-hidden="true"></i></span>
+  </button>
+  <div id="panelBody" hidden>
+    <div class="control-row">
+      <div class="control">
+        <div class="caption"><label for="time">시각</label><output id="hourText" for="time">08:30</output></div>
+        <input type="range" id="time" min="0" max="24" step="0.016666666666666666" value="8.5">
+        <label class="auto"><input type="checkbox" id="autoTime">시간 자동 진행 <small>120초 / 하루</small></label>
+      </div>
+      <canvas class="motion horizon" aria-hidden="true"></canvas>
+    </div>
+    <div class="control-row">
+      <div class="control"><div class="caption"><label for="wind">바람</label><output id="windText" for="wind">3 m/s</output></div>
+        <input type="range" id="wind" min="0" max="16" value="3" step=".5"></div>
+      <canvas class="motion breeze" aria-hidden="true"></canvas>
+    </div>
+    <div class="control-row">
+      <fieldset id="weather" class="control"><legend>날씨</legend><div class="options">
+        <label><input type="radio" name="weather" value="0" checked><span>맑음</span></label>
+        <label><input type="radio" name="weather" value="1"><span>흐림</span></label>
+        <label><input type="radio" name="weather" value="2"><span>비</span></label>
+        <label><input type="radio" name="weather" value="3"><span>안개</span></label>
+        <label><input type="radio" name="weather" value="4"><span>눈</span></label>
+        <label><input type="radio" name="weather" value="5"><span>눈보라</span></label>
+      </div></fieldset>
+      <canvas class="motion forecast" aria-hidden="true"></canvas>
+    </div>
+    <div class="panel-footer"><fieldset id="season"><legend>계절</legend><div class="options">
+      <label><input type="radio" name="season" value="0"><span>봄</span></label>
+      <label><input type="radio" name="season" value="1" checked><span>여름</span></label>
+      <label><input type="radio" name="season" value="2"><span>가을</span></label>
+      <label><input type="radio" name="season" value="3"><span>겨울</span></label>
+    </div></fieldset><button id="reset" type="button">처음 시점</button></div>
+  </div>
+</section>
+<a id="credit" href="https://unity-chan.com/contents/license_en/" target="_blank" rel="noopener">SD Unity-chan © Unity Technologies Japan/UCL</a>
+</main><script type="module" src="/src/main.js"></script></body></html>
