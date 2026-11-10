@@ -52,7 +52,7 @@ function findSpots(world,paths){
   return {beds,shore};
 }
 
-export function createUnityChan(scene,world){
+export function createUnityChan(scene,world,onReady=()=>{}){
   const paths=createFarmPaths(world),spots=findSpots(world,paths);
   const door={x:-1,z:-.25},apron={x:-1,z:.75};
   const root=new T.Group();root.name='sd-unity-chan';root.visible=false;scene.add(root);
@@ -100,7 +100,7 @@ export function createUnityChan(scene,world){
     const box=new T.Box3();model.updateMatrixWorld(true);box.setFromObject(model,true);
     model.scale.multiplyScalar(HEIGHT/box.getSize(new T.Vector3()).y);
     model.updateMatrixWorld(true);box.setFromObject(model,true);model.position.y-=box.min.y;
-    ready=true;
+    ready=true;onReady();
   },undefined,e=>console.warn('SD Unity-chan failed to load',e));
 
   function play(name,fade=.3){

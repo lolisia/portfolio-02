@@ -43,7 +43,8 @@ const cascade=makeCascade(world);scene.add(cascade);
 const atmosphere=createAtmosphere(scene,world);
 const seasons=createSeasons(scene,world,atmosphere);
 const farmLife=createFarmLife(scene,world);
-const unityChan=createUnityChan(scene,world);
+let unityChanLoaded;const unityChanReady=new Promise(r=>unityChanLoaded=r);
+const unityChan=createUnityChan(scene,world,unityChanLoaded);
 const setSky=createSky(renderer,scene,world.water);
 const volume=createVolume(renderer,world,sun,atmosphere.cloudMap);
 const glowCanvas=document.createElement('canvas');glowCanvas.width=glowCanvas.height=128;
@@ -101,8 +102,10 @@ function lighting(){
   volume.set(t,w,weatherBlend.density);atmosphere.set(t,w,weatherBlend.rain);
   surface('glass').emissiveIntensity=.025+nightLevel*2.5;
   for(const {spot,glow} of lanterns){
-    spot.intensity=34*nightLevel;spot.visible=nightLevel>.01;
-    glow.visible=spot.visible;glow.material.opacity=nightLevel*.78;
+    // Lantern spots stay in the scene all day at zero intensity: toggling them would change the
+    // light count and force every material to recompile at dusk.
+    spot.intensity=34*nightLevel;
+    glow.visible=nightLevel>.01;glow.material.opacity=nightLevel*.78;
   }
   flies.visible=nightLevel>.6&&weatherIndex<2&&seasonIndex===1;windowLight.intensity=9*nightLevel;
   const minutes=Math.round(hour*60),label=String(Math.floor(minutes/60)).padStart(2,'0')+':'+String(minutes%60).padStart(2,'0');
@@ -151,6 +154,20 @@ document.querySelector('#season').onchange=e=>{seasonIndex=Number(e.target.value
 document.querySelector('#reset').onclick=home;
 function resize(){const w=innerWidth,h=innerHeight,aspect=w/h,span=Math.max(31.5,46/aspect);camera.left=-span*aspect/2;camera.right=-camera.left;camera.top=span/2;camera.bottom=-camera.top;camera.updateProjectionMatrix();renderer.setSize(w,h,false);volume.resize(w,h)}
 window.addEventListener('resize',resize);resize();
+// Shader warm-up: anything that only appears later (lantern spotlights at dusk, rain, snow,
+// petals, fireflies, Unity-chan) changes light counts or adds materials, which makes three.js
+// compile programs mid-game. Draw one hidden frame with all of it switched on instead.
+function warmUp(){
+  const hidden=[];scene.traverse(o=>{if(!o.visible){hidden.push(o);o.visible=true}});
+  const saved=lanterns.map(({spot})=>spot.intensity);
+  for(const {spot} of lanterns){spot.intensity=1;spot.shadow.needsUpdate=true}
+  renderer.shadowMap.needsUpdate=true;
+  volume.render(scene,camera,0);
+  for(const o of hidden)o.visible=false;
+  lanterns.forEach(({spot},i)=>spot.intensity=saved[i]);
+  lighting();
+}
+warmUp();unityChanReady.then(warmUp);
 let previous=0,frameIndex=0;
 renderer.shadowMap.autoUpdate=false;
 renderer.setAnimationLoop(ms=>{
