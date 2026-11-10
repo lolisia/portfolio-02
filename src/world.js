@@ -2,6 +2,7 @@ import * as T from 'three';
 import {dressGround} from './ground.js';
 import {makeWater} from './water.js';
 import {builder,modules} from './modules.js';
+import {createColliders} from './colliders.js';
 
 export function buildWorld(scene,b){
   const {rand:r,pick,place,part:p}=b, kit=modules(b);
@@ -40,12 +41,18 @@ export function buildWorld(scene,b){
   }
   const water=makeWater(height,waterY);scene.add(water);
   const at=(x,z,scale,angle,fn)=>place(x,height(x,z),z,scale,angle,fn);
-  const obstacles=[];
+  const obstacles=[],bushes=[],stumps=[],colliders=createColliders();
   function occupy(x,z,rad){obstacles.push([x,z,rad])}
   function free(x,z,pad=0){return obstacles.every(([a,c,d])=>(x-a)**2+(z-c)**2>(d+pad)**2)}
   const props=[[-1,-1.8,1,0],[2.25,-1.92,1,.025],[4.45,-1.9,1,-.035]];
   props.forEach(([x,z,s,a],i)=>{at(x,z,s,a,()=>kit.house(i>0,i===1));occupy(x,z,i?1.4:1.95)});
-  for(const [x,z] of [[1.1,3.3],[2.7,3.3],[-7,-9.5],[-5.45,-9.5]]){at(x,z,1,0,kit.bed);occupy(x,z,1)}
+  // Collision footprints: house walls, plus the coop / shed ramps in front of their doors.
+  props.forEach(([x,z,s,a],i)=>{
+    const w=i?1.76:2.92,d=i?1.82:2.66,tag=i===1?'coop':'';
+    colliders.box(x,z,w*s,d*s,a,tag);
+    if(i){const f=d/2+.6;colliders.box(x+Math.sin(a)*f,z+Math.cos(a)*f,.86,1.2,a,tag)}
+  });
+  for(const [x,z] of [[1.1,3.3],[2.7,3.3],[-7,-9.5],[-5.45,-9.5]]){at(x,z,1,0,kit.bed);occupy(x,z,1);colliders.box(x,z,1.32,1.72,0,'bed')}
   const paths=[];
   function path(ax,az,bx,bz,stair=false){
     const len=Math.hypot(ax-bx,az-bz),count=Math.ceil(len/(stair?.46:.73));
@@ -60,17 +67,18 @@ export function buildWorld(scene,b){
   place(13.7,waterY+.48,6.1,1,0,()=>kit.bridge(3.9));
   const treeList=[[-13,-12,1.40],[-10.8,-13.9,1.02],[-9,-12.1,1.22],[-5,-13.5,1.26],[-1.8,-13,1.28],[2,-13.6,1.45],[5.6,-12.1,1.12],[9.5,-12.8,1.35],[12.5,-10,1.45],[-13,-8.7,1.18],[-11,-6.4,1.25],[-13,-3.8,1.52],[-12,.2,1.13],[-13.4,3.7,1.21],[-11.8,7.2,1.28],[-13,11.4,1.35],[-8.9,12.7,1.27],[-5,13.1,1.36],[-1.4,12.1,1.05],[3.1,13.2,1.24],[7.4,12.7,1.13],[12.1,11.8,1.25],[12.2,.1,1.28],[10.5,-3.5,1.16],[12.5,-5.6,1.1],[-6.1,1.8,.76],[-3.95,2.0,.69],[-8.5,6.2,.83],[6.1,-8.2,.88],[.4,-9.8,1.08],[-9, -2.7,.77]];
   dressGround(ground,cv,treeList,paths,wet);
-  treeList.forEach(([x,z,s],i)=>{at(x,z,s,r()*6,()=>b.canopy(()=>kit.tree([3,6,12,24,29].includes(i))));occupy(x,z,.58*s)});
+  treeList.forEach(([x,z,s],i)=>{at(x,z,s,r()*6,()=>b.canopy(()=>kit.tree([3,6,12,24,29].includes(i))));occupy(x,z,.58*s);colliders.circle(x,z,.32*s,'tree')});
   function clear(x,z){return free(x,z,.16)&&wet(x,z)<-.13&&!paths.some(([a,c])=>(a-x)**2+(c-z)**2<.42)}
   for(let i=0;i<440;i++){const x=r()*29.2-14.6,z=r()*29.2-14.6;if(!clear(x,z))continue;
     if(i%4===0){at(x,z,.6+r()*.76,r()*6,kit.flowers)}
     else if(i%5===0){for(let j=0;j<5;j++){const a=x+(r()-.5)*.75,c=z+(r()-.5)*.75,s=.18+r()*.5;p('boulder',a,height(a,c)+s*.16,c,s,s*.74,s*.88,pick(['#82877a','#989c87','#747b73','#a3a48d']),0,r()*5)}}
-    else if(i%6===0){for(let j=0;j<9;j++){const a=x+(r()-.5)*.8,c=z+(r()-.5)*.8;p('rock',a,height(a,c)+.21,c,.48,.47+r()*.26,.52,pick(['#607d3d','#7e9949','#8b9f4f']),0,r()*5)}}
+    else if(i%6===0){const kind=r()>.5?'bushA':'bushB',s=.8+r()*.55,turn=r()*6.28;
+      p(kind+'Twigs',x,height(x,z)-.02,z,s,s,s,'#5b4632',0,turn);p(kind+'Leaves',x,height(x,z)-.02,z,s,s*(.85+r()*.3),s,pick(['#6f8d40','#7e9949','#8b9f4f']),0,turn);bushes.push([x,z,.42*s])}
   }
   for(let i=0;i<9500;i++){const x=r()*29.85-14.925,z=r()*29.85-14.925;if(!clear(x,z)||Math.sin(x*1.45+Math.cos(z*2))+Math.sin(z*1.2+x*.6)<-.72)continue;
-    for(let j=0;j<3;j++){const a=x+(r()-.5)*.2,c=z+(r()-.5)*.2,h=.07+r()*.22;p('cone',a,height(a,c)+h*.45,c,.04+r()*.07,h,.055,pick(['#536e37','#718a40','#98aa58','#899d4c']),0,r()*5,(r()-.5)*.64)}
+    {const s=.35+r()*.55;p(pick(['grass0','grass1','grass2']),x,height(x,z)-.01,z,s,s*(.7+r()*.6),s,pick(['#536e37','#718a40','#98aa58','#899d4c']),0,r()*6.28)}
   }
-  for(const [x,z] of [[-8.5,-4.2],[7.6,10.4],[-6,8]]){at(x,z,1,r()*2,()=>{p('trunk',0,.27,0,.48,1.67,.5,'#6c4f32',0,0,1.50);p('trunk',.835,.22,0,.39,.028,.39,'#c4a471',0,0,1.50)})}
+  for(const [x,z] of [[-8.5,-4.2],[7.6,10.4],[-6,8]]){at(x,z,1,r()*6.28,()=>{p('stumpBark',0,-.04,0,1,1,1,'#7a5a3a');p('stumpTop',0,-.04,0,1,1,1,'#d1b07a')});occupy(x,z,.45);stumps.push([x,z,.4])}
   // Gravel in the shallows and clumps of reeds give the transparent shoreline scale.
   for(let i=0;i<850;i++){
     const x=6+r()*8.75,z=2.45+r()*8,depth=waterY-height(x,z);
@@ -80,13 +88,13 @@ export function buildWorld(scene,b){
     if(depth<.17 && Math.sin(x*1.8+z*.62)>.48){
       for(let k=0;k<5;k++){
         const a=x+(r()-.5)*.23,c=z+(r()-.5)*.21,h=.26+r()*.37;
-        p('cone',a,height(a,c)+h*.46,c,.052,h,.045,pick(['#768449','#8c9751','#516f42']),0,r()*5,(r()-.5)*.57);
+        p('reed',a,height(a,c)-.02,c,.7,h*1.6,.7,pick(['#768449','#8c9751','#516f42']),0,r()*6.28);
       }
     }
   }
   const lamps=[];
   for(const [x,z,angle] of [[-6.1,-7.35,0],[-3.75,-2.5,2.7],[.04,1.58,-1],[6.3,.60,1.35],[13.07,3.74,0]]){
-    at(x,z,1,angle,()=>kit.lantern('post'));
+    at(x,z,1,angle,()=>kit.lantern('post'));colliders.circle(x,z,.2,'lamp');
     const pivot=new T.Group(),parts=builder(pivot);
     pivot.position.set(x+.48*Math.cos(angle),height(x,z)+2.385,z-.48*Math.sin(angle));
     pivot.rotation.y=angle;
@@ -96,5 +104,7 @@ export function buildWorld(scene,b){
   const perches=treeList.map(([x,z,s])=>new T.Vector3(x+.36*s,height(x,z)+3.97*s,z+.25*s));
   perches.push(...lamps.map(p=>p.position.clone().add(new T.Vector3(0,.08,0))));
   ground.material.name='terrain';
-  return {water,floor,waterY,lamps,height,perches,props,ground,walkable:(x,z)=>free(x,z,.24)&&wet(x,z)<-.2};
+  for(const [x,z,rad] of [...bushes,...stumps])colliders.circle(x,z,rad,'plant');
+  return {water,floor,waterY,lamps,height,perches,props,ground,colliders,
+    walkable:(x,z)=>!colliders.blocked(x,z,.26)&&wet(x,z)<-.2};
 }

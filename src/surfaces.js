@@ -34,6 +34,7 @@ const recipes={
   stone:{rough:.91,depth:1.6,relief:(u,v)=>.43*coarse(u,v)+.35*fine(u,v)+.22*grit(u,v)},
   clay:{rough:.74,depth:.85,relief:(u,v)=>.26*coarse(u,v)+.18*fine(u,v)+.18*grit(u,v)+.38*Math.cos(u*6.283)**2},
   plaster:{rough:.98,depth:.95,relief:(u,v)=>.32*coarse(u,v)+.33*fine(u,v)+.35*grit(u,v)},
+  soil:{rough:.97,depth:1.4,relief:(u,v)=>.45*fine(u*2,v*2)+.3*grit(u,v)+.25*coarse(u*4,v*4)},
   leaf:{rough:.66,depth:.58,relief:(u,v)=>.62*coarse(u,v)+.28*fine(u,v)+.1*grit(u,v)}
 };
 const cache=new Map();
@@ -53,6 +54,9 @@ export function surface(name){
     mat.map=leafSpray(name==='needle');mat.side=T.DoubleSide;mat.shadowSide=T.DoubleSide;
     mat.alphaTest=.29;mat.roughness=.78;
   }
+  // Blender nature meshes carry smooth custom normals and a baked shading gradient.
+  if(['bark','spray','needle','grass','petal','cabbage'].includes(name)){mat.flatShading=false;mat.vertexColors=true}
+  if(['grass','petal','cabbage'].includes(name)){mat.side=T.DoubleSide;mat.shadowSide=T.DoubleSide;mat.roughness=name==='petal'?.6:.82}
   if(name==='iron'){mat.metalness=.55;mat.roughness=.55}
   if(name==='glass'){mat.roughness=.23;mat.emissive.set(0xffac46);mat.emissiveIntensity=.025}
   cache.set(name,mat);return mat;
@@ -133,7 +137,7 @@ export function createAtmosphere(scene,world){
             *(1.-smoothstep(3.3,4.7,abs(landPosition.z-6.1)));
           diffuseColor.rgb*=1.-wetFoot*.38;`).replace('roughnessFactor *=','roughnessFactor=mix(roughnessFactor,.28,wetFoot);roughnessFactor *=');
       }
-      if(['spray','leaf','cone','rock','needle','terrain'].includes(mat.name)){
+      if(['spray','leaf','cone','rock','needle','terrain','grass','cabbage'].includes(mat.name)){
         const influence=mat.name==='needle'?.19:mat.name==='terrain'?.42:1;
         shader.fragmentShader='uniform vec3 foliageTint;\n'+shader.fragmentShader.replace('#include <color_fragment>',
           '#include <color_fragment>\ndiffuseColor.rgb*=mix(vec3(1.),foliageTint,'+influence.toFixed(2)+');');

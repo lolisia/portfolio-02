@@ -2,7 +2,7 @@ import * as T from 'three';
 import {surface} from './surfaces.js';
 
 // Module coordinates are measured in tiles. The builder batches repeated pieces by geometry.
-export function builder(scene, seed = 41573) {
+export function builder(scene, seed = 41573, assets = new Map()) {
   const batches = new Map(), dummy = new T.Object3D();
   const geo = {spray:new T.PlaneGeometry(1,1),needle:new T.PlaneGeometry(1,1),box:new T.BoxGeometry(1,1,1), rock:new T.DodecahedronGeometry(.52), cone:new T.ConeGeometry(.55,1,7), trunk:new T.CylinderGeometry(.40,.53,1,7)};
   const types={wood:'box',stone:'box',clay:'box',plaster:'box',glass:'box',iron:'box',leaf:'rock',boulder:'rock'};
@@ -18,10 +18,13 @@ export function builder(scene, seed = 41573) {
     dummy.position.set(x,y,z); dummy.scale.set(w,h,d); dummy.rotation.set(rx,ry,rz); dummy.updateMatrix();
     if (!batches.has(kind)) batches.set(kind,[]);
     const matrix=new T.Matrix4().multiplyMatrices(parent,dummy.matrix);
+    const asset=assets.get(kind);
+    const root=asset?.sway?new T.Vector3(x,y,z).applyMatrix4(parent):null;
     const bend=windRoot?[windRoot.x,windRoot.y,windRoot.z,.014]:
+      root?[root.x,root.y,root.z,asset.sway]:
       kind==='cone'?[x,y-h*.5,z,.39]:[0,0,0,0];
     const evergreen=kind==='needle'||(kind==='cone'&&windRoot!==null);
-    const plant=!evergreen&&(plantGroup||['spray','leaf','cone','rock'].includes(kind))?1:0;
+    const plant=asset?(asset.plant?1:0):!evergreen&&(plantGroup||['spray','leaf','cone','rock'].includes(kind))?1:0;
     batches.get(kind).push([matrix,new T.Color(color),bend,plant]);
   }
   function place(x,y,z,scale,angle,fn) {
@@ -31,7 +34,10 @@ export function builder(scene, seed = 41573) {
   }
   function finish(){
     for(const [kind,items] of batches){
-      const mesh=new T.InstancedMesh(geo[types[kind]??kind].clone(),surface(kind==='trunk'?'bark':kind==='boulder'?'stone':kind),items.length);
+      const asset=assets.get(kind);
+      const mesh=new T.InstancedMesh((asset?.geometry??geo[types[kind]??kind]).clone(),
+        surface(asset?.material??(kind==='trunk'?'bark':kind==='boulder'?'stone':kind)),items.length);
+      mesh.name=kind;
       items.forEach(([m,c],i)=>{mesh.setMatrixAt(i,m);mesh.setColorAt(i,c)});
       mesh.geometry.setAttribute('bendRoot',new T.InstancedBufferAttribute(new Float32Array(items.flatMap(item=>item[2])),4));
       mesh.geometry.setAttribute('plantMask',new T.InstancedBufferAttribute(new Float32Array(items.map(item=>item[3])),1));
@@ -45,37 +51,17 @@ export function modules(b) {
   const {rand:r,pick,part:p,place}=b;
   const box=(...a)=>p('wood',...a), rock=(...a)=>p('leaf',...a);
   const bark=['#55412b','#655034','#493c2d'], wood=['#815133','#986342','#70432e','#aa7650'];
+  // Trees, flowers and beds are Blender meshes (tools/nature-assets.py) authored base-at-origin.
   function tree(pine=false){
-    p('trunk',0,1.45,0,.46,2.9,.48,pick(bark));
-    for(let i=0;i<5;i++){
-      const a=i*1.26;
-      p('trunk',.23*Math.cos(a),.16,.23*Math.sin(a),.19,.66,.21,pick(bark),0,-a,1.06);
-    }
     if(pine){
-      for(let i=0;i<5;i++){
-        const width=2.65-i*.44, y=1.75+i*.51;
-        for(let k=0;k<5;k++){const a=k*1.256+i*.6;place(0,y-.32,0,1,a,()=>p('trunk',width*.18,0,0,.09,width*.65,.09,pick(bark),0,0,-1.23))}
-        p('cone',0,y,0,width*.72,1.41,width*.72,['#364c31','#425c32','#536d39','#637e41','#748840'][i],0,i);
-        for(let j=0;j<15;j++){
-          const a=j*2.4+i,rad=width*.32;
-          p('needle',Math.cos(a)*rad,y-.30,Math.sin(a)*rad,width*.72,width*.69,1,pick(['#70894d','#859b5a','#506e43']),-.94,Math.PI/2-a,.12*Math.sin(a));
-        }
-      }
+      p('pineABark',0,0,0,1,1,1,pick(bark));
+      p('pineANeedles',0,0,0,1,1,1,pick(['#5d7a45','#678449','#55703f']));
       return;
     }
-    const light=r()>.32;
-    const greens=light?['#758e43','#839f4c','#a0aa59','#a9b660','#678539','#889f51']:['#677c3a','#7e9244','#8ba14a','#627d3c','#90a451'];
-    for(let i=0;i<9;i++){
-      const a=i*2.4, rad=i<6?.94:.46, x=Math.cos(a)*rad,z=Math.sin(a)*rad,y=2.73+(i<6?r()*.36:.67+r()*.24);
-      if(i<6)p('trunk',x*.49,2.15,z*.49,.2,1.16,.2,pick(bark),z*.55,0,-x*.55);
-      rock(x,y,z,.84,.62,.79,pick(['#556e37','#61793f','#617a41']),r()*.3,a);
-      for(let j=0;j<22;j++){
-        const ang=r()*6.28, v=r()*1.65-.65,dist=Math.sqrt(1-v*v);
-        const cx=x+.77*dist*Math.cos(ang),cz=z+.74*dist*Math.sin(ang);
-        p('spray',cx,y-.12+.58*v,cz,.98+r()*.42,.91+r()*.52,1,pick(greens),
-          -.80-v*.72,Math.PI*.5-ang,(r()-.5)*1.4);
-      }
-    }
+    const kind=r()>.5?'oakA':'oakB',light=r()>.32;
+    const greens=light?['#8fa553','#9cb35c','#a9b660','#88a14f']:['#7d9447','#8ba14a','#90a451','#76903f'];
+    p(kind+'Bark',0,0,0,1,1,1,pick(bark));
+    p(kind+'Leaves',0,0,0,1,1,1,pick(greens));
   }
   function window(x,y,z){
     box(x,y,z,.73,.85,.09,'#453728');
@@ -125,16 +111,23 @@ export function modules(b) {
     if(!shed){p('stone',-.78,h+1.02,-.55,.46,1.24,.48,'#887e68');p('stone',-.78,h+1.65,-.55,.57,.17,.58,'#a39b87');box(-.78,h+1.74,-.55,.29,.03,.3,'#46453b')}
     });
   }
-  function flowers(){b.vegetation(()=>{
-    const c=pick(['#ed8d48','#d55a3e','#e7c464','#d9d2b2','#a1a6c6']);
-    for(let i=0;i<8;i++){const x=(r()-.5)*.75,z=(r()-.5)*.72,h=.16+r()*.24;
-      box(x,h/2,z,.026,h,.026,'#54733c');rock(x+.04,h*.49,z,.17,.065,.10,'#71934a',0,r()*3,.45);
-      rock(x,h,z,.14,.09,.13,c);box(x,h+.047,z,.048,.024,.05,'#f6cc66')}
-  })}
+  function flowers(){
+    const c=pick(['#ed8d48','#d55a3e','#e7c464','#e9e2c4','#a1a6c6','#e58fae']);
+    for(let i=0;i<7;i++){
+      const x=(r()-.5)*.8,z=(r()-.5)*.76,s=.75+r()*.6,turn=r()*6.28;
+      p('flowerStem',x,0,z,s,s,s,'#6f8f45',0,turn);
+      p('flowerHead',x,0,z,s,s,s,c,0,turn);
+    }
+    for(let i=0;i<3;i++){const s=.45+r()*.3;p(pick(['grass0','grass1','grass2']),(r()-.5)*.7,0,(r()-.5)*.7,s,s,s,'#86a24c',0,r()*6.28)}
+  }
   function bed(){
-    box(0,.07,0,1.27,.14,1.65,'#60412c');
-    for(const k of [-1,1]){box(k*.61,.17,0,.095,.17,1.7,'#8b6240');box(0,.17,k*.8,1.3,.17,.09,'#997049')}
-    for(let i=0;i<4;i++)for(let j=0;j<5;j++){const x=(i-1.5)*.26,z=(j-2)*.29;rock(x,.24,z,.22,.23,.23,pick(['#698345','#779646','#52703c']));rock(x+.04,.32,z,.09,.095,.1,'#ba5032')}
+    p('bedFrame',0,0,0,1,1,1,'#9a6c47');
+    p('bedSoil',0,0,0,1,1,1,'#6a4630');
+    for(let j=0;j<5;j++)for(let i=0;i<3;i++){
+      const x=(i-1)*.36+(r()-.5)*.04,z=(j-2)*.3+(r()-.5)*.04,s=.8+r()*.35;
+      if(j%2===0)p('cabbage',x,.19,z,s,s,s,pick(['#93b65a','#a3c063','#86a84f']),0,r()*6.28);
+      else p('carrot',x,.18,z,s,s,s,pick(['#6f9a3e','#7ea946']),0,r()*6.28);
+    }
   }
   function bridge(len){
     for(let i=0;i<Math.ceil(len/.22);i++)box(0,.1,-len/2+i*.22,1.23,.14,.205,pick(wood));

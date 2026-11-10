@@ -68,7 +68,8 @@ export function createFarmLife(scene,world){
     const legs=[-1,1].map(side=>mesh(group,legGeo,mat(0xa98a52),side*.078,.1,.025));
     group.scale.setScalar(chick?.48:1);scene.add(group);group.visible=false;
     const seed=index*1.731+.53;
-    return {group,head,legs,chick,index,state:'inside',x:2.25,z:-1.45,
+    const body=world.colliders.body(2.25,-1.45,chick?.09:.15,chick?.35:1);body.ignore='coop';
+    return {group,head,legs,chick,index,body,state:'inside',x:2.25,z:-1.45,
       wait:0,step:seed,rng:1297+index*7919,gait:seed,pace:0,baseSpeed:(chick?.31:.27)+(.5+.5*Math.sin(seed*3.7))*.24,
       reaction:0,intent:false,noticed:null,route:[],trip:0,legSpeed:1,walked:0};
   }
@@ -97,7 +98,12 @@ export function createFarmLife(scene,world){
     f.pace=T.MathUtils.damp(f.pace,desired,2.8,dt);
     const step=Math.min(d,dt*f.pace);
     if(d>.001){
-      f.x+=dx/d*step;f.z+=dz/d*step;f.walked+=step;
+      // Chickens may use the coop ramp (its footprint is tagged 'coop'); everything else is solid.
+      f.body.x=f.x+dx/d*step;f.body.z=f.z+dz/d*step;world.colliders.resolve(f.body);
+      const moved=Math.hypot(f.body.x-f.x,f.body.z-f.z);
+      f.x=f.body.x;f.z=f.body.z;f.walked+=step;
+      f.stuck=moved<step*.3?(f.stuck||0)+dt:0;
+      if(f.stuck>1.5){f.stuck=0;f.route.shift()}
       const angle=Math.atan2(dx,dz),delta=Math.atan2(Math.sin(angle-f.group.rotation.y),Math.cos(angle-f.group.rotation.y));
       f.group.rotation.y+=delta*(1-Math.exp(-dt*5));
     }
@@ -123,7 +129,7 @@ export function createFarmLife(scene,world){
       f.reaction=Math.max(0,f.reaction-dt);
       if(f.reaction===0)f.intent=outside;
       if(f.state==='inside'){
-        f.group.visible=false;f.group.userData.activity=hour>=18||hour<6?'sleeping':'sheltered';
+        f.group.visible=false;f.body.active=false;f.group.userData.activity=hour>=18||hour<6?'sleeping':'sheltered';
         if(f.intent){f.state='exiting';f.x=door.x;f.z=door.z;f.route=[apron];f.group.visible=true;f.wait=0;f.pace=0}
         continue;
       }
@@ -142,6 +148,7 @@ export function createFarmLife(scene,world){
       }
       const ramp=Math.abs(f.x-door.x)<.5?T.MathUtils.clamp((.35-f.z)/1.47,0,1)*.65:0;
       // Feet stay on the ground; the torso only rolls subtly with each stride.
+      f.body.active=f.group.visible;f.body.x=f.x;f.body.z=f.z;world.colliders.resolve(f.body);f.x=f.body.x;f.z=f.body.z;
       f.group.position.set(f.x,world.height(f.x,f.z)+ramp,f.z);
       f.group.rotation.z=moving?Math.sin(f.gait)*.017:0;
       const peck=!moving&&f.state==='foraging'?.2+Math.max(0,Math.sin(seconds*(2.1+f.index*.19)+f.step))*.95:0;

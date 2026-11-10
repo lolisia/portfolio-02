@@ -5,7 +5,7 @@ import {createFarmPaths} from './farm-paths.js';
 // SD Unity-chan © Unity Technologies Japan/UCL — see public/models/unitychan/.
 // Gathering / Fishing clips are retargeted from Kevin Iglesias "Human Crafting Animations FREE".
 const URL='/models/unitychan/sd_unitychan.glb';
-const HEIGHT=1.02;
+const HEIGHT=1.02, RADIUS=.2;
 const LOOPS=new Set(['Standing','Walking','Running','Gathering','FishingLoop']);
 const BEDS=[[1.1,3.3],[2.7,3.3]], POND={x:10.7,z:6.3};
 
@@ -34,9 +34,13 @@ function tidy(clip){
 // so she stands right at the bed edge or the shoreline.
 function findSpots(world,paths){
   const facing=(n,x,z)=>Math.atan2(x-n.x,z-n.z);
+  // Step from the nearest graph nodes toward each bed until her body would touch the frame.
   const beds=BEDS.flatMap(([bx,bz])=>paths.nodes
     .map(n=>({n,d:Math.hypot(n.x-bx,n.z-bz)})).sort((a,b)=>a.d-b.d).slice(0,3)
-    .map(({n,d})=>{const k=(d-.78)/d;return {node:n,x:n.x+(bx-n.x)*k,z:n.z+(bz-n.z)*k,face:facing(n,bx,bz)}}));
+    .map(({n,d})=>{
+      let t=0;while(t<d&&!world.colliders.blocked(n.x+(bx-n.x)*(t+.02)/d,n.z+(bz-n.z)*(t+.02)/d,RADIUS+.03))t+=.02;
+      return {node:n,x:n.x+(bx-n.x)*t/d,z:n.z+(bz-n.z)*t/d,face:facing(n,bx,bz)};
+    }));
   // The north bank is the stretch the default camera sees past the trees; she faces the viewer there.
   const shore=[165,180,195,210,225].map(deg=>{
     const a=deg*Math.PI/180,dx=Math.sin(a),dz=Math.cos(a);
@@ -53,8 +57,9 @@ export function createUnityChan(scene,world){
   const door={x:-1,z:-.25},apron={x:-1,z:.75};
   const root=new T.Group();root.name='sd-unity-chan';root.visible=false;scene.add(root);
   const s={state:'inside',x:door.x,z:door.z,heading:0,route:[],wait:0,pace:0,intent:false,reaction:2,
-    rng:90731,action:null,anchor:null,blink:2,blinkT:0,task:null,steps:[],stepTime:0,face:0,prop:null};
+    rng:90731,action:null,anchor:null,stuck:0,blink:2,blinkT:0,task:null,steps:[],stepTime:0,face:0,prop:null};
   let mixer=null,actions={},face=null,blinkIndex=-1,ready=false,hands=[];
+  const body=world.colliders.body(door.x,door.z,RADIUS,3);
   const random=()=>{s.rng=(Math.imul(s.rng,1664525)+1013904223)>>>0;return s.rng/4294967296};
 
   // Fishing rod, line and float are simple props kept in world space.
@@ -161,8 +166,13 @@ export function createUnityChan(scene,world){
     s.pace=T.MathUtils.damp(s.pace,speed,3,dt);
     const step=Math.min(d,dt*s.pace);
     if(d>.001){
-      s.x+=dx/d*step;s.z+=dz/d*step;
+      body.x=s.x+dx/d*step;body.z=s.z+dz/d*step;world.colliders.resolve(body);
+      const moved=Math.hypot(body.x-s.x,body.z-s.z);
+      s.x=body.x;s.z=body.z;
       turn(Math.atan2(dx,dz),dt);
+      // Blocked (another walker parked on the waypoint): give up on it after a moment.
+      s.stuck=moved<step*.3?s.stuck+dt:0;
+      if(s.stuck>1.2){s.stuck=0;s.route.shift()}
     }
     if(d<.05)s.route.shift();
     return s.route.length===0;
@@ -212,7 +222,7 @@ export function createUnityChan(scene,world){
       else if(s.state==='exiting'){moving=true;if(walk(dt,speed)){s.state='strolling';s.wait=1+random()*2;setTrip()}}
       else if(s.state==='returning'){
         speed=weather>=2?1.45:.75;moving=true;
-        if(walk(dt,speed)){s.state='inside';root.visible=false;s.pace=0;play('Standing',0)}
+        if(walk(dt,speed)){s.state='inside';root.visible=false;body.active=false;s.pace=0;play('Standing',0)}
       }else if(s.state==='strolling'){
         moving=true;
         if(walk(dt,speed)){
@@ -227,6 +237,9 @@ export function createUnityChan(scene,world){
           s.action.timeScale=s.pace/(running?1.7:.62);
         }else{play('Standing',.35);if(s.action)s.action.timeScale=1}
       }else if(s.action)s.action.timeScale=1;
+      // Standing still she is still solid: chickens bump off her and she never ends inside a prop.
+      body.active=root.visible;body.x=s.x;body.z=s.z;world.colliders.resolve(body);
+      if(s.state!=='activity'){s.x=body.x;s.z=body.z}
       root.position.set(s.x,world.height(s.x,s.z),s.z);root.rotation.y=s.heading;
     }
     mixer.update(dt);

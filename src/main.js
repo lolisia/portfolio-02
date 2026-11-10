@@ -13,6 +13,7 @@ import {createWildlife} from './wildlife.js';
 import {createFarmLife} from './farm-life.js';
 import {createUnityChan} from './unitychan.js';
 import {buildWorld} from './world.js';
+import {loadNature} from './nature.js';
 import {createWeatherTransition} from './weather.js';
 
 const canvas=document.querySelector('#world');
@@ -35,7 +36,8 @@ if(view==='water'||view==='falls'){
 const sky=new T.DirectionalLight(0xc9e1fb,1.0),sun=new T.DirectionalLight(0xffe3b4,2.25);
 sky.position.set(12,19,17);scene.add(sky,sun,new T.AmbientLight(0x8798ad,.11));sun.position.set(-13,24,9);sun.castShadow=true;
 Object.assign(sun.shadow.camera,{left:-24,right:24,top:24,bottom:-24,near:.1,far:78});sun.shadow.camera.updateProjectionMatrix();renderer.shadowMap.autoUpdate=true;sun.shadow.mapSize.set(2048,2048);sun.shadow.normalBias=.028;sun.shadow.bias=-.00016;
-const b=builder(scene), world=buildWorld(scene,b);b.finish();
+const nature=await loadNature();
+const b=builder(scene,undefined,nature), world=buildWorld(scene,b);b.finish();
 const windowLight=new T.PointLight(0xffaf52,0,7,1.5);windowLight.position.set(-1,2.3,.16);scene.add(windowLight);
 const cascade=makeCascade(world);scene.add(cascade);
 const atmosphere=createAtmosphere(scene,world);
