@@ -11,7 +11,7 @@ function stroke(c,color,width,fn){c.strokeStyle=color;c.lineWidth=width;c.beginP
 function base(c){
   c.clearRect(0,0,220,94);
   const bg=c.createLinearGradient(0,0,220,94);
-  bg.addColorStop(0,'#eff4efb8');bg.addColorStop(1,'#d7e3df70');
+  bg.addColorStop(0,'#ffffff1c');bg.addColorStop(1,'#ffffff08');
   c.fillStyle=bg;c.fillRect(0,0,220,94);
 }
 function land(c,y,color,amplitude){
@@ -86,7 +86,7 @@ function weather(c,t){
 const queries=matchMedia('(prefers-reduced-motion: reduce)');
 function animate(ms){
   requestAnimationFrame(animate);
-  if(document.querySelector('#panelBody').hidden){previous=ms;return}
+  if(!document.querySelector('#panel').classList.contains('open')){previous=ms;return}
   const dt=Math.min(.1,Math.max(0,(ms-previous)/1000)),k=queries.matches?1:1-Math.exp(-dt*5);previous=ms;
   hour+=(((states.hour-hour+36)%24)-12)*k;hour=(hour+24)%24;
   wind+=(states.wind-wind)*k;const w=states.weather;

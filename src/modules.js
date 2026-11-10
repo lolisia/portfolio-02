@@ -41,7 +41,7 @@ export function builder(scene, seed = 41573, assets = new Map()) {
       items.forEach(([m,c],i)=>{mesh.setMatrixAt(i,m);mesh.setColorAt(i,c)});
       mesh.geometry.setAttribute('bendRoot',new T.InstancedBufferAttribute(new Float32Array(items.flatMap(item=>item[2])),4));
       mesh.geometry.setAttribute('plantMask',new T.InstancedBufferAttribute(new Float32Array(items.map(item=>item[3])),1));
-      mesh.castShadow=true;mesh.receiveShadow=true;scene.add(mesh);
+      mesh.castShadow=asset?.shadow!==false;mesh.receiveShadow=true;scene.add(mesh);
     }
   }
   return {part,place,rand,pick,finish,canopy,vegetation};

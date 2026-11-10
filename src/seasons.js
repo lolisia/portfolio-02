@@ -35,7 +35,7 @@ export function createSeasons(scene,world,atmosphere){
     }
     return (active,dt,t,wind,storm)=>{
       const strength=Number(active);mesh.visible=strength>.002;mesh.material.transparent=true;mesh.material.opacity=strength;if(strength<=.002)return;
-      mesh.count=flakes?Math.floor(count*(.42+.58*Number(storm))):count;
+      mesh.count=flakes?Math.floor(count*(.16+.84*Number(storm))):count;  // gentle snow ~1.4k flakes, blizzard 9k
       for(let i=0;i<mesh.count;i++){
         const s=items[i],a=s.phase+t*s.rate;
         const base=floor(s.x,s.z)+.035;
@@ -53,7 +53,7 @@ export function createSeasons(scene,world,atmosphere){
   }
   const petals=particles('petals',155,pieceGeometry(true),[0xffbfd1,0xffe0e4,0xe5a3b6]);
   const leaves=particles('leaves',175,pieceGeometry(false),[0xbb602b,0xe79a40,0xa83e26,0xddbb56]);
-  const snow=particles('snow',1150,new T.IcosahedronGeometry(1,0),[0xf3f9ff,0xe4eef8,0xffffff]);
+  const snow=particles('snow',9000,new T.IcosahedronGeometry(1,0),[0xf3f9ff,0xe4eef8,0xffffff]);
   const ground=world.ground.geometry.attributes.position,base=new Float32Array(ground.count);
   for(let i=0;i<ground.count;i++)base[i]=ground.getY(i);
   const palettes=[[1.15,1.18,.95],[1,1,1],[1.95,.60,.34],[.79,.87,.83]];

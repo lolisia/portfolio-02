@@ -1,13 +1,16 @@
 const panel=document.querySelector('#panelBody');
 const toggle=document.querySelector('#panelToggle');
 
+// The body folds with a grid-row transition; `inert` keeps the folded controls out of tab order.
+const isOpen=()=>document.querySelector('#panel').classList.contains('open');
 function expand(open){
-  panel.hidden=!open;toggle.setAttribute('aria-expanded',String(open));
+  document.querySelector('#panel').classList.toggle('open',open);panel.inert=!open;
+  toggle.setAttribute('aria-expanded',String(open));
   document.querySelector('#toggleLabel').textContent=open?'접기':'펼치기';
 }
-toggle.addEventListener('click',()=>expand(panel.hidden));
+toggle.addEventListener('click',()=>expand(!isOpen()));
 document.querySelector('#panel').addEventListener('keydown',event=>{
-  if(event.key==='Escape'&&!panel.hidden){expand(false);toggle.focus()}
+  if(event.key==='Escape'&&isOpen()){expand(false);toggle.focus()}
 });
 
 export {drawHorizon,drawWind,drawWeather} from './motion.js';

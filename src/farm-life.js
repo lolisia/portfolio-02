@@ -76,13 +76,15 @@ export function createFarmLife(scene,world){
   const flock=[chicken(false,0),chicken(false,1),...Array.from({length:4},(_,i)=>chicken(true,i+2))];
   const door={x:2.25,z:-1.12},apron={x:2.25,z:.38};
   const paths=createFarmPaths(world);
+  // The ramp and the patch in front of it are a thoroughfare: nobody may linger there.
+  const inEntrance=p=>Math.abs(p.x-door.x)<.6&&p.z>door.z-.2&&p.z<apron.z+.75;
   function random(f){f.rng=(Math.imul(f.rng,1664525)+1013904223)>>>0;return f.rng/4294967296}
   function setTrip(f,home=false){
     if(home){f.route=paths.route(f,apron);f.route.push(door);return}
     const far=random(f)>.42;
     const candidates=paths.nodes.filter(n=>{
       const radius=Math.hypot(n.x-apron.x,n.z-apron.z);
-      return radius>(far?3.5:1)&&radius<(far?9:4)&&Math.hypot(n.x-f.x,n.z-f.z)>1;
+      return radius>(far?3.5:1)&&radius<(far?9:4)&&Math.hypot(n.x-f.x,n.z-f.z)>1&&!inEntrance(n);
     });
     for(let i=0;i<8;i++){
       const target=candidates[Math.min(candidates.length-1,Math.floor(random(f)*candidates.length))];
@@ -135,16 +137,17 @@ export function createFarmLife(scene,world){
       }
       if(!f.intent&&f.state!=='returning'){f.state='returning';f.wait=.4+random(f)*1.8;setTrip(f,true)}
       let moving=false;
+      if(f.state==='foraging'&&f.wait>0&&inEntrance(f)){f.wait=0;setTrip(f)}
       if(f.wait>0){f.wait=Math.max(0,f.wait-dt);f.pace=T.MathUtils.damp(f.pace,0,6,dt)}
       else if(f.state==='exiting'){
-        moving=true;if(walk(f,dt,.85)){f.state='foraging';f.wait=1+random(f)*3;setTrip(f)}
+        moving=true;if(walk(f,dt,.85)){f.state='foraging';f.wait=0;setTrip(f)}
       }else if(f.state==='returning'){
         moving=true;if(walk(f,dt,1.25)){f.state='inside';f.group.visible=false;f.pace=0}
       }else if(f.state==='foraging'){
         moving=true;
         if(walk(f,dt,1)){
           moving=false;f.wait=2+random(f)*6;setTrip(f);
-        }else if(random(f)<dt*.025){f.wait=.8+random(f)*2.5}
+        }else if(random(f)<dt*.025&&!inEntrance(f)){f.wait=.8+random(f)*2.5}
       }
       const ramp=Math.abs(f.x-door.x)<.5?T.MathUtils.clamp((.35-f.z)/1.47,0,1)*.65:0;
       // Feet stay on the ground; the torso only rolls subtly with each stride.

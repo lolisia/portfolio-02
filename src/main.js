@@ -76,8 +76,11 @@ const weatherBlend=createWeatherTransition();
 const backdrop=new T.Color();
 if(new URLSearchParams(location.search).get('time')==='night')time.value=22;
 let nightLevel=0,skyTimer=0,lastProbe=-Infinity;
+// Sliders set targets; the scene (and the drawn thumbs) glide toward them.
+let hourShown=Number(time.value),hourTarget=hourShown,windShown=Number(wind.value),windTarget=windShown;
+const slider=input=>input.closest('.slider');
 function lighting(){
-  const hour=Number(time.value),t=daylight(hour),w=weatherBlend.coverage;
+  const hour=hourShown<0?hourShown+24:hourShown,t=daylight(hour),w=weatherBlend.coverage;
   nightLevel=t.night;
   const moon=t.direction.y<0;
   sun.position.copy(t.direction).multiplyScalar(moon?-33:33);
@@ -104,18 +107,45 @@ function lighting(){
   flies.visible=nightLevel>.6&&weatherIndex<2&&seasonIndex===1;windowLight.intensity=9*nightLevel;
   const minutes=Math.round(hour*60),label=String(Math.floor(minutes/60)).padStart(2,'0')+':'+String(minutes%60).padStart(2,'0');
   document.querySelector('#hourText').textContent=label;time.setAttribute('aria-valuetext',label);
-  time.style.setProperty('--pct',(hour/24*100)+'%');
+  slider(time).style.setProperty('--f',hour/24);
   drawHorizon(hour);
 }
 function setWind(){
-  drawWind(Number(wind.value));
-  wind.style.setProperty('--pct',(Number(wind.value)/16*100)+'%');
-  atmosphere.breeze.value=Number(wind.value)/8;
-  document.querySelector('#windText').textContent=wind.value+' m/s';
+  drawWind(windTarget);
+  slider(wind).style.setProperty('--f',windShown/16);
+  atmosphere.breeze.value=windShown/8;
+  const label=(Math.round(windShown*10)/10)+' m/s';
+  document.querySelector('#windText').textContent=label;
   wind.setAttribute('aria-valuetext',wind.value+' m/s');
 }
-const advanceTime=createDayClock(time,lighting);
-lighting();setWind();wind.oninput=setWind;
+const advanceTime=createDayClock(time,()=>{hourTarget=Number(time.value)});
+lighting();setWind();wind.oninput=()=>{windTarget=Number(wind.value)};
+function glide(dt){
+  let dh=hourTarget-hourShown;
+  if(dh<-12&&document.querySelector('#autoTime').checked){hourShown-=24;dh+=24}  // auto clock wraps forward through midnight
+  if(Math.abs(dh)>1e-4){
+    hourShown+=dh*(1-Math.exp(-dt*(document.querySelector('#autoTime').checked?10:3.2)));
+    if(Math.abs(hourTarget-hourShown)<2e-3)hourShown=hourTarget;
+    lighting();
+  }
+  const dw=windTarget-windShown;
+  if(Math.abs(dw)>1e-3){windShown+=dw*(1-Math.exp(-dt*1.6));if(Math.abs(windTarget-windShown)<.01)windShown=windTarget;setWind()}
+}
+// Walkers flatten the turf around them and leave a short trail that springs back.
+const trail=[];let trailClock=0;
+function trample(dt){
+  const slots=atmosphere.trample.value,live=world.colliders.bodies.filter(b=>b.active);
+  trailClock+=dt;
+  if(trailClock>.18){trailClock=0;for(const b of live){
+    if(Math.hypot(b.x-(b.tx??1e9),b.z-(b.tz??1e9))>.12){b.tx=b.x;b.tz=b.z;trail.push({x:b.x,z:b.z,r:b.r,life:1})}
+  }}
+  for(const t of trail)t.life-=dt/2.4;
+  while(trail.length&&(trail[0].life<=0||trail.length>slots.length-live.length))trail.shift();
+  let i=0;
+  for(const b of live)if(i<slots.length)slots[i++].set(b.x,b.z,b.r*1.5,1);
+  for(let k=trail.length-1;k>=0&&i<slots.length;k--){const t=trail[k];slots[i++].set(t.x,t.z,t.r*1.4,.75*t.life*t.life)}
+  for(;i<slots.length;i++)slots[i].w=0;
+}
 weather.onchange=e=>{weatherIndex=Number(e.target.value);weatherBlend.select(weatherIndex);drawWeather(weatherIndex)};
 document.querySelector('#season').onchange=e=>{seasonIndex=Number(e.target.value);lighting()};
 document.querySelector('#reset').onclick=home;
@@ -125,16 +155,17 @@ let previous=0;
 renderer.setAnimationLoop(ms=>{
   advanceTime(ms);
   const elapsedFrame=Math.max(0,(ms-previous)/1000),dt=Math.min(.05,elapsedFrame);previous=ms;controls.update();
+  glide(elapsedFrame);trample(dt);
   const changingWeather=weatherBlend.active;weatherBlend.update(Math.min(.1,elapsedFrame));
   if(changingWeather)lighting();
   scene.background.lerp(backdrop,1-Math.exp(-3.8*Math.min(.5,elapsedFrame)));
   atmosphere.update(ms/1000);
-  rain(dt,ms/1000,Number(wind.value),weatherBlend.rain,nightLevel);
-  seasons(seasonIndex,weatherIndex,Math.min(elapsedFrame,.15),Math.min(elapsedFrame,4),ms/1000,Number(wind.value),weatherBlend);
+  rain(dt,ms/1000,windShown,weatherBlend.rain,nightLevel);
+  seasons(seasonIndex,weatherIndex,Math.min(elapsedFrame,.15),Math.min(elapsedFrame,4),ms/1000,windShown,weatherBlend);
   cascade.userData.update(ms/1000,atmosphere.breeze.value,1-.85*nightLevel);
-  wildlife(ms/1000,Number(wind.value),nightLevel);
-  farmLife(dt,ms/1000,Number(time.value),weatherIndex,Number(wind.value),camera,nightLevel);
-  unityChan(dt,ms/1000,Number(time.value),weatherIndex,Number(wind.value));
+  wildlife(ms/1000,windShown,nightLevel);
+  farmLife(dt,ms/1000,hourShown,weatherIndex,windShown,camera,nightLevel);
+  unityChan(dt,ms/1000,hourShown,weatherIndex,windShown);
   if(flies.visible){flies.position.y=Math.sin(ms*.0015)*.14;flies.rotation.y=Math.sin(ms*.00035)*.025;flies.material.opacity=.72+.25*Math.sin(ms*.0025)}
   const seconds=ms/1000;
   for(const {pivot} of lanterns){

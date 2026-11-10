@@ -11,18 +11,18 @@
   <button type="button" id="panelToggle" aria-expanded="false" aria-controls="panelBody">
     <span>환경 설정</span><span class="toggle-action"><span id="toggleLabel">펼치기</span><i aria-hidden="true"></i></span>
   </button>
-  <div id="panelBody" hidden>
+  <div id="panelBody" inert><div class="panel-inner">
     <div class="control-row">
       <div class="control">
         <div class="caption"><label for="time">시각</label><output id="hourText" for="time">08:30</output></div>
-        <input type="range" id="time" min="0" max="24" step="0.016666666666666666" value="8.5">
+        <div class="slider"><input type="range" id="time" min="0" max="24" step="0.016666666666666666" value="8.5"><i class="thumb" aria-hidden="true"></i></div>
         <label class="auto"><input type="checkbox" id="autoTime">시간 자동 진행 <small>120초 / 하루</small></label>
       </div>
       <canvas class="motion horizon" aria-hidden="true"></canvas>
     </div>
     <div class="control-row">
       <div class="control"><div class="caption"><label for="wind">바람</label><output id="windText" for="wind">3 m/s</output></div>
-        <input type="range" id="wind" min="0" max="16" value="3" step=".5"></div>
+        <div class="slider"><input type="range" id="wind" min="0" max="16" value="3" step=".5"><i class="thumb" aria-hidden="true"></i></div></div>
       <canvas class="motion breeze" aria-hidden="true"></canvas>
     </div>
     <div class="control-row">
@@ -42,7 +42,7 @@
       <label><input type="radio" name="season" value="2"><span>가을</span></label>
       <label><input type="radio" name="season" value="3"><span>겨울</span></label>
     </div></fieldset><button id="reset" type="button">처음 시점</button></div>
-  </div>
+  </div></div>
 </section>
 <a id="credit" href="https://unity-chan.com/contents/license_en/" target="_blank" rel="noopener">SD Unity-chan © Unity Technologies Japan/UCL</a>
 </main><script type="module" src="/src/main.js"></script></body></html>

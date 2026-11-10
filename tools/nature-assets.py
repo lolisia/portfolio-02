@@ -118,29 +118,38 @@ def oak(name, seed, spread=1.):
         a = k/5*TAU + rng.uniform(-.2, .2)
         pts = curve(Vector((0, 0, .32)), Vector((math.cos(a), math.sin(a), -.75)), .52, 3, droop=.12, rng=rng)
         tube(bark, pts, [.12, .09, .06, .03], sides=6, shade=(.5, .6))
-    tips = []
+    limbs = []  # every branch polyline that carries leaves
     for k in range(6):
         a = k/6*TAU + rng.uniform(-.3, .3)
         base = trunk[5 + k % 3]
         d = Vector((math.cos(a), math.sin(a), rng.uniform(.75, 1.2)))
         main = curve(base, d, rng.uniform(1.0, 1.35)*spread, 5, droop=-.02, wobble=.08, rng=rng)
         tube(bark, main, [.11 - .018*i for i in range(6)], sides=6, shade=(.7, 1))
-        tips.append(main[-1])
+        limbs.append(main)
         for j in (2, 3, 4):
             sa = a + rng.choice((-1, 1))*rng.uniform(.5, 1.1)
             sub = curve(main[j], Vector((math.cos(sa), math.sin(sa), rng.uniform(.5, 1.))), rng.uniform(.4, .7)*spread, 3, wobble=.1, rng=rng)
             tube(bark, sub, [.045, .035, .025, .015], sides=5, shade=(.8, 1))
-            tips.append(sub[-1])
-    tips.append(trunk[-1] + Vector((0, 0, .35)))
-    center = Vector((0, 0, sum(t.z for t in tips)/len(tips) - .15))
-    for tip in tips:  # leaf clusters around every branch end
-        for _ in range(26):
-            off = Vector((rng.gauss(0, 1), rng.gauss(0, 1), rng.gauss(0, .8))).normalized()*rng.uniform(.1, .62)
-            p = tip + off
-            n = ((p - center).normalized() + Vector((rng.uniform(-.6, .6), rng.uniform(-.6, .6), rng.uniform(-.2, .7)))).normalized()
-            s = rng.uniform(.55, .85)
-            shade = .62 + .38*max(0, min(1, (p.z - center.z + .8)/1.6))
-            card(leaves, p, n, (s, s*1.05), rng.uniform(0, TAU), shade=shade)
+            limbs.append(sub)
+    # A leader continues the trunk so the crown's top cluster has wood under it.
+    leader = curve(trunk[-1], Vector((0, 0, 1)), .7, 3, wobble=.08, rng=rng)
+    tube(bark, leader, [.07, .05, .03, .015], sides=5, shade=(.8, 1)); limbs.append(leader)
+    pts = [p for limb in limbs for p in limb]
+    center = Vector((0, 0, sum(p.z for p in pts)/len(pts) + .25))
+    # Sprigs grow out of points on the outer part of every branch: the texture's stem
+    # (v=0) sits on the wood, so no leaf hangs in the air.
+    for limb in limbs:
+        seg = [(limb[i], limb[i+1]) for i in range(len(limb)-1)]
+        for i, (p0, p1) in enumerate(seg):
+            if i < len(seg)*.25: continue
+            for _ in range(13 if len(limb) > 5 else 11):
+                t = rng.random(); base = p0.lerp(p1, t)
+                along = (p1 - p0).normalized()
+                out = (along*.6 + (base - center).normalized()*.5 +
+                       Vector((rng.uniform(-.7, .7), rng.uniform(-.7, .7), rng.uniform(-.2, .8)))).normalized()
+                ln = rng.uniform(.5, .78)
+                shade = .62 + .38*max(0, min(1, (base.z - center.z + .9)/1.7))
+                directed_card(leaves, base, out, ln*.85, ln, shade=shade)
     finish(name+'Bark', bark)
     finish(name+'Leaves', leaves, outward(center, .3))
 
@@ -176,23 +185,24 @@ def pine(name, seed):
 
 
 # ---------------------------------------------------------------- undergrowth
-def grass(name, seed, blades=9, height=.42):
+def grass(name, seed, blades=9, height=.42, spread=.07, segments=3):
     rng = random.Random(seed)
     bm = bmesh.new(); uv, col = layers(bm)
     for _ in range(blades):
-        a = rng.uniform(0, TAU); r = rng.uniform(0, .07)
+        a = rng.uniform(0, TAU); r = spread*math.sqrt(rng.random())
         base = Vector((math.cos(a)*r, math.sin(a)*r, 0))
-        lean = Vector((math.cos(a), math.sin(a), 0))*rng.uniform(.15, .55)
-        h = height*rng.uniform(.6, 1.15); w = rng.uniform(.026, .04)
-        side = Vector((-math.sin(a+1.2), math.cos(a+1.2), 0))
+        b = rng.uniform(0, TAU)
+        lean = Vector((math.cos(b), math.sin(b), 0))*rng.uniform(.12, .5)
+        h = height*rng.uniform(.55, 1.15); w = rng.uniform(.026, .042)
+        side = Vector((-math.sin(b+1.2), math.cos(b+1.2), 0))
         rows = []
-        for s in range(4):
-            t = s/3
+        for s_ in range(segments+1):
+            t = s_/segments
             c = base + Vector((0, 0, h*t)) + lean*h*t*t
             half = w*(1-t*.92)/2
             rows.append((bm.verts.new(c - side*half), bm.verts.new(c + side*half), t))
-        for s in range(3):
-            (a0, b0, t0), (a1, b1, t1) = rows[s], rows[s+1]
+        for s_ in range(segments):
+            (a0, b0, t0), (a1, b1, t1) = rows[s_], rows[s_+1]
             f = bm.faces.new((a0, b0, b1, a1))
             for loop, (u, t) in zip(f.loops, ((0, t0), (1, t0), (1, t1), (0, t1))):
                 loop[uv].uv = (u, t); g = .42 + .58*t; loop[col] = (g, g, g, 1)
@@ -347,6 +357,7 @@ def stump(seed):
 oak('oakA', 11); oak('oakB', 23, spread=1.12)
 pine('pineA', 5)
 for i in range(3): grass(f'grass{i}', 100 + i)
+for i in range(3): grass(f'turf{i}', 300 + i, blades=16, height=.36, spread=.24, segments=2)
 grass('reed', 200, blades=7, height=.75)
 bush('bushA', 31); bush('bushB', 47, radius=.42)
 flower('flower', 3)

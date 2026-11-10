@@ -75,8 +75,13 @@ export function buildWorld(scene,b){
     else if(i%6===0){const kind=r()>.5?'bushA':'bushB',s=.8+r()*.55,turn=r()*6.28;
       p(kind+'Twigs',x,height(x,z)-.02,z,s,s,s,'#5b4632',0,turn);p(kind+'Leaves',x,height(x,z)-.02,z,s,s*(.85+r()*.3),s,pick(['#6f8d40','#7e9949','#8b9f4f']),0,turn);bushes.push([x,z,.42*s])}
   }
-  for(let i=0;i<9500;i++){const x=r()*29.85-14.925,z=r()*29.85-14.925;if(!clear(x,z)||Math.sin(x*1.45+Math.cos(z*2))+Math.sin(z*1.2+x*.6)<-.72)continue;
-    {const s=.35+r()*.55;p(pick(['grass0','grass1','grass2']),x,height(x,z)-.01,z,s,s*(.7+r()*.6),s,pick(['#536e37','#718a40','#98aa58','#899d4c']),0,r()*6.28)}
+  // Dense turf: one jittered patch of 16 blades per .26-tile cell; a few taller tufts on top.
+  const greens=['#536e37','#718a40','#98aa58','#899d4c','#647f3b'];
+  for(let gx=-14.85;gx<14.9;gx+=.26)for(let gz=-14.85;gz<14.9;gz+=.26){
+    const x=gx+(r()-.5)*.24,z=gz+(r()-.5)*.24;if(!clear(x,z))continue;
+    const lush=.5+.5*Math.sin(x*.83+Math.cos(z*1.1))*Math.sin(z*.67-x*.31),s=.8+r()*.45;
+    p(pick(['turf0','turf1','turf2']),x,height(x,z)-.01,z,s,s*(.55+.75*lush+r()*.25),s,pick(greens),0,r()*6.28);
+    if(r()<.12){const k=.5+r()*.5;p(pick(['grass0','grass1','grass2']),x,height(x,z)-.01,z,k,k*(.9+r()*.6),k,pick(greens),0,r()*6.28)}
   }
   for(const [x,z] of [[-8.5,-4.2],[7.6,10.4],[-6,8]]){at(x,z,1,r()*6.28,()=>{p('stumpBark',0,-.04,0,1,1,1,'#7a5a3a');p('stumpTop',0,-.04,0,1,1,1,'#d1b07a')});occupy(x,z,.45);stumps.push([x,z,.4])}
   // Gravel in the shallows and clumps of reeds give the transparent shoreline scale.

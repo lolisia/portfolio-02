@@ -13,6 +13,7 @@ function field(size,seed){
     return (1-b)*((1-a)*at(i,j)+a*at(i+1,j))+b*((1-a)*at(i,j+1)+a*at(i+1,j+1));
   };
 }
+export const TRAMPLE_SLOTS=24;
 const coarse=field(5,722),fine=field(27,998),grit=field(96,417);
 function texture(size,paint,color=false){
   const cv=document.createElement('canvas');cv.width=cv.height=size;
@@ -68,6 +69,7 @@ export function createAtmosphere(scene,world){
   const clouds=texture(256,(u,v)=>{const n=255*(.60*coarse(u,v)+.25*coarse(2*u,2*v)+.12*coarse(4*u,4*v)+.03*fine(u,v));return [n,n,n]});
   const cloudMap={value:clouds};
   const snowDepth={value:0},winterBare={value:0},foliageTint={value:new T.Vector3(1,1,1)};
+  const trample={value:Array.from({length:TRAMPLE_SLOTS},()=>new T.Vector4(0,0,1,0))};
   const windVertex=`
     #ifdef USE_INSTANCING
       vec3 wp=(instanceMatrix*vec4(position,1.)).xyz;
@@ -77,10 +79,24 @@ export function createAtmosphere(scene,world){
       float bend=bendRoot.w*(bendRoot.w>.1?h:h*h)*gust*breeze;
       mat4 swaying=instanceMatrix;
       swaying[3].xz+=vec2(bend,bend*.36);
+      #ifdef TRAMPLE
+        // Walkers part the turf around them and leave a slowly recovering trail.
+        vec2 parted=vec2(0.);float pressed=0.;
+        for(int i=0;i<TRAMPLE;i++){
+          vec4 t=trample[i];
+          vec2 away=wp.xz-t.xy;float dist=length(away);
+          float f=t.w*(1.-smoothstep(t.z*.35,t.z*1.7,dist));
+          parted+=away/max(dist,.001)*f;pressed=max(pressed,f);
+        }
+        swaying[3].xz+=parted*h*.85;swaying[3].y-=pressed*h*.5;
+      #endif
       #define instanceMatrix swaying
     #endif`;
-  function sway(shader){
+  function sway(shader,turf=false){
     Object.assign(shader.uniforms,{elapsed:clock,breeze,wet,winterBare});
+    if(turf){shader.uniforms.trample=trample;shader.vertexShader=`#define TRAMPLE ${TRAMPLE_SLOTS}
+uniform vec4 trample[${TRAMPLE_SLOTS}];
+`+shader.vertexShader}
     shader.vertexShader="attribute float plantMask; varying float seasonalPlant; varying float plantRank;\n"+shader.vertexShader.replace("#include <uv_vertex>","#include <uv_vertex>\nseasonalPlant=plantMask;plantRank=fract(dot(instanceMatrix[3].xyz,vec3(16.321,28.735,9.135)));");
     shader.fragmentShader="uniform float winterBare; varying float seasonalPlant; varying float plantRank;\n"+shader.fragmentShader.replace("#include <alphatest_fragment>","#include <alphatest_fragment>\nif(seasonalPlant>.5 && plantRank<winterBare)discard;");
     shader.vertexShader='uniform float elapsed,wet,breeze;\n#ifdef USE_INSTANCING\nattribute vec4 bendRoot;\n#endif\n'+shader.vertexShader.replace('#include <begin_vertex>',windVertex+'\n#include <begin_vertex>');
@@ -103,7 +119,7 @@ export function createAtmosphere(scene,world){
   for(const mat of materials){
     const isWater=mat===water.material;
     mat.onBeforeCompile=shader=>{
-      if(bendingMaterials.has(mat))sway(shader);
+      if(bendingMaterials.has(mat))sway(shader,mat.name==='grass');
       else shader.vertexShader='uniform float elapsed,wet,breeze;\n'+shader.vertexShader;
       Object.assign(shader.uniforms,{cloudMap,cloudAmount,wind,elapsed:clock,breeze,wet,snowDepth,foliageTint});
       shader.vertexShader='varying vec3 landPosition;\n'+shader.vertexShader.replace('#include <project_vertex>',`
@@ -172,6 +188,6 @@ export function createAtmosphere(scene,world){
     };
     mat.customProgramCacheKey=()=>isWater?'pond':mat.name;
   }
-  return {cloudMap,breeze,snowDepth,winterBare,foliageTint,update(seconds){clock.value=seconds;wind.value.set(seconds*.0019,seconds*.0008)},set(t,w,raining){
+  return {cloudMap,breeze,snowDepth,winterBare,foliageTint,trample,update(seconds){clock.value=seconds;wind.value.set(seconds*.0019,seconds*.0008)},set(t,w,raining){
     cloudAmount.value=(.80-.54*t.night)*(w<1?T.MathUtils.lerp(.85,1.18,w):T.MathUtils.lerp(1.18,1.22,w-1));wet.value=Number(raining)}};
 }
