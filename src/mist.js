@@ -14,7 +14,7 @@ export function createVolume(renderer,world,sun,clouds){
   const fog=new T.WebGLRenderTarget(1,1,{type:T.HalfFloatType,depthBuffer:false});
   const aoTarget=new T.WebGLRenderTarget(1,1,{depthBuffer:false});
   const ao=new T.ShaderMaterial({...GTAOShader,uniforms:T.UniformsUtils.clone(GTAOShader.uniforms),
-    defines:{...GTAOShader.defines,NORMAL_VECTOR_TYPE:0,PERSPECTIVE_CAMERA:0,SAMPLES:12},
+    defines:{...GTAOShader.defines,NORMAL_VECTOR_TYPE:0,PERSPECTIVE_CAMERA:0,SAMPLES:8},
     depthTest:false,depthWrite:false});
   ao.uniforms.tDepth.value=frame.depthTexture;ao.uniforms.tNoise.value=generateMagicSquareNoise();
   ao.uniforms.radius.value=.58;ao.uniforms.thickness.value=.42;

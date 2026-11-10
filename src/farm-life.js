@@ -81,6 +81,8 @@ export function createFarmLife(scene,world){
   function random(f){f.rng=(Math.imul(f.rng,1664525)+1013904223)>>>0;return f.rng/4294967296}
   function setTrip(f,home=false){
     if(home){f.route=paths.route(f,apron);f.route.push(door);return}
+    // Path searches are rationed per bird, so a bird with nowhere to go cannot search every frame.
+    if(f.retry>0)return;f.retry=.5;
     const far=random(f)>.42;
     const candidates=paths.nodes.filter(n=>{
       const radius=Math.hypot(n.x-apron.x,n.z-apron.z);
@@ -137,7 +139,8 @@ export function createFarmLife(scene,world){
       }
       if(!f.intent&&f.state!=='returning'){f.state='returning';f.wait=.4+random(f)*1.8;setTrip(f,true)}
       let moving=false;
-      if(f.state==='foraging'&&f.wait>0&&inEntrance(f)){f.wait=0;setTrip(f)}
+      f.retry=Math.max(0,(f.retry||0)-dt);
+      if(f.state==='foraging'&&f.wait>0&&inEntrance(f)){f.wait=0;if(!f.route.length)setTrip(f)}
       if(f.wait>0){f.wait=Math.max(0,f.wait-dt);f.pace=T.MathUtils.damp(f.pace,0,6,dt)}
       else if(f.state==='exiting'){
         moving=true;if(walk(f,dt,.85)){f.state='foraging';f.wait=0;setTrip(f)}

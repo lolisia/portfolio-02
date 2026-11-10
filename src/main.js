@@ -149,24 +149,13 @@ function trample(dt){
 weather.onchange=e=>{weatherIndex=Number(e.target.value);weatherBlend.select(weatherIndex);drawWeather(weatherIndex)};
 document.querySelector('#season').onchange=e=>{seasonIndex=Number(e.target.value);lighting()};
 document.querySelector('#reset').onclick=home;
-// Adaptive resolution: the scene, AO and fog all render into targets sized by `quality`,
-// which steps down when frames run long and back up when there is headroom.
-let quality=Math.min(1,Math.sqrt(1920*1080/(innerWidth*innerHeight*Math.min(devicePixelRatio||1,1.5)))),frameAverage=16,qualityClock=0;
-function resize(){const w=innerWidth,h=innerHeight,aspect=w/h,span=Math.max(31.5,46/aspect);camera.left=-span*aspect/2;camera.right=-camera.left;camera.top=span/2;camera.bottom=-camera.top;camera.updateProjectionMatrix();
-  const scale=quality*Math.min(devicePixelRatio||1,1.5);renderer.setPixelRatio(scale);renderer.setSize(w,h,false);volume.resize(Math.round(w*scale),Math.round(h*scale))}
-function adapt(ms){
-  frameAverage+=(Math.min(ms,100)-frameAverage)*.05;qualityClock+=ms;
-  if(qualityClock<1500)return;
-  const next=frameAverage>28?Math.max(.45,quality*.85):frameAverage<18?Math.min(1,quality*1.06):quality;
-  qualityClock=0;if(Math.abs(next-quality)>.01){quality=next;resize()}
-}
+function resize(){const w=innerWidth,h=innerHeight,aspect=w/h,span=Math.max(31.5,46/aspect);camera.left=-span*aspect/2;camera.right=-camera.left;camera.top=span/2;camera.bottom=-camera.top;camera.updateProjectionMatrix();renderer.setSize(w,h,false);volume.resize(w,h)}
 window.addEventListener('resize',resize);resize();
 let previous=0,frameIndex=0;
 renderer.shadowMap.autoUpdate=false;
 renderer.setAnimationLoop(ms=>{
   advanceTime(ms);
   const elapsedFrame=Math.max(0,(ms-previous)/1000),dt=Math.min(.05,elapsedFrame);previous=ms;controls.update();
-  if(!document.hidden&&elapsedFrame<.5)adapt(elapsedFrame*1000);
   // Shadows: the sun's map refreshes every other frame (swaying canopies stay smooth at 30 Hz);
   // lantern maps, which only see a slight swing, refresh one lamp per frame in turn.
   frameIndex++;renderer.shadowMap.needsUpdate=frameIndex%2===0;

@@ -17,9 +17,12 @@ export function createFarmPaths(world){
     if(d<.9&&clear(a,b)){a.edges.push([j,d]);b.edges.push([i,d])}
   }
   const closest=p=>{
-    let index=-1,best=Infinity;
-    nodes.forEach((n,i)=>{const d=Math.hypot(n.x-p.x,n.z-p.z);if(d<best&&clear(p,n)){index=i;best=d}});
-    return index;
+    // Nearest-first: only line-of-sight test the closest few nodes instead of the whole graph.
+    const near=nodes.map((n,i)=>[Math.hypot(n.x-p.x,n.z-p.z),i]).sort((a,b)=>a[0]-b[0]);
+    for(let k=0;k<Math.min(near.length,16);k++)if(clear(p,nodes[near[k][1]]))return near[k][1];
+    // Standing somewhere off the graph (a ramp, a bank): head for the nearest node anyway;
+    // the collision world slides the walker around whatever is in the way.
+    return near.length?near[0][1]:-1;
   };
   function route(from,to){
     const start=closest(from),end=closest(to);if(start<0||end<0)return [];
