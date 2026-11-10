@@ -195,6 +195,12 @@ def grass(name, seed, blades=9, height=.42, spread=.07, segments=3):
         lean = Vector((math.cos(b), math.sin(b), 0))*rng.uniform(.12, .5)
         h = height*rng.uniform(.55, 1.15); w = rng.uniform(.026, .042)
         side = Vector((-math.sin(b+1.2), math.cos(b+1.2), 0))
+        if segments == 1:  # a single tapered triangle: cheapest blade that still reads as grass
+            tip = base + Vector((0, 0, h)) + lean*h
+            f = bm.faces.new((bm.verts.new(base - side*w*.6), bm.verts.new(base + side*w*.6), bm.verts.new(tip)))
+            for loop, (u, t) in zip(f.loops, ((0, 0), (1, 0), (.5, 1))):
+                loop[uv].uv = (u, t); g = .42 + .58*t; loop[col] = (g, g, g, 1)
+            continue
         rows = []
         for s_ in range(segments+1):
             t = s_/segments
@@ -356,8 +362,8 @@ def stump(seed):
 
 oak('oakA', 11); oak('oakB', 23, spread=1.12)
 pine('pineA', 5)
-for i in range(3): grass(f'grass{i}', 100 + i)
-for i in range(3): grass(f'turf{i}', 300 + i, blades=16, height=.36, spread=.24, segments=2)
+for i in range(3): grass(f'grass{i}', 100 + i, segments=2)
+for i in range(3): grass(f'turf{i}', 300 + i, blades=15, height=.36, spread=.24, segments=1)
 grass('reed', 200, blades=7, height=.75)
 bush('bushA', 31); bush('bushB', 47, radius=.42)
 flower('flower', 3)

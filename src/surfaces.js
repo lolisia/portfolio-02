@@ -13,7 +13,7 @@ function field(size,seed){
     return (1-b)*((1-a)*at(i,j)+a*at(i+1,j))+b*((1-a)*at(i,j+1)+a*at(i+1,j+1));
   };
 }
-export const TRAMPLE_SLOTS=24;
+export const TRAMPLE_SLOTS=12;
 const coarse=field(5,722),fine=field(27,998),grit=field(96,417);
 function texture(size,paint,color=false){
   const cv=document.createElement('canvas');cv.width=cv.height=size;
@@ -84,7 +84,10 @@ export function createAtmosphere(scene,world){
         vec2 parted=vec2(0.);float pressed=0.;
         for(int i=0;i<TRAMPLE;i++){
           vec4 t=trample[i];
-          vec2 away=wp.xz-t.xy;float dist=length(away);
+          if(t.w<.01)continue;
+          vec2 away=wp.xz-t.xy;
+          if(abs(away.x)+abs(away.y)>t.z*2.4)continue;
+          float dist=length(away);
           float f=t.w*(1.-smoothstep(t.z*.35,t.z*1.7,dist));
           parted+=away/max(dist,.001)*f;pressed=max(pressed,f);
         }
