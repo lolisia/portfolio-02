@@ -13,6 +13,8 @@ var vane_rotor: Node3D
 var smoke: GPUParticles3D
 var smoke_process: ParticleProcessMaterial
 var fish_school: Array = []
+var next_leap := 4.0
+var character: Node3D
 var bird: Node3D
 var bird_wings: Array = []
 var bird_state := "perched"
@@ -27,6 +29,7 @@ var time := 0.0
 var wind := 3.0
 var hour := 8.5
 var weather := 0
+var water_freeze := 0.0
 
 var sphere: SphereMesh
 var leg_mesh: CylinderMesh
@@ -142,6 +145,7 @@ func _build_vane() -> void:
 	hub_mesh.mesh = hub
 	hub_mesh.material_override = brass
 	vane_arrow.add_child(hub_mesh)
+	vane_arrow.add_child(_rooster_silhouette())
 
 	vane_rotor = Node3D.new()
 	vane_rotor.position.y = 1.65
@@ -169,6 +173,59 @@ func _build_vane() -> void:
 		cup.rotation.x = PI * 0.5
 		cup.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
 		arm.add_child(cup)
+
+func _rooster_silhouette() -> MeshInstance3D:
+	# Traditional brass rooster cut-out, drawn as a 2D silhouette texture so the
+	# shape stays crisp at diorama distance without a CSG/extrusion dependency.
+	var points := PackedVector2Array([
+		Vector2(-0.37, 0.10), Vector2(-0.55, 0.25), Vector2(-0.62, 0.55),
+		Vector2(-0.48, 0.66), Vector2(-0.56, 0.50), Vector2(-0.27, 0.55),
+		Vector2(-0.03, 0.28), Vector2(0.14, 0.30), Vector2(0.18, 0.55),
+		Vector2(0.13, 0.65), Vector2(0.21, 0.62), Vector2(0.25, 0.71),
+		Vector2(0.30, 0.63), Vector2(0.37, 0.66), Vector2(0.36, 0.56),
+		Vector2(0.46, 0.51), Vector2(0.34, 0.47), Vector2(0.36, 0.36),
+		Vector2(0.24, 0.29), Vector2(0.22, 0.18), Vector2(0.10, 0.06),
+		Vector2(-0.20, 0.03),
+	])
+	var image := Image.create(128, 128, false, Image.FORMAT_RGBA8)
+	var brass := Color(0.71, 0.60, 0.38)
+	for y in range(128):
+		for x in range(128):
+			var p := Vector2(
+				(float(x) - 64.0) / 105.0,
+				0.36 - (float(y) - 64.0) / 105.0)
+			if _point_in_polygon(p, points):
+				image.set_pixel(x, y, brass)
+	var texture := ImageTexture.create_from_image(image)
+	var material := StandardMaterial3D.new()
+	material.albedo_texture = texture
+	material.albedo_color = Color.WHITE
+	material.metallic = 0.65
+	material.roughness = 0.42
+	material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	material.alpha_scissor_threshold = 0.5
+	material.cull_mode = BaseMaterial3D.CULL_DISABLED
+	var quad := QuadMesh.new()
+	quad.size = Vector2(0.95, 0.95)
+	quad.material = material
+	var mesh := MeshInstance3D.new()
+	mesh.name = "RoosterSilhouette"
+	mesh.mesh = quad
+	mesh.position = Vector3(0.0, 0.34, 0.0)
+	mesh.rotation.y = PI * 0.5
+	mesh.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	return mesh
+
+func _point_in_polygon(p: Vector2, polygon: PackedVector2Array) -> bool:
+	var inside := false
+	var j := polygon.size() - 1
+	for i in range(polygon.size()):
+		var a := polygon[i]
+		var b := polygon[j]
+		if ((a.y > p.y) != (b.y > p.y)) and (p.x < (b.x - a.x) * (p.y - a.y) / (b.y - a.y) + a.x):
+			inside = not inside
+		j = i
+	return inside
 
 func _build_smoke() -> void:
 	var image := Image.create(64, 64, false, Image.FORMAT_RGBA8)
@@ -272,7 +329,7 @@ func _chicken(chick: bool, index: int) -> Dictionary:
 		"group": group, "head": head, "legs": legs, "chick": chick, "index": index,
 		"x": 0.0, "z": 0.0, "target": Vector2.ZERO, "wait": 0.0,
 		"gait": randf() * 4.0, "speed": (0.31 if chick else 0.27) + randf() * 0.12,
-		"state": "foraging", "stride": -1,
+		"state": "foraging", "stride": -1, "flee": 0.0,
 	}
 
 func _pick_target(c: Dictionary) -> Vector2:
@@ -321,6 +378,7 @@ func _build_fish() -> void:
 			"group": group, "tail": tail, "x": target.x, "z": target.y,
 			"target": target, "depth": randf_range(0.18, 0.48),
 			"speed": randf_range(0.22, 0.38), "phase": randf() * 9.0,
+			"leap": -1.0,
 		})
 		group.position = Vector3(target.x, world.water.position.y - 0.3, target.y)
 
@@ -364,7 +422,37 @@ func _build_bird() -> void:
 
 func _update_fish(delta: float) -> void:
 	var water_y: float = world.water.position.y
+	var frozen := water_freeze > 0.15
+	next_leap -= delta
+	if not frozen and next_leap <= 0.0:
+		var jumper: Dictionary = fish_school[randi() % fish_school.size()]
+		var jumper_group: Node3D = jumper["group"]
+		var heading: float = jumper_group.rotation.y
+		if float(jumper["leap"]) < 0.0 and _fish_in_pond(
+				float(jumper["x"]) + sin(heading) * 1.4,
+				float(jumper["z"]) + cos(heading) * 1.4):
+			jumper["leap"] = 0.0
+		next_leap = 4.0 + randf() * 8.0
 	for f in fish_school:
+		var fish_group: Node3D = f.group
+		fish_group.visible = not frozen
+		if frozen:
+			continue
+		if float(f["leap"]) >= 0.0:
+			f["leap"] = float(f["leap"]) + delta / 1.15
+			var u := minf(1.0, float(f["leap"]))
+			var heading: float = fish_group.rotation.y
+			f.x += sin(heading) * delta * 1.15
+			f.z += cos(heading) * delta * 1.15
+			fish_group.position = Vector3(f.x, water_y - 0.22 + sin(PI * u) * 0.95, f.z)
+			fish_group.rotation.x = -0.95 * cos(PI * u)
+			var tail: MeshInstance3D = f.tail
+			tail.rotation.y = sin(time * 22.0) * 0.5
+			if float(f["leap"]) >= 1.0:
+				f["leap"] = -1.0
+				fish_group.rotation.x = 0.0
+				f.target = _pick_fish_target(f)
+			continue
 		var flat := Vector2(f.target.x - f.x, f.target.y - f.z)
 		if flat.length() < 0.16:
 			f.target = _pick_fish_target(f)
@@ -449,6 +537,16 @@ func _process(delta: float) -> void:
 		group.visible = outside
 		if not outside:
 			continue
+		c["flee"] = maxf(0.0, float(c["flee"]) - delta)
+		var threat := Vector2(1e9, 1e9)
+		if character != null:
+			threat = Vector2(character.position.x, character.position.z)
+		var away := Vector2(float(c["x"]), float(c["z"])) - threat
+		if away.length() < 1.25:
+			var push := away.normalized() if away.length() > 0.001 else Vector2(1.0, 0.0)
+			c["target"] = Vector2(float(c["x"]), float(c["z"])) + push * 1.5
+			c["wait"] = 0.0
+			c["flee"] = 0.8
 		if c.wait > 0.0:
 			c.wait = maxf(0.0, c.wait - delta)
 			c.state = "pecking"
@@ -465,7 +563,8 @@ func _process(delta: float) -> void:
 				continue
 			c.state = "foraging"
 			var direction := flat.normalized()
-			var step := minf(c.speed * delta, flat.length())
+			var pace := float(c["speed"]) * (2.4 if float(c["flee"]) > 0.0 else 1.0)
+			var step := minf(pace * delta, flat.length())
 			c.x += direction.x * step
 			c.z += direction.y * step
 			c.gait += step / (0.045 if c.chick else 0.085)

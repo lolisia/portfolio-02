@@ -14,8 +14,8 @@ Godot 4.7 프로젝트. 원본 Three.js 디오라마(`../src`)를 PC/모바일 �
 - 데스크톱: Forward+
 - 모바일: Mobile (`project.godot`의 `renderer/rendering_method.mobile`)
 - 조작: 좌클릭 드래그 회전, 휠 확대/축소, 터치 한 손가락 회전, 두 손가락 핀치 확대/축소
-- 개발용 프리셋: `-- --house`, `-- --pond`, `-- --pondside`, `-- --char`, `-- --char2`, `-- --charclose`, `-- --panel`, `-- --fishtest`, `-- --door`
-- 날씨/계절 프리뷰: `-- --winter`, `-- --snow`, `-- --rain`
+- 개발용 프리셋: `-- --house`, `-- --pond`, `-- --pondside`, `-- --char`, `-- --char2`, `-- --charclose`, `-- --panel`, `-- --fishtest`, `-- --door`, `-- --front`
+- 날씨/계절 프리뷰: `-- --winter`, `-- --snow`, `-- --rain`, `-- --spring`, `-- --autumn`, `-- --night`, `-- --dusk`
 - 태스크 프리뷰: `-- --gather`, `-- --fish`, `-- --salute`, `-- --fishnear`, `-- --gathernear`, `-- --snowtest`
 - 스크린샷: `-- --shot C:/path.png` (현재 창 해상도, 개발용)
 
@@ -33,9 +33,12 @@ Godot 4.7 프로젝트. 원본 Three.js 디오라마(`../src`)를 PC/모바일 �
 - 태양/하늘/안개/톤매핑/글로우/SSAO 기본 환경
 - Forward+ 볼류메트릭 미스트(FogVolume)와 **SubViewport 평면 물 반사**(모바일은 화면공간 반사 폴백)
 - 표면 셰이더: 나무결·석재·기와·흙 디테일, 젖은 표면, 눈 덮임
+- 봄 벚꽃잎/가을 낙엽 파티클, 계절 foliage tint, 겨울 연못 결빙/균열, 폭포 spray
+- 밤 별 dome, 램프별 플리커/후광, 램프 주변 나방, 여름밤 반딧불
+- 농가 창문/TV 컬러 플리커, 사람이 지날 때 창문 광량 감소
 - 겨울 지면 융기(셰이더)와 눈 위 부츠/닭 발자국, 눈이 쌓이면 서서히 메워짐
 - 캐릭터/닭이 지나간 자리의 풀 눌림과 회복 트레일(16슬롯 트램플 셰이더)
-- 계절/날씨 상태: 여름/가을/겨울 색조, 비/눈 파티클, 겨울 낙엽/풀 제거
+- 계절/날씨 상태: 여름/가을/겨울 색조, 비/눈 파티클 크로스페이드, 겨울 낙엽/풀 제거
 - 지형 경로 마스크(돌길 주변 흙 노출), 웅덩이/습기 표현
 - 화면 후처리: UI 패널 유리 렌즈, 톤 그레이드, 비네트
 - **WebP → PNG로 변환한 Unity-chan GLB** (`convert_unitychan_glb.py`)

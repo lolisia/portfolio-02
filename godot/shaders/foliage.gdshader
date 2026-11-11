@@ -7,6 +7,7 @@ uniform float wet : hint_range(0.0, 1.0) = 0.0;
 uniform float snow_depth : hint_range(0.0, 1.0) = 0.0;
 uniform float winter : hint_range(0.0, 1.0) = 0.0;
 uniform float trample_strength : hint_range(0.0, 1.0) = 0.0;
+uniform vec3 season_tint = vec3(1.0);
 uniform vec4 trample[16];
 
 varying vec3 v_color;
@@ -91,7 +92,7 @@ void fragment() {
 	if (CAMERA_POSITION_WORLD.y < 0.0 && v_origin.y < 0.44) {
 		discard;
 	}
-	vec3 albedo = base_color.rgb * v_color;
+	vec3 albedo = base_color.rgb * v_color * season_tint;
 	float up = clamp(v_world_normal.y, 0.0, 1.0);
 	float snow_noise = fbm(v_origin.xz * 2.6);
 	float snow_mask = smoothstep(0.04, 0.46, snow_depth * 1.2 - snow_noise * 0.35)

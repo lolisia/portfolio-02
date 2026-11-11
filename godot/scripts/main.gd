@@ -13,16 +13,20 @@ const PostProcess = preload("res://scripts/post_process.gd")
 const FarmLife = preload("res://scripts/farm_life.gd")
 const WaterReflection = preload("res://scripts/water_reflection.gd")
 const Footprints = preload("res://scripts/footprints.gd")
+const NightLife = preload("res://scripts/night_life.gd")
+const SeasonsFX = preload("res://scripts/seasons_fx.gd")
 
 var world: FarmWorld
 var orbit: OrbitCamera
 var ui: GameUI
 var character: UnityChan
 var weather_fx: WeatherFX
+var seasons_fx: SeasonsFX
 var post: PostProcess
 var farm_life: FarmLife
 var water_reflection: WaterReflection
 var footprints: Footprints
+var night_life: NightLife
 var high_end_rendering := true
 var day_cycle: DayCycle
 var sun: DirectionalLight3D
@@ -45,6 +49,11 @@ var auto_start := 8.5
 var auto_elapsed := 0.0
 var _wind_applied := -1.0
 var _last_apply_hour := -999.0
+var rain_fx := 0.0
+var snow_fx := 0.0
+var storm_fx := 0.0
+var water_freeze := 0.0
+var _water_freeze_applied := -1.0
 var _presses: Dictionary = {}
 var _trail: Array = []
 var _trail_clock := 0.0
@@ -70,11 +79,19 @@ func _ready() -> void:
 
 	weather_fx = WeatherFX.new()
 	weather_fx.name = "WeatherFX"
+	weather_fx.world = world
 	add_child(weather_fx)
+
+	seasons_fx = SeasonsFX.new()
+	seasons_fx.name = "SeasonsFX"
+	seasons_fx.world = world
+	add_child(seasons_fx)
+	seasons_fx.setup()
 
 	farm_life = FarmLife.new()
 	farm_life.name = "FarmLife"
 	farm_life.world = world
+	farm_life.character = character
 	add_child(farm_life)
 	farm_life.build()
 
@@ -91,6 +108,12 @@ func _ready() -> void:
 	orbit.position = Vector3(31.0, 34.0, 41.0)
 	orbit.target = Vector3(0.0, 1.0, 0.0)
 	add_child(orbit)
+
+	night_life = NightLife.new()
+	night_life.name = "NightLife"
+	night_life.world = world
+	add_child(night_life)
+	night_life.setup()
 
 	high_end_rendering = String(RenderingServer.get_current_rendering_method()) == "forward_plus"
 	if high_end_rendering:
@@ -122,6 +145,8 @@ func _ready() -> void:
 		orbit.set_view(Vector3(6.6, 0.6, 4.0), 0.55, 1.2, 4.0)
 	if "--door" in cli:
 		orbit.set_view(Vector3(-0.8, 1.0, -0.6), 0.25, 1.35, 4.2)
+	if "--front" in cli:
+		orbit.set_view(Vector3(-1.0, 1.2, -0.4), 0.1, 0.42, 4.0)
 
 	ui = GameUI.new()
 	ui.name = "GameUI"
@@ -152,11 +177,25 @@ func _ready() -> void:
 	farm_life.weather = weather
 
 	# Development shortcuts for previewing a settled weather/season state.
+	if "--spring" in cli:
+		season = 0
+		ui.set_season(0)
+		world.set_surface_state(wet, snow_depth, season)
+		day_cycle.apply(hour, weather, season)
+	if "--autumn" in cli:
+		season = 2
+		ui.set_season(2)
+		world.set_surface_state(wet, snow_depth, season)
+		day_cycle.apply(hour, weather, season)
 	if "--winter" in cli:
 		season = 3
 		ui.set_season(3)
 		snow_depth = 1.0
 		_surface_snow = 1.0
+		water_freeze = 1.0
+		_water_freeze_applied = 1.0
+		world.set_water_freeze(1.0)
+		farm_life.water_freeze = 1.0
 		world.set_surface_state(wet, snow_depth, season)
 		day_cycle.apply(hour, weather, season)
 	if "--snow" in cli:
@@ -164,6 +203,7 @@ func _ready() -> void:
 		ui.set_weather(4)
 		snow_depth = 1.0
 		_surface_snow = 1.0
+		snow_fx = 1.0
 		world.set_surface_state(wet, snow_depth, season)
 		day_cycle.apply(hour, weather, season)
 		weather_fx.set_weather(weather)
@@ -172,11 +212,20 @@ func _ready() -> void:
 		ui.set_weather(2)
 		wet = 1.0
 		_surface_wet = 1.0
+		rain_fx = 1.0
 		world.set_surface_state(wet, snow_depth, season)
 		day_cycle.apply(hour, weather, season)
 		weather_fx.set_weather(weather)
 	if "--panel" in cli:
 		ui.set_panel_open(true)
+	if "--night" in cli:
+		hour = 22.0
+		hour_target = 22.0
+		_apply_time(true)
+	if "--dusk" in cli:
+		hour = 18.6
+		hour_target = 18.6
+		_apply_time(true)
 	if "--gather" in cli:
 		character._begin_journey("gather")
 	if "--fish" in cli:
@@ -357,15 +406,35 @@ func _process(delta: float) -> void:
 		_surface_wet = wet
 		_surface_snow = snow_depth
 
+	rain_fx = lerpf(rain_fx, 1.0 if weather == 2 else 0.0, 1.0 - exp(-delta * 1.4))
+	snow_fx = lerpf(snow_fx, 1.0 if weather >= 4 else 0.0, 1.0 - exp(-delta * 1.4))
+	storm_fx = lerpf(storm_fx, 1.0 if weather == 5 else 0.0, 1.0 - exp(-delta * 1.4))
+	if weather_fx != null:
+		weather_fx.set_intensity(rain_fx, snow_fx, storm_fx, delta)
+	if seasons_fx != null:
+		seasons_fx.update(delta, season, wind)
+
+	water_freeze = lerpf(water_freeze, 1.0 if season == 3 else 0.0, 1.0 - exp(-delta * 0.9))
+	if absf(water_freeze - _water_freeze_applied) > 0.002:
+		world.set_water_freeze(water_freeze)
+		_water_freeze_applied = water_freeze
+	if farm_life != null:
+		farm_life.water_freeze = water_freeze
+
 	if footprints != null:
 		footprints.snow_depth = snow_depth
 		footprints.snowfall = 1.0 if weather == 4 else (2.0 if weather == 5 else 0.0)
 	_update_trample(delta)
 
+	var daylight := Daylight.evaluate(hour)
+	var coverage: float = [0.0, 1.0, 2.0, 1.0, 1.0, 2.0][clampi(weather, 0, 5)]
+	var overcast: float = clampf(coverage * 0.42, 0.0, 0.88)
+	if night_life != null:
+		night_life.update(delta, float(daylight["night"]), float(daylight["golden"]),
+			1.0 - minf(1.0, overcast * 1.1), weather, season, wind, orbit.yaw)
+
 	if post != null:
-		var t := Daylight.evaluate(hour)
-		var coverage: float = [0.0, 1.0, 2.0, 1.0, 1.0, 2.0][clampi(weather, 0, 5)]
-		var overcast: float = clampf(coverage * 0.42, 0.0, 0.88)
+		var t := daylight
 		var tint := Color(1, 1, 1)
 		if t["golden"] > 0.01:
 			tint = tint.lerp(Color(1.03, 1.0, 0.94), 0.25 * float(t["golden"]))
@@ -396,7 +465,6 @@ func _on_wind_changed(value: float) -> void:
 
 func _on_weather_changed(index: int) -> void:
 	weather = index
-	weather_fx.set_weather(index)
 	_apply_time(true)
 
 func _on_season_changed(index: int) -> void:

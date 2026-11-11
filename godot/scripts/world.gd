@@ -28,6 +28,7 @@ var pond_shore := Vector2(6.9, 4.0)
 var lamps: Array = []
 var window_light: OmniLight3D
 var lamp_glass_material: StandardMaterial3D
+var window_glass_material: StandardMaterial3D
 var cottage_window := Vector3.ZERO
 var cottage_ridge := Vector3.ZERO
 var cottage_chimney := Vector3.ZERO
@@ -61,6 +62,12 @@ const BARK_COLORS := ["#55412b", "#655034", "#493c2d"]
 const TIMBER := ["#9c6a44", "#a9764b", "#8d5d3c", "#b27e54", "#a06c46", "#956540"]
 const SHAKES := ["#7b5a43", "#6d4e3a", "#866550", "#5f4434", "#8a6a52", "#735240", "#6a5342"]
 const TURF_GREENS := ["#536e37", "#718a40", "#98aa58", "#899d4c", "#647f3b"]
+const SEASON_TINTS := [
+	Vector3(1.15, 1.18, 0.95),
+	Vector3(1.0, 1.0, 1.0),
+	Vector3(1.95, 0.60, 0.34),
+	Vector3(0.79, 0.87, 0.83),
+]
 
 func build() -> void:
 	meshes = NatureAssets.load_meshes()
@@ -736,6 +743,7 @@ func _build_path_mask() -> void:
 
 func set_surface_state(wet_value: float, snow_value: float, season_value: int) -> void:
 	var winter_value := 1.0 if season_value == 3 else 0.0
+	var tint: Vector3 = SEASON_TINTS[clampi(season_value, 0, 3)]
 	if terrain_material != null:
 		terrain_material.set_shader_parameter("wet", wet_value)
 		terrain_material.set_shader_parameter("snow_depth", snow_value)
@@ -747,12 +755,20 @@ func set_surface_state(wet_value: float, snow_value: float, season_value: int) -
 				mat.set_shader_parameter("wet", wet_value)
 				mat.set_shader_parameter("snow_depth", snow_value)
 				mat.set_shader_parameter("winter", winter_value)
+				mat.set_shader_parameter("season_tint", tint)
 
 ## 16 x (x, z, radius, strength) presses written by main.gd. Only the turf /
 ## grass materials receive the array, so trees and crops skip the loop.
 func set_trample(slots: PackedVector4Array) -> void:
 	for mat in _trample_materials:
 		mat.set_shader_parameter("trample", slots)
+
+func set_water_freeze(value: float) -> void:
+	if water == null:
+		return
+	var mat := water.material_override as ShaderMaterial
+	if mat != null:
+		mat.set_shader_parameter("freeze", clampf(value, 0.0, 1.0))
 
 func _build_trees() -> void:
 	for i in range(TREE_LIST.size()):
@@ -911,6 +927,8 @@ func _collect_materials() -> void:
 			var mat := mmi.material_override
 			if mmi.name == "lampglass" and mat is StandardMaterial3D:
 				lamp_glass_material = mat
+			if mmi.name == "glass" and mat is StandardMaterial3D:
+				window_glass_material = mat
 			var name := String(mmi.name)
 			if mat is ShaderMaterial and (name.begins_with("turf") or name.begins_with("grass")):
 				_trample_materials.append(mat)

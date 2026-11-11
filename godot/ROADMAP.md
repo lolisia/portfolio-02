@@ -48,6 +48,11 @@ Godot의 사용자 인자는 `--` 뒤에 전달합니다.
 ... -- --fishnear       # 연못 근처에서 낚시 시작
 ... -- --gathernear     # 채소밭 근처에서 수확 시작
 ... -- --snowtest       # 눈 위 이동/발자국/풀 눌림 확인
+... -- --spring         # 봄(벚꽃잎) 프리셋
+... -- --autumn         # 가을(낙엽/tint) 프리셋
+... -- --night          # 밤 22:00, 별/나방/램프/창문 확인
+... -- --dusk           # 해질녘 18:36
+... -- --front          # 농가 정면 낮은 각도
 ... -- --shot C:/path.png   # 현재 창 해상도로 스크린샷 저장 (개발용)
 
 ... -- --winter         # 겨울 상태 즉시 적용
@@ -82,8 +87,11 @@ Godot의 사용자 인자는 `--` 뒤에 전달합니다.
   - 지형 경로 마스크(돌길 주변 흙)
 - 계절/날씨 상태
   - 여름/가을/겨울 하늘·안개 색
-  - 비/눈 GPU 파티클
-  - 겨울 낙엽/풀 제거, 눈 덮임
+  - 비/눈 GPU 파티클, 강도 크로스페이드(`amount_ratio`)
+  - 봄 벚꽃잎 / 가을 낙엽 GPU 파티클
+  - 겨울 낙엽/풀 제거, 눈 덮임, 연못 결빙/균열 셰이더
+  - 계절별 foliage tint (봄/여름/가을/겨울)
+  - 비 수면 파문 링, 폭포 spray 파티클
 - Unity-chan
   - GLB 임포트(90본, 10개 애니메이션)
   - Standing/Walking 크로스페이드, 경유지 걷기
@@ -93,10 +101,16 @@ Godot의 사용자 인자는 `--` 뒤에 전달합니다.
   - 눈 깜빡임
 - 농장 생활
   - 닭 2 + 병아리 4, 배회/쪼기/낮·날씨 은신
-  - 지붕 풍향계·풍속계
+  - Unity-chan 접근 시 닭이 도망 (2.4배 속도, 0.8초)
+  - 지붕 풍향계·풍속계, 청동 수탉 실루엣
   - 굴뚝 연기 GPU 파티클
-  - 물고기 10마리
+  - 물고기 10마리, 가끔 수면 위로 점프
   - 나무/램프/지붕을 옮겨 앉는 새
+- 야간 연출
+  - 별 dome(절차적 텍스처, 궤도 회전), 밤 안개/별 밝기
+  - 램프별 플리커/험, additive 후광, 유리 emissive
+  - 램프 주변 나방, 여름밤 반딧불
+  - 농가 창문/램프/TV 컬러 플리커, 사람이 지나갈 때 창문 광량 감소
 - 물
   - 연못 수면 셰이더, 물고기, 다리, 폭포
   - Forward+ SubViewport 평면 반사
@@ -133,8 +147,10 @@ Godot의 사용자 인자는 `--` 뒤에 전달합니다.
 | `scripts/day_cycle.gd` | 태양/하늘/안개/글로우/계절 색 |
 | `scripts/orbit_camera.gd` | 직교 카메라 오빗/터치 줌 |
 | `scripts/unity_chan.gd` | 캐릭터 임포트, 태스크 AI, 낚시 장비 |
-| `scripts/farm_life.gd` | 닭, 풍향계, 연기, 물고기, 새 |
-| `scripts/weather_fx.gd` | 비/눈 GPU 파티클 |
+| `scripts/farm_life.gd` | 닭, 풍향계/수탉, 연기, 물고기 점프, 새 |
+| `scripts/weather_fx.gd` | 비/눈 강도 크로스페이드, 물보라/수면 파문, 폭포 spray |
+| `scripts/seasons_fx.gd` | 봄 벚꽃잎, 가을 낙엽 |
+| `scripts/night_life.gd` | 별, 나방/반딧불, 램프 플리커/후광, 실내 창문/TV |
 | `scripts/post_process.gd` | 패널 렌즈/그레이드 |
 | `scripts/water_reflection.gd` | Forward+ 평면 반사 SubViewport |
 | `scripts/footprints.gd` | 부츠/닭 발자국 MultiMesh, 수명/눈 표면 추적 |
@@ -143,7 +159,8 @@ Godot의 사용자 인자는 `--` 뒤에 전달합니다.
 | `shaders/terrain.gdshader` | 지형/경로/눈/습기, 겨울 정점 융기 |
 | `shaders/foliage.gdshader` | 바람/눈/겨울 낙엽, 풀 눌림 |
 | `shaders/footprint.gdshader` | 발자국 알파/수명 |
-| `shaders/water.gdshader` | 물결/반사/색 |
+| `shaders/stars.gdshader` | 별 dome additive |
+| `shaders/water.gdshader` | 물결/반사/색, 겨울 결빙 |
 | `shaders/waterfall.gdshader` | 폭포 |
 | `shaders/post_process.gdshader` | 화면 후처리 |
 
@@ -198,7 +215,7 @@ Godot의 사용자 인자는 `--` 뒤에 전달합니다.
    - 불가능하면 screen-space light shafts + FogVolume 조합.
 2. 새벽/밤/비/눈에 따른 안개 밀도·색·산란 튜닝.
 3. 램프 5개의 볼류메트릭 산란(Spot/Omni light) 확인.
-4. 밤하늘 별/달(원본 `sky.js`의 별) 추가.
+4. ~~밤하늘 별~~ — `night_life.gd` 별 dome + `stars.gdshader`로 구현.
 5. 모바일은 depth fog로 폴백.
 
 **파일**
@@ -237,81 +254,66 @@ Godot의 사용자 인자는 `--` 뒤에 전달합니다.
 
 ---
 
-### P3. 계절 파티클/날씨 전환 완성
+### P3. 계절 파티클/날씨 전환 완성 — 대부분 완료
 
 **현재 상태**
-- 비/눈 파티클만 있음.
-- 벚꽃/낙엽 파티클 없음.
-- 날씨 전환이 즉시적이며 원본의 크로스페이드 느낌이 약함.
+- 봄 벚꽃잎/가을 낙엽 GPU 파티클 구현 (`seasons_fx.gd`).
+- 비/눈 파티클 강도를 `amount_ratio`로 보간하고, `wet`/`snow_depth`와 함께 1초 내외로 전환.
+- 겨울 연못 결빙 셰이더(균열/서리) + 물고기 숨김 + 폭포 spray.
+- 계절 foliage tint (봄 연둣빛, 가을 주황, 겨울 청회색).
+- 비/눈이 그치면 입자 수가 서서히 줄어드는 것 확인.
 
-**할 일**
-1. `seasons.js` 포트:
-   - 봄 벚꽃잎, 가을 낙엽.
-   - 나무 위치 기반 스폰, 바람에 따른 이동.
-   - 지면에 잠시 쌓였다가 사라지는 표현(선택).
-2. `weather.js`식 크로스페이드:
-   - 날씨 상태 가중치 보간.
-   - 안개 밀도/하늘/글로우/파티클 강도 연동.
-3. 비 물보라/수면 파문.
-4. 눈보라 강도에 따른 파티클 수/속도/바람.
-5. 겨울 물 동결/얼음 셰이더, 폭포 spray/foam/vapor 디테일.
+**남은 일**
+1. 지면에 쌓였다가 사라지는 낙엽/벚꽃잎 표현.
+2. 눈보라 강도에 따른 파티클 속도/바람 연동 강화.
+3. 폭포 foam/vapor 디테일.
 
 **파일**
 - `scripts/weather_fx.gd`
+- `scripts/seasons_fx.gd`
 - `scripts/day_cycle.gd`
 - `scripts/main.gd`
-- 신규 `scripts/seasons_fx.gd`
+- `shaders/water.gdshader`
 
 **완료 기준**
-- 봄/가을에 계절 파티클이 보임.
-- 날씨 변경 시 1~2초에 걸쳐 자연스럽게 전환.
-- 비 올 때 수면/지면 파문이 보임.
+- 봄/가을에 계절 파티클이 보임. (확인)
+- 날씨 변경 시 1~2초에 걸쳐 자연스럽게 전환. (파티클/젖음/눈 확인)
+- 비 올 때 수면/지면 파문이 보임. (수면 파문 확인, 지면 물보라는 남음)
 
 ---
 
-### P4. 농장/야생 디테일
+### P4. 농장/야생 디테일 — 대부분 완료
 
 **현재 상태**
-- 닭은 배회/쪼기만; 원본의 놀람/도망/닭장 출입 없음.
-- 새는 나무/램프/지붕 이동; 원본의 체류/이착륙 연출은 단순화.
-- 물고기는 헤엄만; 점프/물보라 없음.
-- 램프는 점등만; 깜빡임/글래스 발광/후광 없음.
-- 풍향계는 화살표만; 원본의 수탉 실루엣 없음.
-- 실내 TV/사람 실루엣 없음.
-- 반딧불/나방 없음.
+- 닭: 배회/쪼기, Unity-chan 접근 시 2.4배 속도로 도망. 닭장 출입 사이클은 아직 즉시 숨김.
+- 새: 나무/램프/지붕 이동, 날개 펼침/접힘. 체류/착륙 flare는 단순화.
+- 물고기: 수면 위로 점프(포물선 + 회전), 결빙 시 숨김. 점프 물보라는 아직 없음.
+- 램프: 랜턴별 플리커/험, 글래스 emissive, additive 후광.
+- 풍향계: 청동 수탉 실루엣/허브 디테일 추가.
+- 실내: 창문/TV 컬러 플리커, 사람이 지나갈 때 창문 광량 감소.
+- 반딧불/나방: 밤/계절/날씨 조건부.
+- 농가 주변 디테일/꽃정원은 아직 부분.
 
-**할 일**
-1. 닭:
-   - Unity-chan 접근 시 도망.
-   - 밤/비에 닭장 안으로 들어가고 나오는 사이클.
-   - 발자국/모이 쪼기 디테일.
-2. 새:
-   - 체류 시간, 이착륙 flare, 날개 접기.
-   - 나뭇가지 흔들림과 함께 앉기.
-3. 물고기:
-   - 가끔 수면 위로 점프 + 물보라.
-4. 램프:
-   - 랜턴별 재질/점멸, 글래스 emissive, 후광 스프라이트.
-5. 실내:
-   - TV 색 번짐, 지나가는 사람 실루엣, 창문 조명.
-6. 반딧불/나방:
-   - 밤, 따뜻하고 바람 약한 날에만.
-7. 풍향계 수탉 실루엣/브라스 디테일.
-8. 농가 주변 디테일: 정원 계단/flight, 울타리, 먼 꽃정원.
-9. 원본 `garden.js`의 꽃(튤립·라벤더·해바라기·폭스글러브·장미) 이식.
+**남은 일**
+1. 닭장 출입 사이클과 문/램프 연출.
+2. 새의 착륙 flare/체류 시간, 가지 흔들림 동기화.
+3. 물고기 점프 물보라.
+4. 실내 사람 실루엣(유리 셰이더)과 TV 색 번짐 강화.
+5. 원본 `garden.js`의 꽃(튤립·라벤더·해바라기·폭스글러브·장미) 이식.
+6. 농가 주변 계단/울타리/먼 꽃정원 디테일.
 
 **파일**
 - `scripts/farm_life.gd`
 - `scripts/world.gd`
 - `scripts/unity_chan.gd`
-- 신규 `scripts/interior.gd`
-- 신규 `scripts/night_life.gd` (반딧불/나방)
+- `scripts/night_life.gd`
+- `shaders/water.gdshader`
 
 **완료 기준**
-- 닭이 캐릭터를 피해 도망.
-- 밤에 닭이 닭장으로 들어감.
-- 램프가 랜턴별로 미세하게 깜빡임.
-- 실내 창문 빛이 시간/TV에 따라 변함.
+- 닭이 캐릭터를 피해 도망. (확인)
+- 밤에 닭이 닭장으로 들어감. (남음)
+- 램프가 랜턴별로 미세하게 깜빡임. (확인)
+- 실내 창문 빛이 시간/TV에 따라 변함. (확인)
 
 ---
 
@@ -413,6 +415,13 @@ Godot의 사용자 인자는 `--` 뒤에 전달합니다.
   - 지형 융기는 CPU 메시가 아니라 `terrain.gdshader` 정점 변위. `snow_surface()` 분석식과 반드시 함께 수정.
   - 겨울에 식물 95% discard; 일부만 남음.
   - 발자국은 투명 쿼드 데칼이며 그림자를 받지 않음(원본과 유사).
+- **물/겨울**
+  - 연못 결빙은 `water.gdshader`의 `freeze` uniform; `main.gd`의 `water_freeze`와 함께 조정.
+  - 비 파문은 연못 수면에만 생성(지면 물보라는 아직 없음).
+- **야간**
+  - 별은 화면공간 합성이 아니라 145 반경 dome이므로 fog/depth에 영향받음.
+  - 실내 사람 실루엣은 창문 광량 변조로 근사; 유리 셰이더 실루엣은 아직 없음.
+  - 램프 유리 emissive는 5개 램프가 하나의 material을 공유해 평균 플리커만 반영.
 - **태스크 AI**
   - A* 그래프가 아니라 근거리 웨이포인트 + 충돌 슬라이드.
   - 작은 덤불/램프는 통과 가능하게 처리.
@@ -440,21 +449,21 @@ Godot의 사용자 인자는 `--` 뒤에 전달합니다.
 2. **경로 그래프/A* + 실내** (P5)
    - `farm-paths.js`의 0.6 타일 그래프를 `scripts/farm_paths.gd`로
    - 문 열기 → 실내 → 다시 나오는 상태 추가
-3. **모바일 UI/품질 프로파일** (P6)
-   - 360px 폭 패널, 터치 타깃, High/Medium/Low
-   - 반사/눈 파티클/잔디 밀도 예산
-4. **농장/야생 디테일** (P4)
-   - 닭 도망/닭장 출입, 물고기 점프, 램프 깜빡임, 반딧불
-5. **계절 파티클/날씨 크로스페이드** (P3)
-   - 벚꽃/낙엽, rainfall 가중치 보간, 수면 파문
-6. **빌드/배포** (P7)
+3. **모바일 품질/모션 프리뷰** (P6)
+   - High/Medium/Low 프리셋, 해상도 스케일/그림자/파티클 예산
+   - `motion.js`의 지평선/풍속계/날씨 카드 이식
+4. **농장/야생 남은 디테일** (P4)
+   - 닭장 출입, 새 착륙 flare, 물고기 점프 물보라, 꽃정원
+5. **계절/날씨 남은 디테일** (P3)
+   - 낙엽/벚꽃잎 지면 적재, 눈보라 바람 연동, 폭포 foam
+6. **빌드/배포/스모크 테스트** (P7)
 
 ### 세션 시작 체크리스트
 
 - [ ] `git status` 확인 (preview/reference 제외)
 - [ ] `git log --oneline -3` 확인
 - [ ] 헤드리스 실행으로 파싱 오류 확인
-- [ ] `--pondside` / `--pond` / `--winter --snowtest` 렌더로 회귀 확인
+- [ ] `--pondside` / `--winter --pondside` / `--autumn` / `--night` 렌더로 회귀 확인
 - [ ] 작업 후 `git add godot` + 커밋
 
 ---
@@ -471,14 +480,14 @@ Godot의 사용자 인자는 `--` 뒤에 전달합니다.
 | `src/water.js` | `water.gdshader` + `water_reflection.gd` | 근사 |
 | `src/cascade.js` | `world.gd::_build_cascade`, `waterfall.gdshader` | 간략화 |
 | `src/seasons.js` | `day_cycle.gd`, `weather_fx.gd`, shaders, `terrain.gdshader` | 겨울 지면 융기 포함 |
-| `src/weather.js` | `main.gd` wet/snow state | 부분 |
-| `src/rain.js` | `weather_fx.gd` | 간략화 |
+| `src/weather.js` | `main.gd` rain/snow intensity crossfade | 부분 |
+| `src/rain.js` | `weather_fx.gd` (lines, pond ripples, spray) | 간략화 |
 | `src/footprints.js` | `scripts/footprints.gd` | 완료 |
-| `src/farm-life.js` | `farm_life.gd` | 부분 |
-| `src/wildlife.js` | `farm_life.gd` | 부분 |
+| `src/farm-life.js` | `farm_life.gd` (flee, vane, lamps) | 부분 |
+| `src/wildlife.js` | `farm_life.gd` (fish leap, bird) | 부분 |
 | `src/unitychan.js` | `unity_chan.gd` | 부분 |
-| `src/interior.js` | 없음 | 미이식 |
-| `src/panel.js`, `motion.js` | `game_ui.gd` | 모션 프리뷰 누락 |
+| `src/interior.js` | `night_life.gd` (window/TV light) | 부분 (사람 실루엣 없음) |
+| `src/panel.js`, `motion.js` | `game_ui.gd` | 반응형 완료, 모션 프리뷰 누락 |
 | `src/daylight.js` | `daylight.gd` | 이식 |
 | `src/garden.js` | `world.gd::_build_garden_beds` | 꽃정원 대신 작물밭으로 대체 |
 | `src/farm-paths.js` | 없음 | 미이식 |
