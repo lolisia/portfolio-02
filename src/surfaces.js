@@ -99,6 +99,7 @@ export function createAtmosphere(scene,world){
   const clouds=texture(256,(u,v)=>{const n=255*(.60*coarse(u,v)+.25*coarse(2*u,2*v)+.12*coarse(4*u,4*v)+.03*fine(u,v));return [n,n,n]});
   const cloudMap={value:clouds};
   const snowDepth={value:0},winterBare={value:0},foliageTint={value:new T.Vector3(1,1,1)};
+  const rainNow={value:0},WATER=world.waterY.toFixed(3);
   const trample={value:Array.from({length:TRAMPLE_SLOTS},()=>new T.Vector4(0,0,1,0))};
   const windVertex=`
     #ifdef USE_INSTANCING
@@ -175,7 +176,7 @@ uniform vec4 trample[${TRAMPLE_SLOTS}];
           }
           #endif`);
       }
-      Object.assign(shader.uniforms,{cloudMap,cloudAmount,wind,elapsed:clock,breeze,wet,snowDepth,foliageTint});
+      Object.assign(shader.uniforms,{cloudMap,cloudAmount,wind,elapsed:clock,breeze,wet,snowDepth,foliageTint,rainNow});
       shader.vertexShader='varying vec3 landPosition;\n'+shader.vertexShader.replace('#include <project_vertex>',`
         vec4 land=vec4(transformed,1.);
         #ifdef USE_INSTANCING
@@ -183,7 +184,7 @@ uniform vec4 trample[${TRAMPLE_SLOTS}];
         #endif
         landPosition=(modelMatrix*land).xyz;
         #include <project_vertex>`);
-      shader.fragmentShader='varying vec3 landPosition; uniform sampler2D cloudMap; uniform float cloudAmount,elapsed,wet,breeze; uniform vec2 wind;\n'+shader.fragmentShader;
+      shader.fragmentShader='varying vec3 landPosition; uniform sampler2D cloudMap; uniform float cloudAmount,elapsed,wet,breeze,rainNow; uniform vec2 wind;\n'+shader.fragmentShader;
       shader.fragmentShader=shader.fragmentShader.replace('#include <lights_fragment_begin>',T.ShaderChunk.lights_fragment_begin.replace('getDirectionalLightInfo( directionalLight, directLight );',`
         getDirectionalLightInfo( directionalLight, directLight );
         #if UNROLLED_LOOP_INDEX == 0
@@ -245,13 +246,58 @@ uniform vec4 trample[${TRAMPLE_SLOTS}];
           float hold=mix(.6,1.,smoothstep(.35,.95,snowNormal.y));
           float coverSnow=smoothstep(.0,.16,snowDepth*1.55*hold-uneven*.82)*settle;
           diffuseColor.rgb=mix(diffuseColor.rgb,vec3(.80,.88,.95)*(.87+.17*uneven),coverSnow);
-          roughnessFactor=mix(roughnessFactor,.87,coverSnow);`);
+          roughnessFactor=mix(roughnessFactor,.87,coverSnow);
+          // Snow sparkle: scattered ice facets, about two pixels across, each tilted its own way.
+          // The few that mirror the sun toward the eye flash (see the glint added to the sun's
+          // light below), and which ones do changes as the view turns.
+          float grainSpan=max(length(dFdx(landPosition)),length(dFdy(landPosition)));
+          vec3 grain=floor(landPosition*exp2(-floor(log2(grainSpan*1.6))));
+          vec3 facet=fract(sin(vec3(dot(grain,vec3(127.1,311.7,74.7)),dot(grain,vec3(269.5,183.3,246.1)),dot(grain,vec3(113.5,271.9,124.6))))*43758.5453);
+          float crystal=step(.7,facet.x)*coverSnow;
+          vec3 crystalNormal=normalize(normal+(vec3(facet.y,facet.z,fract(facet.x*57.))-.5)*1.1);
+          // Rain soaks in: wet surfaces turn darker and richer, and shine. Faces turned to the
+          // sky take the most water.
+          float wetness=wet*mix(.35,1.,smoothstep(-.1,.7,snowNormal.y))*(1.-coverSnow);
+          diffuseColor.rgb=pow(diffuseColor.rgb,vec3(1.+.36*wetness));
+          roughnessFactor*=1.-.38*wetness;
+          ${['terrain','stone'].includes(mat.name)?`
+          // Puddles gather in level hollows of the ground and on the paving slabs, and mirror the
+          // sky and lanterns. Falling drops ring them.
+          float basin=texture2D(cloudMap,landPosition.xz*.12+.31).r*.6+texture2D(cloudMap,landPosition.xz*.41).r*.4;
+          float brim=mix(.95,.52,wet)${mat.name==='terrain'?'-.14*trailMask':'+.04'};
+          float puddle=smoothstep(brim,brim+.035,basin)*smoothstep(.965,.995,inverseTransformDirection(nonPerturbedNormal,viewMatrix).y)
+            *(1.-coverSnow)*step(${WATER}+.03,landPosition.y)*smoothstep(0.,.15,wet);
+          if(puddle>.001){
+            vec2 push=vec2(0.);
+            for(int layer=0;layer<2;layer++){
+              vec2 rq=landPosition.xz*(3.1+1.3*float(layer))+float(layer)*17.3,cell=floor(rq);
+              float seed=fract(sin(dot(cell,vec2(127.1,311.7)))*43758.5453);
+              vec2 delta=fract(rq)-(.5+.3*(vec2(seed,fract(seed*91.7))-.5));
+              float age=fract(elapsed*(.8+.6*seed)+seed*7.),crest=length(delta)-age*.33;
+              push+=delta/max(.02,length(delta))*sin(crest*42.)*exp(-abs(crest)*16.)*(1.-age);
+            }
+            push*=.45*rainNow;
+            normal=normalize(mix(normal,normalize((viewMatrix*vec4(push.x,1.,push.y,0.)).xyz),puddle));
+            diffuseColor.rgb*=1.-.55*puddle;roughnessFactor=mix(roughnessFactor,.045,puddle);
+          }`:''}`);
+        const direct='RE_Direct( directLight, geometryPosition, geometryNormal, geometryViewDir, geometryClearcoatNormal, material, reflectedLight );';
+        const index=shader.fragmentShader.indexOf(direct,shader.fragmentShader.indexOf('getDirectionalLightInfo( directionalLight, directLight );'));
+        shader.fragmentShader=shader.fragmentShader.slice(0,index)+`
+            reflectedLight.directSpecular += directLight.color * crystal * 7.
+              * pow(max(0.,dot(crystalNormal,normalize(directLight.direction+geometryViewDir))),900.);
+          `+shader.fragmentShader.slice(index);
       }
       if(isWater)shadeWater(shader,water);
       if(mat.name==='cascade')shadeCascade(shader,water);
     };
     mat.customProgramCacheKey=()=>isWater?'pond':mat.name;
   }
-  return {cloudMap,breeze,snowDepth,winterBare,foliageTint,trample,update(seconds){clock.value=seconds;wind.value.set(seconds*.0019,seconds*.0008)},set(t,w,raining){
-    cloudAmount.value=(.80-.54*t.night)*(w<1?T.MathUtils.lerp(.85,1.18,w):T.MathUtils.lerp(1.18,1.22,w-1));wet.value=Number(raining)}};
+  return {cloudMap,breeze,snowDepth,winterBare,foliageTint,trample,wet,update(seconds){clock.value=seconds;wind.value.set(seconds*.0019,seconds*.0008)},
+    // Surfaces soak within a few seconds of rain and take about half a minute to dry again.
+    soak(rain,dt){
+      rainNow.value=rain;
+      wet.value=rain>wet.value?wet.value+(rain-wet.value)*(1-Math.exp(-dt*.5)):Math.max(rain,wet.value-dt*.035);
+    },
+    set(t,w){
+    cloudAmount.value=(.80-.54*t.night)*(w<1?T.MathUtils.lerp(.85,1.18,w):T.MathUtils.lerp(1.18,1.22,w-1))}};
 }

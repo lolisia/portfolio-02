@@ -112,7 +112,9 @@ function lighting(){
   volume.grade({top,bottom,glow:t.color([0xfff0d0,0xfff0d0,0xffb08a,0x000000,0xff8a48]),glowAmount:2*golden*(1-t.night*.6),
     shadow:tint(t.dawn?new T.Vector3(-.12,-.08,.14):new T.Vector3(-.1,-.15,.12),new T.Vector3(-.12,-.06,.16)),
     highlight:tint(t.dawn?new T.Vector3(.1,.02,-.06):new T.Vector3(.17,-.01,-.17),new T.Vector3(-.04,0,.06)),
-    saturation:1+.16*golden,vignette:.2+.1*t.night});
+    saturation:1+.16*golden,vignette:.2+.1*t.night,
+    // Bloom: a restrained glare by day, wide warm halos once the lamps are the brightest thing left.
+    bloom:.05+.06*golden+.11*t.night,threshold:T.MathUtils.lerp(1.25,.55,t.night),stars:t.night*clear*clear*(1-t.golden)});
   document.body.style.backgroundColor=backdrop.getStyle();
   clearTimeout(skyTimer);
   const updateProbe=()=>{setSky(t,w,sun);lastProbe=performance.now()};
@@ -191,6 +193,17 @@ function warmUp(){
   lanterns.forEach(({spot},i)=>spot.intensity=saved[i]);
   lighting();
 }
+// ?weather=0-5 and ?season=0-3 open the scene already settled in that state (for checking looks).
+{
+  const query=new URLSearchParams(location.search),pick=(name,count)=>{
+    const value=query.get(name);if(value===null||!(Number(value)>=0&&Number(value)<count))return null;
+    document.querySelector('#'+name+' input[value="'+Number(value)+'"]').checked=true;return Number(value);
+  };
+  const startWeather=pick('weather',6),startSeason=pick('season',4);
+  if(startWeather!==null){weatherIndex=startWeather;weatherBlend.select(weatherIndex);weatherBlend.update(100);drawWeather(weatherIndex);atmosphere.soak(weatherBlend.rain,100)}
+  if(startSeason!==null)seasonIndex=startSeason;
+  if(startWeather!==null||startSeason!==null)seasons(seasonIndex,weatherIndex,0,60,0,windShown,weatherBlend);
+}
 warmUp();unityChanReady.then(warmUp);
 let previous=0,frameIndex=0;
 renderer.shadowMap.autoUpdate=false;
@@ -205,7 +218,8 @@ renderer.setAnimationLoop(ms=>{
   const changingWeather=weatherBlend.active;weatherBlend.update(Math.min(.1,elapsedFrame));
   if(changingWeather)lighting();
   scene.background.lerp(backdrop,1-Math.exp(-3.8*Math.min(.5,elapsedFrame)));
-  atmosphere.update(ms/1000);
+  atmosphere.update(ms/1000);atmosphere.soak(weatherBlend.rain,Math.min(elapsedFrame,.5));
+  volume.mood(atmosphere.snowDepth.value,atmosphere.wet.value,weatherBlend.rain,T.MathUtils.clamp((weatherBlend.density-1)/2.8,0,1),weatherBlend.storm,nightLevel);
   rain(dt,ms/1000,windShown,weatherBlend.rain,nightLevel);
   seasons(seasonIndex,weatherIndex,Math.min(elapsedFrame,.15),Math.min(elapsedFrame,4),ms/1000,windShown,weatherBlend);
   cascade.userData.update(ms/1000,atmosphere.breeze.value,1-.85*nightLevel);
