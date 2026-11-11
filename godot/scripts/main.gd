@@ -115,7 +115,9 @@ func _setup_environment() -> void:
 	env.glow_intensity = 0.16
 	env.glow_bloom = 0.04
 	env.glow_hdr_threshold = 1.05
-	env.ssao_enabled = true
+	var method := String(RenderingServer.get_current_rendering_method())
+	var high_end := method == "forward_plus"
+	env.ssao_enabled = high_end
 	env.ssao_radius = 1.2
 	env.ssao_intensity = 1.8
 	env.ssao_power = 1.0
@@ -124,7 +126,7 @@ func _setup_environment() -> void:
 	env.fog_light_color = Color(0.42, 0.50, 0.52)
 	env.fog_density = 0.0025
 	env.fog_sky_affect = 0.18
-	env.volumetric_fog_enabled = true
+	env.volumetric_fog_enabled = high_end
 	env.volumetric_fog_density = 0.0035
 	env.volumetric_fog_albedo = Color(0.50, 0.58, 0.58)
 	env.volumetric_fog_length = 55.0
