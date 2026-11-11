@@ -45,6 +45,12 @@ void vertex() {
 }
 
 void fragment() {
+	// The pond mirror camera sits below the water plane. Discard the part of
+	// the island below the waterline so the reflection only sees the world
+	// above the pond instead of the underside of the diorama.
+	if (CAMERA_POSITION_WORLD.y < 0.0 && v_world.y < 0.44) {
+		discard;
+	}
 	float n = fbm3(v_world * 5.5);
 	vec3 albedo = v_color;
 	float roughness = 0.9;

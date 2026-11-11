@@ -49,6 +49,9 @@ void vertex() {
 }
 
 void fragment() {
+	if (CAMERA_POSITION_WORLD.y < 0.0 && v_origin.y < 0.44) {
+		discard;
+	}
 	vec3 albedo = base_color.rgb * v_color;
 	float up = clamp(v_world_normal.y, 0.0, 1.0);
 	float snow_noise = fbm(v_origin.xz * 2.6);

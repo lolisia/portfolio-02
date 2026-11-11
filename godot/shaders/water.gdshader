@@ -5,11 +5,17 @@ uniform vec4 shallow_color : source_color = vec4(0.055, 0.19, 0.17, 0.62);
 uniform vec4 deep_color : source_color = vec4(0.006, 0.045, 0.085, 0.90);
 uniform float wave_strength : hint_range(0.0, 3.0) = 1.0;
 uniform sampler2D screen_tex : hint_screen_texture, filter_linear;
+uniform sampler2D reflection_tex : filter_linear;
+uniform mat4 reflection_projection;
+uniform mat4 reflection_view;
+uniform float reflection_strength : hint_range(0.0, 1.0) = 0.0;
 
 varying vec3 world_pos;
+varying vec4 mirror_coord;
 
 void vertex() {
 	world_pos = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
+	mirror_coord = reflection_projection * (reflection_view * vec4(world_pos, 1.0));
 	float w = sin(world_pos.x * 2.2 + TIME * 1.3) + sin(world_pos.z * 2.8 - TIME * 1.1);
 	VERTEX.y += w * 0.004 * wave_strength;
 }
@@ -32,7 +38,11 @@ void fragment() {
 		sin(world_pos.x * 2.1 + TIME * 1.3),
 		cos(world_pos.z * 2.4 - TIME * 1.1)) * 0.006;
 	vec3 reflected = texture(screen_tex, clamp(SCREEN_UV + ripple, vec2(0.001), vec2(0.999))).rgb;
+	vec2 mirror_uv = mirror_coord.xy / max(mirror_coord.w, 0.0001) * 0.5 + 0.5;
+	vec3 mirror = texture(reflection_tex, clamp(mirror_uv + ripple * 1.5, vec2(0.001), vec2(0.999))).rgb;
+	reflected = mix(reflected, mirror, reflection_strength);
 	float fresnel = pow(1.0 - clamp(dot(normalize(NORMAL), normalize(VIEW)), 0.0, 1.0), 3.0);
-	ALBEDO = mix(ALBEDO, reflected, fresnel * 0.42);
-	ALPHA = mix(ALPHA, 0.98, fresnel * 0.35);
+	ALBEDO = mix(ALBEDO, reflected, 0.10 + fresnel * 0.55);
+	ALPHA = mix(ALPHA, 0.98, 0.04 + fresnel * 0.35);
 }
+

@@ -1,5 +1,5 @@
 shader_type spatial;
-render_mode cull_disabled, diffuse_burley, specular_schlick_ggx;
+render_mode cull_back, diffuse_burley, specular_schlick_ggx;
 
 uniform sampler2D path_mask : filter_linear;
 uniform float wet : hint_range(0.0, 1.0) = 0.0;
@@ -40,6 +40,9 @@ void vertex() {
 }
 
 void fragment() {
+	if (CAMERA_POSITION_WORLD.y < 0.0 && v_world.y < 0.44) {
+		discard;
+	}
 	float large = fbm(v_world.xz * 1.4);
 	float fine = fbm(v_world.xz * 11.0);
 	float blades = smoothstep(0.54, 0.92, fbm(v_world.xz * 88.0));

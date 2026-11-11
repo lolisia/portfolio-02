@@ -11,6 +11,7 @@ const UnityChan = preload("res://scripts/unity_chan.gd")
 const WeatherFX = preload("res://scripts/weather_fx.gd")
 const PostProcess = preload("res://scripts/post_process.gd")
 const FarmLife = preload("res://scripts/farm_life.gd")
+const WaterReflection = preload("res://scripts/water_reflection.gd")
 
 var world: FarmWorld
 var orbit: OrbitCamera
@@ -19,6 +20,8 @@ var character: UnityChan
 var weather_fx: WeatherFX
 var post: PostProcess
 var farm_life: FarmLife
+var water_reflection: WaterReflection
+var high_end_rendering := true
 var day_cycle: DayCycle
 var sun: DirectionalLight3D
 var fill: DirectionalLight3D
@@ -73,6 +76,14 @@ func _ready() -> void:
 	orbit.position = Vector3(31.0, 34.0, 41.0)
 	orbit.target = Vector3(0.0, 1.0, 0.0)
 	add_child(orbit)
+
+	high_end_rendering = String(RenderingServer.get_current_rendering_method()) == "forward_plus"
+	if high_end_rendering:
+		water_reflection = WaterReflection.new()
+		water_reflection.name = "WaterReflection"
+		add_child(water_reflection)
+		water_reflection.setup(world.water, orbit, world.water.position.y)
+		_add_volumetric_mist()
 
 	var cli: Array = []
 	for arg in OS.get_cmdline_args():
@@ -194,6 +205,7 @@ func _setup_environment() -> void:
 	env.glow_hdr_threshold = 1.05
 	var method := String(RenderingServer.get_current_rendering_method())
 	var high_end := method == "forward_plus"
+	high_end_rendering = high_end
 	env.ssao_enabled = high_end
 	env.ssao_radius = 1.2
 	env.ssao_intensity = 1.8
@@ -204,8 +216,8 @@ func _setup_environment() -> void:
 	env.fog_density = 0.0025
 	env.fog_sky_affect = 0.18
 	env.volumetric_fog_enabled = high_end
-	env.volumetric_fog_density = 0.0035
-	env.volumetric_fog_albedo = Color(0.50, 0.58, 0.58)
+	env.volumetric_fog_density = 0.012
+	env.volumetric_fog_albedo = Color(0.55, 0.63, 0.64)
 	env.volumetric_fog_length = 55.0
 	env.volumetric_fog_detail_spread = 1.4
 	env.volumetric_fog_anisotropy = 0.35
@@ -215,6 +227,20 @@ func _setup_environment() -> void:
 	world_environment.name = "WorldEnvironment"
 	world_environment.environment = env
 	add_child(world_environment)
+
+func _add_volumetric_mist() -> void:
+	var fog := FogVolume.new()
+	fog.name = "ForestMist"
+	fog.size = Vector3(36, 12, 36)
+	fog.position = Vector3(0, 4, 0)
+	var mist := FogMaterial.new()
+	mist.density = 0.12
+	mist.albedo = Color(0.58, 0.68, 0.70)
+	mist.emission = Color(0.01, 0.015, 0.02)
+	mist.height_falloff = 0.38
+	mist.edge_fade = 0.15
+	fog.material = mist
+	add_child(fog)
 
 func _setup_lights() -> void:
 	sun = DirectionalLight3D.new()
@@ -322,4 +348,5 @@ func _on_auto_toggled(enabled: bool) -> void:
 
 func _on_reset_requested() -> void:
 	orbit.reset_view()
+
 
