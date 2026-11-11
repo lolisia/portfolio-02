@@ -1,0 +1,162 @@
+extends RefCounted
+class_name DioramaBuilder
+
+## Batched instanced builder, a port of src/modules.js + the batching half of
+## src/surfaces.js. Every kind becomes one MultiMeshInstance3D.
+
+var root: Node3D
+var assets: Dictionary
+var rng := RandomNumberGenerator.new()
+var batches: Dictionary = {}
+var parent := Transform3D.IDENTITY
+
+const BOX_KINDS := ["wood", "stone", "clay", "plaster", "glass", "lampglass", "soil", "iron"]
+const PLANT_KINDS := [
+	"oakALeaves", "oakBLeaves", "pineANeedles",
+	"bushALeaves", "bushBLeaves", "grass0", "grass1", "grass2",
+	"turf0", "turf1", "turf2", "reed", "carrot", "flowerStem",
+	"flowerHead", "cabbage", "sunflowerStem", "sunflowerBloom",
+	"lavenderStem", "lavenderBloom", "tulipStem", "tulipBloom",
+	"foxgloveStem", "foxgloveBloom", "roseBloom",
+]
+const NO_SHADOW := ["turf0", "turf1", "turf2", "grass0", "grass1", "grass2", "glass"]
+
+func _init(p_root: Node3D, p_assets: Dictionary, p_seed: int = 41573) -> void:
+	root = p_root
+	assets = p_assets
+	rng.seed = p_seed
+
+func randf() -> float:
+	return rng.randf()
+
+func pick(values: Array) -> Variant:
+	return values[rng.randi_range(0, values.size() - 1)]
+
+func part(kind: String, x: float, y: float, z: float, w: float, h: float, d: float,
+		color: Variant, rx: float = 0.0, ry: float = 0.0, rz: float = 0.0, sway: float = 0.0) -> void:
+	var c: Color = color if color is Color else Color(str(color))
+	# Vertex and MultiMesh instance/custom data are raw shader data; convert the
+	# sRGB-authored palette to linear once here.
+	c = c.srgb_to_linear()
+	var basis := Basis.from_euler(Vector3(rx, ry, rz)) * Basis.from_scale(Vector3(w, h, d))
+	var t := parent * Transform3D(basis, Vector3(x, y, z))
+	if not batches.has(kind):
+		batches[kind] = []
+	batches[kind].append([t, c, sway])
+
+func place(x: float, y: float, z: float, scale: float, angle: float, fn: Callable) -> void:
+	var old := parent
+	parent = old * Transform3D(Basis(Vector3.UP, angle) * Basis.from_scale(Vector3.ONE * scale), Vector3(x, y, z))
+	fn.call()
+	parent = old
+
+func finish() -> void:
+	for kind in batches.keys():
+		var kind_name := String(kind)
+		var items: Array = batches[kind_name]
+		if items.is_empty():
+			continue
+		var mesh: Mesh = _mesh_for(kind_name)
+		if mesh == null:
+			continue
+		var material: Material = _material_for(kind_name)
+		var mm := MultiMesh.new()
+		mm.transform_format = MultiMesh.TRANSFORM_3D
+		mm.use_colors = true
+		mm.use_custom_data = true
+		mm.mesh = mesh
+		mm.instance_count = items.size()
+		for i in range(items.size()):
+			var item: Array = items[i]
+			mm.set_instance_transform(i, item[0])
+			var item_color: Color = item[1]
+			mm.set_instance_color(i, item_color)
+			# The foliage shader reads the tint from custom data as well, because
+			# MultiMesh instance colors are not exposed consistently in custom shaders.
+			mm.set_instance_custom_data(i, Color(item_color.r, item_color.g, item_color.b, float(item[2])))
+		var mmi := MultiMeshInstance3D.new()
+		mmi.name = kind_name
+		mmi.multimesh = mm
+		mmi.material_override = material
+		var no_shadow := kind_name in NO_SHADOW
+		mmi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF if no_shadow else GeometryInstance3D.SHADOW_CASTING_SETTING_ON
+		root.add_child(mmi)
+
+func _mesh_for(kind: String) -> Mesh:
+	if assets.has(kind):
+		return assets[kind]
+	match kind:
+		"stone", "wood", "clay", "plaster", "glass", "lampglass", "soil", "iron":
+			var box := BoxMesh.new()
+			box.size = Vector3.ONE
+			return box
+		"cone":
+			var cone := CylinderMesh.new()
+			cone.top_radius = 0.0
+			cone.bottom_radius = 0.55
+			cone.height = 1.0
+			cone.radial_segments = 7
+			cone.rings = 1
+			return cone
+		"trunk":
+			var trunk := CylinderMesh.new()
+			trunk.top_radius = 0.40
+			trunk.bottom_radius = 0.53
+			trunk.height = 1.0
+			trunk.radial_segments = 7
+			trunk.rings = 1
+			return trunk
+		"leaf", "boulder":
+			var sphere := SphereMesh.new()
+			sphere.radius = 0.52
+			sphere.height = 1.04
+			sphere.radial_segments = 7
+			sphere.rings = 4
+			return sphere
+		_:
+			var fallback := BoxMesh.new()
+			fallback.size = Vector3.ONE
+			return fallback
+
+func _material_for(kind: String) -> Material:
+	if kind in PLANT_KINDS:
+		var shader_mat := ShaderMaterial.new()
+		shader_mat.shader = preload("res://shaders/foliage.gdshader")
+		shader_mat.set_shader_parameter("wind_strength", 1.0)
+		return shader_mat
+	var mat := StandardMaterial3D.new()
+	mat.vertex_color_use_as_albedo = true
+	mat.roughness = 0.9
+	mat.metallic = 0.0
+	match kind:
+		"glass":
+			mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+			mat.albedo_color = Color(1.0, 1.0, 1.0, 0.42)
+			mat.emission_enabled = true
+			mat.emission = Color(1.0, 0.67, 0.32)
+			mat.emission_energy_multiplier = 0.03
+			mat.roughness = 0.23
+			mat.cull_mode = BaseMaterial3D.CULL_DISABLED
+		"lampglass":
+			mat.emission_enabled = true
+			mat.emission = Color(1.0, 0.93, 0.80)
+			mat.emission_energy_multiplier = 0.03
+			mat.roughness = 0.2
+			mat.cull_mode = BaseMaterial3D.CULL_DISABLED
+		"iron":
+			mat.metallic = 0.55
+			mat.roughness = 0.55
+		"wood":
+			mat.roughness = 0.82
+		"stone":
+			mat.roughness = 0.92
+		"soil":
+			mat.roughness = 0.98
+		"clay":
+			mat.roughness = 0.74
+		"plaster":
+			mat.roughness = 0.98
+	if kind in ["oakALeaves", "oakBLeaves", "bushALeaves", "bushBLeaves"]:
+		mat.cull_mode = BaseMaterial3D.CULL_DISABLED
+	return mat
+
