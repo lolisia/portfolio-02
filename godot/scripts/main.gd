@@ -54,6 +54,8 @@ func _ready() -> void:
 	character.name = "UnityChan"
 	character.world = world
 	character.position = Vector3(-0.35, 0.0, 1.0)
+	character.weather = weather
+	character.season = season
 	add_child(character)
 
 	weather_fx = WeatherFX.new()
@@ -85,6 +87,8 @@ func _ready() -> void:
 		orbit.set_view(Vector3(-1.0, 0.55, 1.75), 0.0, 1.35, 8.0)
 	if "--pond" in cli:
 		orbit.set_view(Vector3(10.8, 0.3, 6.1), 0.7, 0.98, 2.8)
+	if "--fishtest" in cli:
+		orbit.set_view(Vector3(6.6, 0.6, 4.0), 0.55, 1.2, 4.0)
 
 	ui = GameUI.new()
 	ui.name = "GameUI"
@@ -140,6 +144,18 @@ func _ready() -> void:
 		weather_fx.set_weather(weather)
 	if "--panel" in cli:
 		ui.set_panel_open(true)
+	if "--gather" in cli:
+		character._begin_journey("gather")
+	if "--fish" in cli:
+		character._begin_journey("fish")
+	if "--salute" in cli:
+		character._begin_journey("salute")
+	if "--fishnear" in cli:
+		character.position = Vector3(6.5, 0.0, 4.2)
+		character._begin_journey("fish")
+	if "--gathernear" in cli:
+		character.position = Vector3(1.0, 0.0, 2.2)
+		character._begin_journey("gather")
 	ui.set_time_value(hour)
 	ui.set_wind_value(wind)
 
@@ -239,6 +255,9 @@ func _process(delta: float) -> void:
 		farm_life.hour = hour
 		farm_life.wind = wind
 		farm_life.weather = weather
+	if character != null:
+		character.weather = weather
+		character.season = season
 
 	var wet_target := 1.0 if weather == 2 else (0.65 if weather == 3 else 0.0)
 	wet = lerpf(wet, wet_target, 1.0 - exp(-delta * 0.8))

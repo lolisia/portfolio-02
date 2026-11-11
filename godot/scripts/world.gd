@@ -22,6 +22,8 @@ var ground: MeshInstance3D
 var terrain_material: ShaderMaterial
 var path_mask: ImageTexture
 var water: MeshInstance3D
+var veg_beds: Array = []
+var pond_shore := Vector2(6.9, 4.0)
 var lamps: Array = []
 var window_light: OmniLight3D
 var lamp_glass_material: StandardMaterial3D
@@ -70,6 +72,7 @@ func build() -> void:
 	_build_coop(2.25, -1.92, 0.025)
 	_build_shed(4.45, -1.90, -0.035)
 	_build_garden_beds()
+	_build_vegetable_beds()
 	_build_paths()
 	_build_path_mask()
 	_build_trees()
@@ -130,6 +133,21 @@ func is_free(x: float, z: float, pad: float = 0.0) -> bool:
 		var oz: float = obstacle[1]
 		var radius: float = obstacle[2]
 		if pow(x - ox, 2.0) + pow(z - oz, 2.0) <= pow(radius + pad, 2.0):
+			return false
+	return true
+
+func is_free_for_walker(x: float, z: float, pad: float = 0.16) -> bool:
+	if wet(x, z) > -0.10:
+		return false
+	for obstacle in obstacles:
+		var radius: float = obstacle[2]
+		# Small plants and lamp posts can be brushed through; walls, beds and
+		# larger trees remain solid so the walker does not cut through the farm.
+		if radius < 0.55:
+			continue
+		var dx := x - float(obstacle[0])
+		var dz := z - float(obstacle[1])
+		if dx * dx + dz * dz <= pow(radius + pad, 2.0):
 			return false
 	return true
 
@@ -588,6 +606,27 @@ func _build_garden_beds() -> void:
 		path_points.append(Vector2(cx, cz + f * bd * 2.0))
 		path_points.append(Vector2(cx + f * bw * 2.0, cz))
 
+func _build_vegetable_beds() -> void:
+	for bed in [Vector2(1.1, 3.3), Vector2(2.7, 3.3)]:
+		var x: float = bed.x
+		var z: float = bed.y
+		var y := height(x, z)
+		b.place(x, y, z, 1.0, 0.0, func() -> void:
+			b.part("wood", 0.0, 0.10, 0.0, 1.32, 0.20, 1.72, "#9a6c47")
+			b.part("soil", 0.0, 0.20, 0.0, 1.12, 0.14, 1.52, "#5e3f2a")
+			for row in range(5):
+				for col in range(3):
+					var px := (col - 1) * 0.36 + (b.randf() - 0.5) * 0.04
+					var pz := (row - 2) * 0.30 + (b.randf() - 0.5) * 0.04
+					var s := 0.72 + b.randf() * 0.24
+					if row % 2 == 0:
+						b.part("cabbage", px, 0.26, pz, s, s, s, b.pick(["#93b65a", "#a3c063", "#86a84f"]), 0.0, b.randf() * TAU, 0.0, 0.2)
+					else:
+						b.part("carrot", px, 0.26, pz, s, s, s, b.pick(["#6f9a3e", "#7ea946"]), 0.0, b.randf() * TAU, 0.0, 0.3)
+		)
+		obstacles.append([x, z, 0.78])
+		veg_beds.append(Vector2(x, z))
+
 func _path(ax: float, az: float, bx: float, bz: float) -> void:
 	var length := sqrt((bx - ax) * (bx - ax) + (bz - az) * (bz - az))
 	var count := maxi(1, int(ceil(length / 0.73)))
@@ -815,4 +854,5 @@ func set_wind(wind_ms: float) -> void:
 
 func walkable(x: float, z: float) -> bool:
 	return wet(x, z) < -0.2 and is_free(x, z, 0.26)
+
 
