@@ -11,6 +11,16 @@ var vane_arrow: Node3D
 var vane_rotor: Node3D
 var smoke: GPUParticles3D
 var smoke_process: ParticleProcessMaterial
+var fish_school: Array = []
+var bird: Node3D
+var bird_wings: Array = []
+var bird_state := "perched"
+var bird_timer := 5.0
+var bird_from := Vector3.ZERO
+var bird_to := Vector3.ZERO
+var bird_t := 0.0
+var bird_duration := 2.0
+var bird_perches: Array = []
 var rotor_speed := 0.0
 var time := 0.0
 var wind := 3.0
@@ -39,6 +49,8 @@ func build() -> void:
 	_build_vane()
 	_build_smoke()
 	_build_flock()
+	_build_fish()
+	_build_bird()
 
 func _material(color: Color) -> StandardMaterial3D:
 	var key := color.to_html()
@@ -270,10 +282,143 @@ func _pick_target(c: Dictionary) -> Vector2:
 			return Vector2(x, z)
 	return COOP_CENTER
 
+func _fish_in_pond(x: float, z: float) -> bool:
+	return world.wet(x, z) > 0.30 and world.height(x, z) < world.water.position.y - 0.20 and x < 12.6
+
+func _pick_fish_target(f: Dictionary) -> Vector2:
+	for i in range(12):
+		var x := randf_range(7.4, 12.5)
+		var z := randf_range(3.4, 9.0)
+		if _fish_in_pond(x, z):
+			return Vector2(x, z)
+	return Vector2(10.0, 6.1)
+
+func _build_fish() -> void:
+	var palettes := [
+		[Color(0.384, 0.475, 0.420), Color(0.678, 0.694, 0.545), Color(0.502, 0.420, 0.322)],
+		[Color(0.541, 0.435, 0.298), Color(0.824, 0.698, 0.486), Color(0.608, 0.420, 0.239)],
+		[Color(0.886, 0.863, 0.796), Color(0.949, 0.933, 0.886), Color(0.847, 0.471, 0.235)],
+	]
+	for i in range(10):
+		var palette: Array = palettes[i % palettes.size()]
+		var group := Node3D.new()
+		group.name = "fish-" + str(i)
+		add_child(group)
+		var body := _egg(group, palette[0], 0, 0, 0, 0.092, 0.12, 0.34)
+		body.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		var belly := _egg(group, palette[1], 0, -0.055, 0.07, 0.073, 0.065, 0.21)
+		belly.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		var tail := _egg(group, palette[2], 0, 0, -0.36, 0.028, 0.14, 0.14)
+		tail.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		for s in [-1.0, 1.0]:
+			var eye := _egg(group, Color(0.153, 0.157, 0.114), float(s) * 0.074, 0.024, 0.208, 0.016, 0.016, 0.016)
+			eye.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		var scale := 0.62 + 0.3 * float((i * 37) % 10) / 10.0
+		group.scale = Vector3.ONE * scale
+		var target := _pick_fish_target({})
+		fish_school.append({
+			"group": group, "tail": tail, "x": target.x, "z": target.y,
+			"target": target, "depth": randf_range(0.18, 0.48),
+			"speed": randf_range(0.22, 0.38), "phase": randf() * 9.0,
+		})
+		group.position = Vector3(target.x, world.water.position.y - 0.3, target.y)
+
+func _bird_ellipsoid(parent: Node3D, color: Color, x: float, y: float, z: float,
+		w: float, h: float, d: float) -> MeshInstance3D:
+	var mi := _egg(parent, color, x, y, z, w, h, d)
+	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
+	return mi
+
+func _build_bird() -> void:
+	bird = Node3D.new()
+	bird.name = "PerchingBird"
+	add_child(bird)
+	_bird_ellipsoid(bird, Color(0.502, 0.384, 0.290), 0, 0.11, 0, 0.12, 0.115, 0.21)
+	_bird_ellipsoid(bird, Color(0.333, 0.314, 0.294), 0, 0.22, 0.13, 0.101, 0.106, 0.11)
+	_bird_ellipsoid(bird, Color(0.898, 0.757, 0.604), 0, 0.14, 0.13, 0.092, 0.083, 0.095)
+	_bird_ellipsoid(bird, Color(0.757, 0.588, 0.345), 0, 0.20, 0.235, 0.044, 0.028, 0.067)
+	for s in [-1.0, 1.0]:
+		_bird_ellipsoid(bird, Color(0.129, 0.118, 0.110), float(s) * 0.083, 0.241, 0.172, 0.015, 0.015, 0.015)
+	_bird_ellipsoid(bird, Color(0.298, 0.271, 0.243), 0, 0.12, -0.217, 0.063, 0.043, 0.158)
+	for s in [-1.0, 1.0]:
+		var wing := Node3D.new()
+		wing.position = Vector3(float(s) * 0.069, 0.15, -0.013)
+		bird.add_child(wing)
+		_bird_ellipsoid(wing, Color(0.408, 0.345, 0.290), float(s) * 0.15, 0, -0.03, 0.205, 0.031, 0.103)
+		_bird_ellipsoid(wing, Color(0.271, 0.243, 0.220), float(s) * 0.295, 0, -0.094, 0.124, 0.021, 0.055)
+		bird_wings.append(wing)
+	bird.scale = Vector3.ONE * 1.35
+
+	for tree in FarmWorld.TREE_LIST:
+		var x: float = tree[0]
+		var z: float = tree[1]
+		var s: float = tree[2]
+		bird_perches.append(Vector3(x + 0.36 * s, world.height(x, z) + 3.97 * s, z + 0.25 * s))
+	for lamp in world.lamps:
+		var p: Vector3 = lamp.position
+		bird_perches.append(p + Vector3(0, 0.08, 0))
+	bird_perches.append(world.cottage_ridge + Vector3(0, 0.22, 0))
+	bird.position = bird_perches[bird_perches.size() - 1]
+	bird_timer = 6.0
+
+func _update_fish(delta: float) -> void:
+	var water_y: float = world.water.position.y
+	for f in fish_school:
+		var flat := Vector2(f.target.x - f.x, f.target.y - f.z)
+		if flat.length() < 0.16:
+			f.target = _pick_fish_target(f)
+			continue
+		var direction := flat.normalized()
+		var step := minf(f.speed * delta, flat.length())
+		f.x += direction.x * step
+		f.z += direction.y * step
+		var group: Node3D = f.group
+		group.position = Vector3(f.x, water_y - f.depth, f.z)
+		group.rotation.y = lerp_angle(group.rotation.y, atan2(direction.x, direction.y), 1.0 - exp(-delta * 4.0))
+		var tail: MeshInstance3D = f.tail
+		tail.rotation.y = sin(time * 9.0 + f.phase) * 0.38
+
+func _update_bird(delta: float) -> void:
+	if bird == null:
+		return
+	if bird_state == "perched":
+		bird_timer -= delta
+		bird.rotation.x = sin(time * 0.7) * 0.03
+		for i in range(bird_wings.size()):
+			var wing: Node3D = bird_wings[i]
+			wing.rotation.z = lerp(wing.rotation.z, float(-1 if i == 0 else 1) * 0.12, 1.0 - exp(-delta * 5.0))
+		if bird_timer <= 0.0:
+			bird_from = bird.position
+			var next = bird_perches[randi() % bird_perches.size()]
+			if next.distance_to(bird_from) < 0.5 and bird_perches.size() > 1:
+				next = bird_perches[(randi() + 1) % bird_perches.size()]
+			bird_to = next
+			bird_t = 0.0
+			bird_duration = clampf(bird_from.distance_to(bird_to) * 0.28, 1.6, 4.2)
+			bird_state = "flying"
+	else:
+		bird_t = minf(1.0, bird_t + delta / bird_duration)
+		var pos := bird_from.lerp(bird_to, bird_t)
+		pos.y += sin(bird_t * PI) * (0.5 + bird_from.distance_to(bird_to) * 0.16)
+		bird.position = pos
+		var ahead := bird_to - bird_from
+		bird.rotation.y = atan2(ahead.x, ahead.z)
+		bird.rotation.x = -sin(bird_t * PI) * 0.45
+		for i in range(bird_wings.size()):
+			var wing2: Node3D = bird_wings[i]
+			wing2.rotation.z = float(-1 if i == 0 else 1) * (0.45 + sin(time * 18.0) * 0.55)
+		if bird_t >= 1.0:
+			bird.position = bird_to
+			bird_state = "perched"
+			bird.rotation.x = 0.0
+			bird_timer = 6.0 + randf() * 8.0
+
 func _process(delta: float) -> void:
 	if world == null:
 		return
 	time += delta
+	_update_fish(delta)
+	_update_bird(delta)
 	var outside := hour >= 6.0 and hour < 19.0 and (weather <= 1 or weather == 4) and wind < 11.0
 	var gust := sin(time * 1.37) + 0.42 * sin(time * 2.31)
 	var target_heading := WIND_HEADING + gust * 0.11 * minf(1.0, wind / 8.0)
