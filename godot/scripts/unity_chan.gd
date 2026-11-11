@@ -7,11 +7,11 @@ class_name UnityChan
 
 const MODEL_PATH := "res://assets/models/unitychan/sd_unitychan.glb"
 const TARGET_HEIGHT := 1.02
-const HUB := Vector2(0.4, 1.7)
 const POND := Vector2(10.7, 6.3)
 
 var world: FarmWorld
 var footprints: Footprints
+var paths: FarmPaths
 var model: Node3D
 var animation: AnimationPlayer
 var blend_face: MeshInstance3D
@@ -70,6 +70,8 @@ func _ready() -> void:
 	_find_face()
 	_build_fishing_gear()
 	position.y = world.height(position.x, position.z) if world != null else 0.0
+	if world != null:
+		paths = FarmPaths.new(world)
 	_play("Standing", 0.0)
 
 func _fit_model() -> void:
@@ -235,24 +237,24 @@ func _begin_journey(type: String) -> void:
 func _task_route(type: String) -> Array[Vector2]:
 	var result: Array[Vector2] = []
 	var current := Vector2(position.x, position.z)
-	if current.distance_to(HUB) > 2.0:
-		result.append(HUB)
+	var target := current
 	if type == "gather" and world != null and not world.veg_beds.is_empty():
 		var bed: Vector2 = world.veg_beds[randi() % world.veg_beds.size()]
-		var target := bed + Vector2(0, -1.05)
+		target = bed + Vector2(0, -1.05)
 		task_face = atan2(bed.x - target.x, bed.y - target.y)
-		result.append(target)
 	elif type == "fish" and world != null:
-		var target: Vector2 = world.pond_shore
+		target = world.pond_shore
 		task_face = atan2(POND.x - target.x, POND.y - target.y)
-		result.append(Vector2(4.2, 2.2))
-		result.append(Vector2(6.3, 3.7))
-		result.append(target)
 	elif type == "salute":
-		var target := Vector2(-0.35, 1.0)
+		target = Vector2(-0.35, 1.0)
 		task_face = atan2(-1.0 - target.x, -2.5 - target.y)
-		result.append(target)
-	return result
+	if target != current and paths != null and world != null:
+		var path: Array[Vector2] = paths.route(world, current, target)
+		if not path.is_empty():
+			if path.size() > 1 and path[0].distance_to(current) < 0.35:
+				path.pop_front()
+			return path
+	return [target] if target != current else result
 
 func _stroll_next() -> void:
 	mode = "stroll"
@@ -260,9 +262,12 @@ func _stroll_next() -> void:
 	var target: Vector2 = waypoints[waypoint_index]
 	route.clear()
 	var current := Vector2(position.x, position.z)
-	if current.distance_to(target) > 4.0:
-		route.append(HUB)
-	route.append(target)
+	if paths != null and world != null:
+		route = paths.route(world, current, target)
+		if route.size() > 1 and route[0].distance_to(current) < 0.35:
+			route.pop_front()
+	if route.is_empty():
+		route.append(target)
 	_play("Walking", 0.3)
 
 func _walk_route(delta: float) -> void:
@@ -364,6 +369,15 @@ func _update_task(delta: float) -> void:
 		if task_type == "fish" and task_phase >= 1:
 			_update_fishing_gear()
 		return
+	if task_type == "salute" and task_phase == 0:
+		# Step through the open door and stay inside for a moment.
+		task_phase = 1
+		task_timer = 4.5
+		if world != null:
+			world.set_door_open(true)
+		position = Vector3(-1.0, position.y, -1.15)
+		model.visible = false
+		return
 	if task_type == "fish":
 		if task_phase == 0:
 			_play("FishingLoop", 0.2)
@@ -387,6 +401,9 @@ func _update_task(delta: float) -> void:
 	_finish_task()
 
 func _finish_task() -> void:
+	if task_type == "salute" and task_phase == 1:
+		position = Vector3(-0.35, position.y, 1.0)
+		model.visible = true
 	mode = "stroll"
 	task_type = ""
 	if world != null:

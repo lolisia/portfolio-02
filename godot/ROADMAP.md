@@ -94,10 +94,10 @@ Godot의 사용자 인자는 `--` 뒤에 전달합니다.
   - 비 수면 파문 링, 폭포 spray 파티클
 - Unity-chan
   - GLB 임포트(90본, 10개 애니메이션)
-  - Standing/Walking 크로스페이드, 경유지 걷기
+  - Standing/Walking 크로스페이드, A* 경유지 걷기
   - Gathering / Fishing / Salute / Kneel 태스크
   - 낚싯대·낚싯줄·찌
-  - 경례 시 정문 열림/닫힘
+  - 경례 시 정문 열림/닫힘, 실내 4.5초 방문 후 복귀
   - 눈 깜빡임
 - 농장 생활
   - 닭 2 + 병아리 4, 배회/쪼기/낮·날씨 은신
@@ -147,6 +147,7 @@ Godot의 사용자 인자는 `--` 뒤에 전달합니다.
 | `scripts/day_cycle.gd` | 태양/하늘/안개/글로우/계절 색 |
 | `scripts/orbit_camera.gd` | 직교 카메라 오빗/터치 줌 |
 | `scripts/unity_chan.gd` | 캐릭터 임포트, 태스크 AI, 낚시 장비 |
+| `scripts/farm_paths.gd` | 0.6 타일 워킹 그래프, A* 경로 |
 | `scripts/farm_life.gd` | 닭, 풍향계/수탉, 연기, 물고기 점프, 새 |
 | `scripts/weather_fx.gd` | 비/눈 강도 크로스페이드, 물보라/수면 파문, 폭포 spray |
 | `scripts/seasons_fx.gd` | 봄 벚꽃잎, 가을 낙엽 |
@@ -317,35 +318,30 @@ Godot의 사용자 인자는 `--` 뒤에 전달합니다.
 
 ---
 
-### P5. Unity-chan 경로 탐색/실내
+### P5. Unity-chan 경로 탐색/실내 — A*/문 통과 완료
 
 **현재 상태**
-- 근거리 웨이포인트 + 충돌 슬라이드.
-- A* 그래프 없음.
-- 문 앞 경례만 하고 실내로 들어가지 않음.
+- `scripts/farm_paths.gd`: 0.6 타일 격자 그래프, `closest`, A* `route` 포팅.
+- 태스크/산책 경로를 A*로 생성; 낚시/수확/경례 목적지까지 장애물을 피해 이동.
+- 경례 후 문을 열고 실내 위치로 이동해 4.5초 숨은 뒤, 문 앞으로 돌아와 다시 보임.
+- 실내 공간/가구는 없고 캐릭터 숨김으로 처리.
+- `--fishnear --fishtest`에서 연못까지 이동 후 낚시 상태 진입 확인.
 
-**할 일**
-1. `farm-paths.js` 포트:
-   - 0.6 타일 격자 그래프.
-   - `closest`, `route` A*.
-   - `world.walkable` 연동.
-2. 태스크 목적지까지 A* 경로 사용.
-3. 정문 통과:
-   - 문 열기 → 문 안/밖 상태.
-   - 실내에서 잠시 머문 뒤 다시 나오기.
-4. 실내 공간:
-   - 최소한의 방/창문/램프, 또는 실내 상태에서 캐릭터 숨김.
-5. 낚시/밭일 중 장애물 회피 안정화.
+**남은 일**
+1. 실내 방/창문/램프/가구 메시와 실내 카메라 연출.
+2. 경로 캐시/그래프 디버그 시각화.
+3. `stand()` 높이(데크/계단)와 경로 그래프 연동 정밀화.
+4. 태스크 반복 시 장기 안정성 테스트.
 
 **파일**
-- 신규 `scripts/farm_paths.gd`
+- `scripts/farm_paths.gd`
 - `scripts/unity_chan.gd`
 - `scripts/world.gd`
 
 **완료 기준**
-- 캐릭터가 건물/침대를 관통하지 않고 목적지까지 이동.
-- 문을 열고 들어갔다가 다시 나옴.
-- 태스크가 막힘 없이 반복됨.
+- 캐릭터가 건물/침대를 관통하지 않고 목적지까지 이동. (A* 경로)
+- 문을 열고 들어갔다가 다시 나옴. (숨김 연출)
+- 태스크가 막힘 없이 반복됨. (단기 확인)
 
 ---
 
@@ -423,9 +419,9 @@ Godot의 사용자 인자는 `--` 뒤에 전달합니다.
   - 실내 사람 실루엣은 창문 광량 변조로 근사; 유리 셰이더 실루엣은 아직 없음.
   - 램프 유리 emissive는 5개 램프가 하나의 material을 공유해 평균 플리커만 반영.
 - **태스크 AI**
-  - A* 그래프가 아니라 근거리 웨이포인트 + 충돌 슬라이드.
+  - A* 그래프는 0.6 타일이며, 최종 목적지는 그래프 밖 한 걸음이라 충돌 슬라이드에 의존.
   - 작은 덤불/램프는 통과 가능하게 처리.
-  - 문 앞 경례만 하고 실내 진입은 없음.
+  - 문 앞 경례 후 실내로 숨었다 4.5초 뒤 복귀; 실제 실내 방은 없음.
 - **UI**
   - 360px 폭/세로 모드 대응 완료. 모션 프리뷰 캔버스와 safe area는 남음.
   - `--shot <path>`는 개발용 스크린샷 헬퍼.
@@ -446,16 +442,15 @@ Godot의 사용자 인자는 `--` 뒤에 전달합니다.
 1. **빛줄기/안개 튜닝** (P1)
    - `--house` 아침/저녁, `--winter`, `--rain`에서 FogVolume/조명 확인
    - 커스텀 CompositorEffect는 리스크가 크므로 먼저 내장 볼류메트릭으로 목표치 확인
-2. **경로 그래프/A* + 실내** (P5)
-   - `farm-paths.js`의 0.6 타일 그래프를 `scripts/farm_paths.gd`로
-   - 문 열기 → 실내 → 다시 나오는 상태 추가
-3. **모바일 품질/모션 프리뷰** (P6)
+2. **모바일 품질/모션 프리뷰** (P6)
    - High/Medium/Low 프리셋, 해상도 스케일/그림자/파티클 예산
    - `motion.js`의 지평선/풍속계/날씨 카드 이식
-4. **농장/야생 남은 디테일** (P4)
+3. **농장/야생 남은 디테일** (P4)
    - 닭장 출입, 새 착륙 flare, 물고기 점프 물보라, 꽃정원
-5. **계절/날씨 남은 디테일** (P3)
+4. **계절/날씨 남은 디테일** (P3)
    - 낙엽/벚꽃잎 지면 적재, 눈보라 바람 연동, 폭포 foam
+5. **실내 공간** (P5 후속)
+   - 방/가구/램프 메시와 유리 실루엣
 6. **빌드/배포/스모크 테스트** (P7)
 
 ### 세션 시작 체크리스트
@@ -485,11 +480,11 @@ Godot의 사용자 인자는 `--` 뒤에 전달합니다.
 | `src/footprints.js` | `scripts/footprints.gd` | 완료 |
 | `src/farm-life.js` | `farm_life.gd` (flee, vane, lamps) | 부분 |
 | `src/wildlife.js` | `farm_life.gd` (fish leap, bird) | 부분 |
-| `src/unitychan.js` | `unity_chan.gd` | 부분 |
+| `src/unitychan.js` | `unity_chan.gd`, `farm_paths.gd` | A* 경로/문 통과 포함 |
 | `src/interior.js` | `night_life.gd` (window/TV light) | 부분 (사람 실루엣 없음) |
 | `src/panel.js`, `motion.js` | `game_ui.gd` | 반응형 완료, 모션 프리뷰 누락 |
 | `src/daylight.js` | `daylight.gd` | 이식 |
 | `src/garden.js` | `world.gd::_build_garden_beds` | 꽃정원 대신 작물밭으로 대체 |
-| `src/farm-paths.js` | 없음 | 미이식 |
+| `src/farm-paths.js` | `scripts/farm_paths.gd` | 완료 |
 | `src/colliders.js` | `world.gd` 장애물 목록 | 간략화 |
 
