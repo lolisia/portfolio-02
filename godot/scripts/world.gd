@@ -30,6 +30,8 @@ var lamp_glass_material: StandardMaterial3D
 var cottage_window := Vector3.ZERO
 var cottage_ridge := Vector3.ZERO
 var cottage_chimney := Vector3.ZERO
+var door_leaf: Node3D
+var door_target_open := false
 var obstacles: Array = []
 var path_points: Array[Vector2] = []
 var flight := {
@@ -277,6 +279,63 @@ func _build_perimeter() -> void:
 			var z1: float = segment[1]
 			b.part("stone", 15.10, yy, (z0 + z1) * 0.5, 0.34, h / 6.0 + 0.012, z1 - z0, col)
 
+func _build_door_leaf(cx: float, gy: float, cz: float, rot: float) -> Node3D:
+	var D: float = COTTAGE.D
+	var F: float = COTTAGE.F
+	var pivot := Node3D.new()
+	pivot.name = "CottageDoor"
+	pivot.position = Vector3(cx - 0.37, gy + F + 0.12, cz + D * 0.5 + 0.01)
+	pivot.rotation.y = rot
+	add_child(pivot)
+	var wood := StandardMaterial3D.new()
+	wood.albedo_color = Color(0.42, 0.27, 0.17)
+	wood.roughness = 0.82
+	var dark := StandardMaterial3D.new()
+	dark.albedo_color = Color(0.30, 0.20, 0.13)
+	dark.roughness = 0.8
+	var iron := StandardMaterial3D.new()
+	iron.albedo_color = Color(0.18, 0.16, 0.14)
+	iron.metallic = 0.6
+	iron.roughness = 0.5
+	for i in range(5):
+		var plank := BoxMesh.new()
+		plank.size = Vector3(0.74 / 5.0 - 0.012, 1.28, 0.04)
+		var mi := MeshInstance3D.new()
+		mi.mesh = plank
+		mi.material_override = wood if i % 2 == 0 else dark
+		mi.position = Vector3((i + 0.5) * 0.74 / 5.0, 0.65, 0.02)
+		mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
+		pivot.add_child(mi)
+	for yy in [0.28, 1.02]:
+		var batten := BoxMesh.new()
+		batten.size = Vector3(0.66, 0.08, 0.02)
+		var mi := MeshInstance3D.new()
+		mi.mesh = batten
+		mi.material_override = dark
+		mi.position = Vector3(0.37, yy, 0.05)
+		mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
+		pivot.add_child(mi)
+	var knob_mesh := SphereMesh.new()
+	knob_mesh.radius = 0.035
+	knob_mesh.height = 0.07
+	knob_mesh.radial_segments = 8
+	knob_mesh.rings = 5
+	var knob := MeshInstance3D.new()
+	knob.mesh = knob_mesh
+	knob.material_override = iron
+	knob.position = Vector3(0.62, 0.65, 0.08)
+	pivot.add_child(knob)
+	return pivot
+
+func set_door_open(open: bool) -> void:
+	door_target_open = open
+
+func _process(delta: float) -> void:
+	if door_leaf == null:
+		return
+	var target := -1.55 if door_target_open else 0.0
+	door_leaf.rotation.y = lerp_angle(door_leaf.rotation.y, target, 1.0 - exp(-delta * 4.0))
+
 func _cottage_steps(drop: float) -> int:
 	return maxi(1, int(round(drop / 0.16)))
 
@@ -329,6 +388,7 @@ func _build_cottage(cx: float, cz: float, rot: float) -> void:
 	b.place(cx, gy, cz, 1.0, rot, func() -> void:
 		_cottage_parts(drop)
 	)
+	door_leaf = _build_door_leaf(cx, gy, cz, rot)
 	obstacles.append([cx, cz, 2.3])
 	obstacles.append([cx, porch_z + 0.2, 0.75])
 	cottage_window = Vector3(cx, gy + COTTAGE.F + 1.1, cz + COTTAGE.D * 0.5 + 0.7)

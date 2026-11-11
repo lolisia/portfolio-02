@@ -89,6 +89,8 @@ func _ready() -> void:
 		orbit.set_view(Vector3(10.8, 0.3, 6.1), 0.7, 0.98, 2.8)
 	if "--fishtest" in cli:
 		orbit.set_view(Vector3(6.6, 0.6, 4.0), 0.55, 1.2, 4.0)
+	if "--door" in cli:
+		orbit.set_view(Vector3(-0.8, 1.0, -0.6), 0.25, 1.35, 4.2)
 
 	ui = GameUI.new()
 	ui.name = "GameUI"

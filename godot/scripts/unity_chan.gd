@@ -326,6 +326,8 @@ func _start_task(type: String) -> void:
 		"salute":
 			_play("Salute", 0.3)
 			task_timer = _clip_length("Salute") + 0.4
+			if world != null:
+				world.set_door_open(true)
 		"kneel":
 			_play("KneelDown", 0.25)
 			task_timer = _clip_length("KneelDown") + 0.2
@@ -367,6 +369,8 @@ func _update_task(delta: float) -> void:
 func _finish_task() -> void:
 	mode = "stroll"
 	task_type = ""
+	if world != null:
+		world.set_door_open(false)
 	rod.visible = false
 	line.visible = false
 	bobber.visible = false
