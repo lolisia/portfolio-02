@@ -1,7 +1,7 @@
 import * as T from 'three';
 import {dressGround} from './ground.js';
 import {makeWater} from './water.js';
-import {builder,modules} from './modules.js';
+import {builder,modules,COTTAGE,cottageSteps} from './modules.js';
 import {createColliders} from './colliders.js';
 
 export function buildWorld(scene,b){
@@ -44,14 +44,40 @@ export function buildWorld(scene,b){
   const obstacles=[],bushes=[],stumps=[],colliders=createColliders();
   function occupy(x,z,rad){obstacles.push([x,z,rad])}
   function free(x,z,pad=0){return obstacles.every(([a,c,d])=>(x-a)**2+(z-c)**2>(d+pad)**2)}
-  const props=[[-1,-1.8,1,0],[2.25,-1.92,1,.025],[4.45,-1.9,1,-.035]];
-  props.forEach(([x,z,s,a],i)=>{at(x,z,s,a,()=>kit.house(i>0,i===1));occupy(x,z,i?1.4:1.95)});
-  // Collision footprints: house walls, plus the coop / shed ramps in front of their doors.
+  const props=[[-1,-2.5,1,0],[2.25,-1.92,1,.025],[4.45,-1.9,1,-.035]];
+  // The cottage (prop 0, unrotated) sits on its plinth; the porch steps make up the drop to the
+  // ground in front of them.
+  const [hx,hz]=props[0],{W,D,F,P,B,E,slope,over,run}=COTTAGE,houseY=height(hx,hz);
+  const porchZ=hz+D/2+P,drop=Math.max(.12,houseY+F-height(hx,porchZ+.35)),steps=cottageSteps(drop);
+  props.forEach(([x,z,s,a],i)=>{at(x,z,s,a,()=>i?kit.house(i===1):kit.cottage(drop));occupy(x,z,i?1.4:2.3)});
+  occupy(hx,porchZ+.2,.75);
+  // Collision footprints: house walls and porch railings, plus the coop / shed ramps.
+  colliders.box(hx,hz,W+.26,D+.26,0,'house');
+  for(const s of [-1,1]){
+    colliders.box(hx+s*(W/2-.06),hz+D/2+.13+(P-.13)/2,.14,P-.13,0,'house');
+    colliders.box(hx+s*(W/2+.58)/2,porchZ-.06,W/2-.58,.14,0,'house');
+    colliders.circle(hx+s*(COTTAGE.BW/2-.05),hz+D/2+B-.08,.1,'house');
+  }
   props.forEach(([x,z,s,a],i)=>{
-    const w=i?1.76:2.92,d=i?1.82:2.66,tag=i===1?'coop':'';
+    if(!i)return;
+    const w=1.76,d=1.82,tag=i===1?'coop':'';
     colliders.box(x,z,w*s,d*s,a,tag);
-    if(i){const f=d/2+.6;colliders.box(x+Math.sin(a)*f,z+Math.cos(a)*f,.86,1.2,a,tag)}
+    const f=d/2+.6;colliders.box(x+Math.sin(a)*f,z+Math.cos(a)*f,.86,1.2,a,tag);
   });
+  // Standing height: the porch deck and its steps, otherwise the ground.
+  function stand(x,z){
+    const lx=x-hx,lz=z-hz,ground=height(x,z);
+    if(Math.abs(lx)<W/2&&lz>D/2&&lz<D/2+P)return houseY+F;
+    const k=Math.floor((lz-D/2-P)/run)+1;
+    if(Math.abs(lx)<.5&&k>=1&&k<=steps)return Math.max(ground,houseY+F-k*drop/(steps+1));
+    return ground;
+  }
+  const span=W/2+over,zFront=D/2+B+.28,zBack=-D/2-.35;
+  const roofs=[{x:hx,z:hz+(zFront+zBack)/2,rx:span,rz:(zFront-zBack)/2,y:houseY+E,slope},
+    ...props.slice(1).map(([x,z])=>({x,z,rx:1.10,rz:1.1,y:height(x,z)+2.15,slope:.6}))];
+  const cottage={door:{x:hx,z:hz+D/2+.4},apron:{x:hx,z:porchZ+steps*run+.3},
+    chimney:new T.Vector3(hx+COTTAGE.chimney[0],houseY+E+span*slope+.58,hz+COTTAGE.chimney[1]),
+    ridge:new T.Vector3(hx,houseY+E+span*slope+.1,hz-.5),window:new T.Vector3(hx,houseY+F+1.1,hz+D/2+.7)};
   for(const [x,z] of [[1.1,3.3],[2.7,3.3],[-7,-9.5],[-5.45,-9.5]]){at(x,z,1,0,kit.bed);occupy(x,z,1);colliders.box(x,z,1.32,1.72,0,'bed')}
   const paths=[];
   function path(ax,az,bx,bz,stair=false){
@@ -69,16 +95,49 @@ export function buildWorld(scene,b){
     const legs=[];let total=0;
     for(let i=1;i<points.length;i++){const [ax,az]=points[i-1],[bx,bz]=points[i],len=Math.hypot(bx-ax,bz-az);legs.push({ax,az,bx,bz,len,start:total});total+=len}
     const top=height(...points[0]),bottom=height(...points.at(-1)),count=Math.max(Math.ceil(Math.abs(top-bottom)/.11),Math.ceil(total/.42));
-    const run=total/count;
+    const run=total/count,list=[];
     for(let k=0;k<count;k++){
       const at=(k+.5)*run,leg=legs.find(l=>at<=l.start+l.len)||legs.at(-1),u=(at-leg.start)/leg.len;
       const x=leg.ax+(leg.bx-leg.ax)*u,z=leg.az+(leg.bz-leg.az)*u,angle=Math.atan2(leg.bx-leg.ax,leg.bz-leg.az);
-      const tread=top+(bottom-top)*(k+1)/count+.03,ground=Math.min(height(x,z),tread)-.16;
-      p('stone',x,(tread+ground)/2,z,1.05,tread-ground,run+.07,pick(['#aaa58b','#92967e','#a7a48a','#9d9a82']),0,angle+(r()-.5)*.05);
+      // Each tread sits just above the highest ground under its footprint (never sunk into the
+      // slope); where the hillside bulges the flight simply climbs over it.
+      let ground=-Infinity,low=Infinity;
+      for(const a of [-.52,0,.52])for(const c of [-.5,0,.5]){
+        const gx=x+Math.cos(angle)*a+Math.sin(angle)*c*run,gz=z-Math.sin(angle)*a+Math.cos(angle)*c*run,g=height(gx,gz);
+        ground=Math.max(ground,g);low=Math.min(low,g);
+      }
+      list.push({x,z,angle,low,tread:ground+.11});
+    }
+    for(const {x,z,angle,low,tread} of list){
+      const base=low-.18;
+      p('stone',x,(tread+base)/2,z,1.0+r()*.1,tread-base,run+.07,pick(['#aaa58b','#92967e','#a7a48a','#9d9a82']),0,angle+(r()-.5)*.05);
       paths.push([x,z]);
     }
   }
-  path(-7,-10,-5,-6.3);stairs([[-5,-6.3],[-6.4,-5.0],[-5.0,-3.9],[-4.4,-2.25]]);path(-4.4,-2.25,-2,.8);path(-2,.8,5.5,.82);path(5.5,.82,10.8,3.0);path(1,.8,1,2.6);
+  // Wooden post-and-rail fence along a polyline of world points.
+  function fence(points){
+    const posts=[];
+    for(let i=1;i<points.length;i++){
+      const [ax,az]=points[i-1],[bx,bz]=points[i],len=Math.hypot(bx-ax,bz-az),n=Math.max(1,Math.round(len/.85));
+      for(let k=i>1?1:0;k<=n;k++)posts.push([ax+(bx-ax)*k/n,az+(bz-az)*k/n]);
+      colliders.box((ax+bx)/2,(az+bz)/2,.16,len,Math.atan2(bx-ax,bz-az),'fence');
+    }
+    posts.forEach(([x,z],i)=>{
+      const y=height(x,z);
+      p('wood',x,y+.31,z,.1,.74,.1,pick(['#6b4b33','#5e4230','#735139']),0,r()*.3);
+      p('wood',x,y+.7,z,.13,.04,.13,'#4f3725',0,r()*.3);
+      occupy(x,z,.22);
+      if(!i)return;
+      const [px,pz]=posts[i-1],py=height(px,pz),len=Math.hypot(x-px,z-pz);
+      place((x+px)/2,(y+py)/2,(z+pz)/2,1,Math.atan2(x-px,z-pz),()=>{
+        for(const h of [.26,.55])p('wood',0,h,0,.045,.075,len+.06,pick(['#8f6644','#9b7049','#86603f']),-Math.atan2(y-py,len));
+      });
+    });
+  }
+  fence([[hx-W/2-.1,porchZ-.03],[hx-W/2-.6,porchZ-.03],[hx-W/2-.6,hz-D/2+.05],[hx-W/2-.08,hz-D/2+.05]]);
+  fence([[hx+W/2+.1,porchZ-.03],[hx+W/2+.42,porchZ-.03],[hx+W/2+.42,porchZ-.9]]);
+  fence([[hx+W/2+.42,porchZ-1.7],[hx+W/2+.42,hz-D/2+.05],[hx+W/2+.08,hz-D/2+.05]]);
+  path(-7,-10,-5,-6.3);stairs([[-5,-6.3],[-6.4,-5.0],[-5.0,-3.9],[-4.4,-2.25]]);path(-4.4,-2.25,-3.85,.25);path(-3.85,.25,-2,.8);path(-2,.8,5.5,.82);path(5.5,.82,10.8,3.0);path(1,.8,1,2.6);
   place(13.7,waterY+.48,6.1,1,0,()=>kit.bridge(3.9));
   const treeList=[[-13,-12,1.40],[-10.8,-13.9,1.02],[-9,-12.1,1.22],[-5,-13.5,1.26],[-1.8,-13,1.28],[2,-13.6,1.45],[5.6,-12.1,1.12],[9.5,-12.8,1.35],[12.5,-10,1.45],[-13,-8.7,1.18],[-11,-6.4,1.25],[-13,-3.8,1.52],[-12,.2,1.13],[-13.4,3.7,1.21],[-11.8,7.2,1.28],[-13,11.4,1.35],[-8.9,12.7,1.27],[-5,13.1,1.36],[-1.4,12.1,1.05],[3.1,13.2,1.24],[7.4,12.7,1.13],[12.1,11.8,1.25],[12.2,.1,1.28],[10.5,-3.5,1.16],[12.5,-5.6,1.1],[-6.1,1.8,.76],[-3.95,2.0,.69],[-8.5,6.2,.83],[6.1,-8.2,.88],[.4,-9.8,1.08],[-9, -2.7,.77]];
   dressGround(ground,cv,treeList,paths,wet);
@@ -127,6 +186,6 @@ export function buildWorld(scene,b){
   perches.push(...lamps.map(p=>p.position.clone().add(new T.Vector3(0,.08,0))));
   ground.material.name='terrain';
   for(const [x,z,rad] of [...bushes,...stumps])colliders.circle(x,z,rad,'plant');
-  return {water,floor,waterY,lamps,height,perches,props,ground,colliders,
+  return {water,floor,waterY,lamps,height,stand,roofs,cottage,perches,props,ground,colliders,
     walkable:(x,z)=>!colliders.blocked(x,z,.26)&&wet(x,z)<-.2};
 }

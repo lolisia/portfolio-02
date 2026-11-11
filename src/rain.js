@@ -14,7 +14,7 @@ export function createRain(scene,world){
   const splashes=new T.Points(splashGeo,new T.PointsMaterial({size:1.7,color:0xc7dddf,transparent:true,opacity:.53,depthWrite:false}));
   scene.add(drops,splashes);drops.frustumCulled=splashes.frustumCulled=false;
   let cursor=0,lastRing=-1;
-  const roofs=world.props.map(([x,z],i)=>({x,z,rx:i?1.10:1.62,rz:i?1.1:1.49,y:world.height(x,z)+(i?2.15:2.38)}));
+  const roofs=world.roofs;
   function reset(i,initial){
     const k=i*6;vertices[k]=Math.random()*30-15;vertices[k+2]=Math.random()*30-15;
     vertices[k+1]=initial?2+Math.random()*14:12+Math.random()*4;speed[i]=8+Math.random()*6;
@@ -33,7 +33,7 @@ export function createRain(scene,world){
     for(let i=0;i<count;i++){
       const k=i*6,x=vertices[k]+=dx*dt,y=vertices[k+1]-=speed[i]*dt,z=vertices[k+2]+=dz*dt;
       const h=world.height(x,z);let hit=Math.max(world.waterY,h);
-      for(const roof of roofs)if(Math.abs(x-roof.x)<roof.rx&&Math.abs(z-roof.z)<roof.rz)hit=Math.max(hit,roof.y+(roof.rx-Math.abs(x-roof.x))*.6);
+      for(const roof of roofs)if(Math.abs(x-roof.x)<roof.rx&&Math.abs(z-roof.z)<roof.rz)hit=Math.max(hit,roof.y+(roof.rx-Math.abs(x-roof.x))*roof.slope);
       if(y<=hit||x>15||z>15){
         if(y<=hit&&x<=15&&z<=15){
           if(h<world.waterY&&world.water.userData.freeze.value<.15&&seconds-lastRing>.052/Math.max(.01,intensity)){world.water.userData.splash(x,z,seconds,.12);lastRing=seconds}

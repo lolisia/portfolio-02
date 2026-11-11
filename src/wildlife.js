@@ -21,13 +21,29 @@ function birdModel(){
   bird.scale.setScalar(1.35);return {bird,wings};
 }
 export function createWildlife(scene,world){
-  const {bird,wings}=birdModel(),fish=new T.Group();
-  ellipsoid(fish,0x62796b,0,0,0,.092,.12,.34);
-  ellipsoid(fish,0xadb18b,0,-.055,.07,.073,.065,.21);
-  const tail=ellipsoid(fish,0x806b52,0,0,-.36,.028,.14,.14);
-  ellipsoid(fish,0x403d31,0,.11,-.05,.025,.055,.11);
-  for(const s of [-1,1])ellipsoid(fish,0x27281d,s*.074,.024,.208,.016,.016,.016);
-  scene.add(bird,fish);bird.visible=fish.visible=false;
+  const {bird,wings}=birdModel();
+  scene.add(bird);bird.visible=false;
+  // A school of ten swims the pond below the surface; now and then one of them leaps.
+  const {height,waterY}=world,deep=(x,z)=>waterY-height(x,z);
+  const inPond=(x,z)=>deep(x,z)>.3&&x<12.6;
+  const palettes=[[0x62796b,0xadb18b,0x806b52],[0x8a6f4c,0xd2b27c,0x9b6b3d],[0xe2dccb,0xf2eee2,0xd8783c],[0xb06a3a,0xe7c08a,0xa65a2f]];
+  const school=Array.from({length:10},(_,i)=>{
+    const group=new T.Group(),[back,belly,fin]=palettes[i%palettes.length];
+    ellipsoid(group,back,0,0,0,.092,.12,.34);
+    ellipsoid(group,belly,0,-.055,.07,.073,.065,.21);
+    const tail=ellipsoid(group,fin,0,0,-.36,.028,.14,.14);
+    ellipsoid(group,fin,0,.11,-.05,.025,.055,.11);
+    for(const s of [-1,1])ellipsoid(group,0x27281d,s*.074,.024,.208,.016,.016,.016);
+    group.scale.setScalar(.62+.3*((i*37)%10)/10);scene.add(group);
+    let x,z;do{x=7.5+Math.random()*5;z=3.5+Math.random()*5.5}while(!inPond(x,z));
+    return {group,tail,x,z,heading:Math.random()*6.28,speed:.3,target:null,depth:.2+Math.random()*.3,phase:Math.random()*9,leap:-1,airborne:false};
+  });
+  function retarget(f){
+    for(let k=0;k<20;k++){
+      const x=7.5+Math.random()*5,z=3.5+Math.random()*5.5;
+      if(inPond(x,z)){f.target=[x,z];f.depth=.18+Math.random()*.32;return}
+    }
+  }
   let state='away',since=0,duration=2.5,perchIndex=world.perches.length-5;
   const start=new T.Vector3(),end=new T.Vector3(),pos=new T.Vector3(),ahead=new T.Vector3();
   function flight(t){
@@ -40,9 +56,10 @@ export function createWildlife(scene,world){
     else{end.copy(world.perches[perchIndex]);state='arriving'}
     duration=out&&wind>=10?2.5:4.6;since=now;bird.visible=true;
   }
-  let last=0,fishStart=4,fishWasAirborne=false,fishX=10,fishZ=6.3;
+  let last=0,nextLeap=5;
   return (seconds,wind,night)=>{
-    if(!last){since=seconds;fishStart=seconds+4}last=seconds;
+    if(!last){since=seconds;nextLeap=seconds+4}
+    const dt=Math.min(.1,last?seconds-last:0);last=seconds;
     let age=seconds-since;
     if(state==='away'&&age>=duration&&wind<10&&night<.8){
       bird.position.set(-18,10,-11);launch(false,seconds,wind);age=0;
@@ -64,19 +81,43 @@ export function createWildlife(scene,world){
       wings.forEach((w,i)=>{w.rotation.z=0;w.rotation.y=(i?1:-1)*1.2});
       bird.rotation.z=Math.sin(seconds*2.4)*.033;
     }
-    const f=seconds-fishStart;
-    fish.visible=f>=0&&f<5.4&&world.water.userData.freeze.value<.15;
-    if(fish.visible){
-      const leap=T.MathUtils.clamp((f-2.05)/.91,0,1),arc=Math.sin(Math.PI*leap);
-      fish.position.set(fishX+.18*Math.sin(f*1.4),world.waterY-.19+arc*.83,fishZ-1.24+f*.45);
-      fish.rotation.y=Math.atan2(.252*Math.cos(f*1.4),.45);
-      fish.rotation.x=arc>0?-.82*Math.cos(leap*Math.PI):.04*Math.sin(f*4);
-      tail.rotation.y=Math.sin(f*16)*.47;
-      const airborne=fish.position.y>world.waterY;
-      if(airborne!==fishWasAirborne)world.water.userData.splash(fish.position.x,fish.position.z,seconds,.29);
-      fishWasAirborne=airborne;
-    }else if(f>=5.4){
-      fishStart=seconds+9+Math.random()*14;fishX=9.7+Math.random()*1.9;fishZ=6+Math.random()*.7;fishWasAirborne=false;
+    const frozen=world.water.userData.freeze.value>.15;
+    if(!frozen&&seconds>nextLeap){
+      const f=school[Math.floor(Math.random()*school.length)];
+      if(f.leap<0&&inPond(f.x+Math.sin(f.heading)*1.4,f.z+Math.cos(f.heading)*1.4))f.leap=0;
+      nextLeap=seconds+4+Math.random()*8;
+    }
+    for(const f of school){
+      f.group.visible=!frozen;if(frozen)continue;
+      let y;
+      if(f.leap>=0){
+        f.leap+=dt/1.15;const u=Math.min(1,f.leap);
+        f.x+=Math.sin(f.heading)*dt*1.15;f.z+=Math.cos(f.heading)*dt*1.15;
+        y=waterY-.22+Math.sin(Math.PI*u)*.95;
+        f.group.rotation.set(-.95*Math.cos(Math.PI*u),f.heading,0,'YXZ');
+        f.tail.rotation.y=Math.sin(seconds*22)*.5;
+        if(f.leap>=1)f.leap=-1;
+      }else{
+        if(!f.target||Math.hypot(f.target[0]-f.x,f.target[1]-f.z)<.5)retarget(f);
+        const want=Math.atan2(f.target[0]-f.x,f.target[1]-f.z);
+        let turn=Math.atan2(Math.sin(want-f.heading),Math.cos(want-f.heading));
+        f.heading+=T.MathUtils.clamp(turn,-1.4*dt,1.4*dt)+.25*Math.sin(seconds*1.3+f.phase)*dt;
+        f.speed=.22+.14*Math.max(0,Math.sin(seconds*.6+f.phase))**3*3;
+        const nx=f.x+Math.sin(f.heading)*f.speed*dt,nz=f.z+Math.cos(f.heading)*f.speed*dt;
+        if(inPond(nx,nz)){f.x=nx;f.z=nz}else{retarget(f);f.heading+=2.5*dt}
+        y=waterY-Math.max(.1,Math.min(f.depth,deep(f.x,f.z)-.14))+.03*Math.sin(seconds*.9+f.phase);
+        f.group.rotation.set(.06*Math.sin(seconds*.9+f.phase+1.5),f.heading,0,'YXZ');
+        f.tail.rotation.y=Math.sin(seconds*(6+f.speed*22)+f.phase)*.42;
+      }
+      f.group.position.set(f.x,y,f.z);
+      const airborne=y>waterY;
+      if(airborne!==f.airborne)world.water.userData.splash(f.x,f.z,seconds,.26);
+      f.airborne=airborne;
+    }
+    // Keep the school from swimming through one another.
+    for(let i=0;i<school.length;i++)for(let j=i+1;j<school.length;j++){
+      const a=school[i],b=school[j],dx=a.x-b.x,dz=a.z-b.z,d=Math.hypot(dx,dz);
+      if(d>1e-4&&d<.42&&a.leap<0&&b.leap<0){const k=(.42-d)*.5*Math.min(1,dt*4)/d;a.x+=dx*k;a.z+=dz*k;b.x-=dx*k;b.z-=dz*k}
     }
     bird.userData.state=state;
   };

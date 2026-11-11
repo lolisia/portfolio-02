@@ -33,12 +33,19 @@ if(view==='water'||view==='falls'){
   }
   camera.zoom=3.25;camera.updateProjectionMatrix();controls.update();
 }
+// Close-ups for checking details: ?view=house|coop|stairs|pond, optionally &zoom=N.
+const closeUps={house:[-1,1.6,-1.2,3],coop:[2.25,1.7,-1.6,3.3],stairs:[-5.4,2.2,-4.4,3],pond:[10.2,.4,6.3,5]};
+if(closeUps[view]){
+  const [x,y,z,zoom]=closeUps[view],yaw=Number(new URLSearchParams(location.search).get('yaw'))||0;
+  controls.target.set(x,y,z);camera.position.copy(controls.target).add(new T.Vector3(24,18,30).applyAxisAngle(new T.Vector3(0,1,0),yaw*Math.PI/180));
+  camera.zoom=Number(new URLSearchParams(location.search).get('zoom'))||zoom;controls.maxZoom=Math.max(controls.maxZoom,camera.zoom);camera.updateProjectionMatrix();controls.update();
+}
 const sky=new T.DirectionalLight(0xc9e1fb,1.0),sun=new T.DirectionalLight(0xffe3b4,2.25);
 sky.position.set(12,19,17);scene.add(sky,sun,new T.AmbientLight(0x8798ad,.11));sun.position.set(-13,24,9);sun.castShadow=true;
 Object.assign(sun.shadow.camera,{left:-24,right:24,top:24,bottom:-24,near:.1,far:78});sun.shadow.camera.updateProjectionMatrix();renderer.shadowMap.autoUpdate=true;sun.shadow.mapSize.set(2048,2048);sun.shadow.normalBias=.028;sun.shadow.bias=-.00016;
 const nature=await loadNature();
 const b=builder(scene,undefined,nature), world=buildWorld(scene,b);b.finish();
-const windowLight=new T.PointLight(0xffaf52,0,7,1.5);windowLight.position.set(-1,2.3,.16);scene.add(windowLight);
+const windowLight=new T.PointLight(0xffaf52,0,7,1.5);windowLight.position.copy(world.cottage.window);scene.add(windowLight);
 const cascade=makeCascade(world);scene.add(cascade);
 const atmosphere=createAtmosphere(scene,world);
 const seasons=createSeasons(scene,world,atmosphere);
@@ -75,7 +82,8 @@ const wind=document.querySelector('#wind');
 let weatherIndex=0,seasonIndex=1;
 const weatherBlend=createWeatherTransition();
 const backdrop=new T.Color();
-if(new URLSearchParams(location.search).get('time')==='night')time.value=22;
+const startHour=new URLSearchParams(location.search).get('time');
+if(startHour)time.value=startHour==='night'?22:Number(startHour);
 let nightLevel=0,skyTimer=0,lastProbe=-Infinity;
 // Sliders set targets; the scene (and the drawn thumbs) glide toward them.
 let hourShown=Number(time.value),hourTarget=hourShown,windShown=Number(wind.value),windTarget=windShown;
@@ -85,16 +93,26 @@ function lighting(){
   nightLevel=t.night;
   const moon=t.direction.y<0;
   sun.position.copy(t.direction).multiplyScalar(moon?-33:33);
-  sun.color.copy(moon?new T.Color(0xa5c3ee):t.color([0xffeed4,0xfff5df,0xffad75,0xffb887]));
+  sun.color.copy(moon?new T.Color(0xa5c3ee):t.color([0xffeed4,0xfff5df,0xffb48c,0xffb887,0xff8b4a]));
   const elevation=Math.abs(t.direction.y);
-  sun.intensity=(moon?.34:2.85)*T.MathUtils.smoothstep(elevation,0,moon?.24:.48)* (w<1?T.MathUtils.lerp(1,.52,w):T.MathUtils.lerp(.52,.25,w-1));
-  sky.color.copy(t.color([0xe8f3fc,0xf3fbff,0xffdbc1,0x97aed6]));
-  sky.intensity=t.value([.54,.62,.42,.10])*(1-w*.09);
-  backdrop.copy(t.color([0xacbfca,0x93b9d4,0xcc998e,0x17263f]));
+  sun.intensity=(moon?.34:2.85*(1+1.1*t.golden))*(moon?T.MathUtils.smoothstep(elevation,0,.24):T.MathUtils.smoothstep(elevation,-.02,.34))* (w<1?T.MathUtils.lerp(1,.52,w):T.MathUtils.lerp(.52,.25,w-1));
+  sky.color.copy(t.color([0xe8f3fc,0xf3fbff,0xbab3ea,0x97aed6,0x8e88d4]));
+  sky.intensity=t.value([.54,.62,.5,.10,.48])*(1-w*.09);
+  backdrop.copy(t.color([0xacbfca,0x93b9d4,0xd8aaa6,0x17263f,0xd48b6c]));
   const overcast=w<1?w*.64:T.MathUtils.lerp(.64,.88,w-1);
   const dimming=w<1?T.MathUtils.lerp(1,.92,w):T.MathUtils.lerp(.92,.68,w-1);
   backdrop.lerp(t.color([0x909ea9,0xa2acb6,0x948895,0x202737]),overcast).multiplyScalar(dimming);
   if(!scene.background)scene.background=backdrop.clone();
+  // Sky backdrop gradient, sun glow and grade for the composite pass: golden hours get a warm
+  // key against lavender shadows, night a cool cast.
+  const clear=1-Math.min(1,overcast*1.1),golden=t.golden*clear,nightCast=.35*t.night*(1-t.golden);
+  const top=backdrop.clone().lerp(t.color([0x8fb3cc,0x7fa9cf,0x8f8bc0,0x0b1428,0x5f5498]),.6*clear).multiplyScalar(dimming);
+  const bottom=backdrop.clone().lerp(t.color([0xd7dfd0,0xc6dae3,0xf6c4a4,0x223150,0xf4a066]),.55*clear).multiplyScalar(dimming);
+  const tint=(gold,cool)=>new T.Vector3(1,1,1).addScaledVector(gold,golden).addScaledVector(cool,nightCast);
+  volume.grade({top,bottom,glow:t.color([0xfff0d0,0xfff0d0,0xffb08a,0x000000,0xff8a48]),glowAmount:2*golden*(1-t.night*.6),
+    shadow:tint(t.dawn?new T.Vector3(-.12,-.08,.14):new T.Vector3(-.1,-.15,.12),new T.Vector3(-.12,-.06,.16)),
+    highlight:tint(t.dawn?new T.Vector3(.1,.02,-.06):new T.Vector3(.17,-.01,-.17),new T.Vector3(-.04,0,.06)),
+    saturation:1+.16*golden,vignette:.2+.1*t.night});
   document.body.style.backgroundColor=backdrop.getStyle();
   clearTimeout(skyTimer);
   const updateProbe=()=>{setSky(t,w,sun);lastProbe=performance.now()};

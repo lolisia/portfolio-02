@@ -11,10 +11,10 @@ function pieceGeometry(petal){
 }
 export function createSeasons(scene,world,atmosphere){
   const trees=world.perches.slice(0,-world.lamps.length),pose=new T.Object3D(),color=new T.Color();
-  const roofs=world.props.map(([x,z],i)=>({x,z,rx:i?1.10:1.62,rz:i?1.1:1.49,y:world.height(x,z)+(i?2.15:2.38)}));
+  const roofs=world.roofs;
   function floor(x,z){
     let y=Math.max(world.waterY,world.height(x,z));
-    for(const r of roofs)if(Math.abs(x-r.x)<r.rx&&Math.abs(z-r.z)<r.rz)y=Math.max(y,r.y+(r.rx-Math.abs(x-r.x))*.6);
+    for(const r of roofs)if(Math.abs(x-r.x)<r.rx&&Math.abs(z-r.z)<r.rz)y=Math.max(y,r.y+(r.rx-Math.abs(x-r.x))*r.slope);
     return y;
   }
   function particles(kind,count,geometry,palette){

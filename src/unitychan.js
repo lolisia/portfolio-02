@@ -54,7 +54,7 @@ function findSpots(world,paths){
 
 export function createUnityChan(scene,world,onReady=()=>{}){
   const paths=createFarmPaths(world),spots=findSpots(world,paths);
-  const door={x:-1,z:-.25},apron={x:-1,z:.75};
+  const {door,apron}=world.cottage;
   const root=new T.Group();root.name='sd-unity-chan';root.visible=false;scene.add(root);
   const s={state:'inside',x:door.x,z:door.z,heading:0,route:[],wait:0,pace:0,intent:false,reaction:2,
     rng:90731,action:null,anchor:null,stuck:0,blink:2,blinkT:0,task:null,steps:[],stepTime:0,face:0,prop:null};
@@ -240,7 +240,7 @@ export function createUnityChan(scene,world,onReady=()=>{}){
       // Standing still she is still solid: chickens bump off her and she never ends inside a prop.
       body.active=root.visible;body.x=s.x;body.z=s.z;world.colliders.resolve(body);
       if(s.state!=='activity'){s.x=body.x;s.z=body.z}
-      root.position.set(s.x,world.height(s.x,s.z),s.z);root.rotation.y=s.heading;
+      root.position.set(s.x,world.stand(s.x,s.z),s.z);root.rotation.y=s.heading;
     }
     mixer.update(dt);
     updateRod(seconds);

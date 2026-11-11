@@ -14,8 +14,8 @@ const KINDS={
   reed:{material:'grass',plant:true,sway:.3},carrot:{material:'grass',plant:true,sway:.3},
   flowerStem:{material:'grass',plant:true,sway:.25},flowerHead:{material:'petal',plant:true,sway:.25},
   cabbage:{material:'cabbage',plant:true},
-  bedFrame:{material:'wood'},bedSoil:{material:'soil'},
-  stumpBark:{material:'bark'},stumpTop:{material:'wood'}
+  bedFrame:{material:'wood-uv'},bedSoil:{material:'soil'},
+  stumpBark:{material:'bark'},stumpTop:{material:'wood-uv'}
 };
 
 export async function loadNature(url='/models/nature.glb'){

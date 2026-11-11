@@ -1,7 +1,7 @@
 import * as T from 'three';
 
 export function createChimneySmoke(scene,world){
-  const source=new T.Vector3(-1.78,world.height(-1,-1.8)+3.82,-2.35);
+  const source=world.cottage.chimney.clone();
   const count=144,centers=new Float32Array(count*3),sizes=new Float32Array(count),ages=new Float32Array(count),seeds=new Float32Array(count);
   const plane=new T.PlaneGeometry(1,1),geo=new T.InstancedBufferGeometry();
   geo.index=plane.index;geo.attributes.position=plane.attributes.position;geo.attributes.uv=plane.attributes.uv;geo.instanceCount=count;

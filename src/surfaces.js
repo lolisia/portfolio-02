@@ -3,49 +3,79 @@ import {leafSpray} from './foliage.js';
 import {shadeWater} from './water.js';
 import {shadeCascade} from './cascade.js';
 
-function field(size,seed){
-  const values=new Float32Array(size*size);
+export function field(size,seed,rows=size){
+  const values=new Float32Array(size*rows);
   for(let i=0;i<values.length;i++){seed=(Math.imul(seed,1664525)+1013904223)>>>0;values[i]=seed/4294967296}
   return (u,v)=>{
-    const x=(u-Math.floor(u))*size,y=(v-Math.floor(v))*size,i=Math.floor(x),j=Math.floor(y);
+    const x=(u-Math.floor(u))*size,y=(v-Math.floor(v))*rows,i=Math.floor(x),j=Math.floor(y);
     let a=x-i,b=y-j;a=a*a*(3-2*a);b=b*b*(3-2*b);
-    const at=(m,n)=>values[(n%size)*size+m%size];
+    const at=(m,n)=>values[(n%rows)*size+m%size];
     return (1-b)*((1-a)*at(i,j)+a*at(i+1,j))+b*((1-a)*at(i,j+1)+a*at(i+1,j+1));
   };
 }
 export const TRAMPLE_SLOTS=16;
 const coarse=field(5,722),fine=field(27,998),grit=field(96,417);
+// Wood fibres: many cells across the grain, few along it, so streaks run the length of a board.
+const fibre=field(180,5113,6),streak=field(46,2741,3);
+const knots=[[.21,.27],[.68,.71],[.43,.93]];
+function grain(u,v){
+  let bend=.022*coarse(u,v)+.008*Math.sin(v*6.283*2);
+  let knot=0;
+  for(const [ku,kv] of knots){
+    const du=((u-ku+1.5)%1-.5)*6,dv=((v-kv+1.5)%1-.5)*1.3,d=du*du+dv*dv;
+    knot=Math.max(knot,Math.exp(-d*38));bend+=.05*Math.exp(-d*9)*Math.sign(du||1)/(1+d*30);
+  }
+  const ring=.5+.5*Math.sin(6.283*(26*(u+bend)+1.3*coarse(u*2,v)));
+  const late=Math.pow(ring,7),fib=fibre(u+bend,v),str=streak(u+bend*.5,v);
+  return {late,fib,str,knot};
+}
 function texture(size,paint,color=false){
   const cv=document.createElement('canvas');cv.width=cv.height=size;
-  const ctx=cv.getContext('2d'),data=ctx.createImageData(size,size);
-  for(let j=0;j<size;j++)for(let i=0;i<size;i++)
-    data.data.set([...paint(i/size,j/size),255],(j*size+i)*4);
+  const ctx=cv.getContext('2d'),data=ctx.createImageData(size,size),d=data.data;
+  for(let j=0;j<size;j++)for(let i=0;i<size;i++){
+    const c=paint(i/size,j/size),k=(j*size+i)*4;d[k]=c[0];d[k+1]=c[1];d[k+2]=c[2];d[k+3]=255;
+  }
   ctx.putImageData(data,0,0);
   const map=new T.CanvasTexture(cv);map.wrapS=map.wrapT=T.RepeatWrapping;
   map.anisotropy=4;if(color)map.colorSpace=T.SRGBColorSpace;return map;
 }
 
 const recipes={
-  wood:{rough:.78,depth:1.2,relief:(u,v)=>{
-    const bend=.045*coarse(u,v)+.015*Math.sin(v*6.283);
-    const ring=Math.sin(6.283*(10*(u+bend)+coarse(u*2,v)*1.6));
-    return .26*coarse(u*3,v)+.29*(1-Math.pow(.5+.5*ring,5))+.30*fine(u+bend,v*.22)+.15*grit(u,v);
+  // Box faces are mapped at world scale (one texture per tile), grain along each board's length.
+  wood:{rough:.8,depth:2.4,size:512,relief:(u,v)=>{
+    const g=grain(u,v);
+    return .5-.34*g.late+.24*g.fib+.12*g.str-.3*g.knot+.06*grit(u*2,v*2);
+  },paint:(u,v)=>{
+    const g=grain(u,v),tone=.86+.16*coarse(u*2,v)-.1*g.str;
+    const dark=Math.min(1,.42*g.late+.22*(1-g.fib)+.7*g.knot);
+    return [255*tone*(1-.42*dark),238*tone*(1-.5*dark),214*tone*(1-.58*dark)].map(c=>Math.min(255,c));
   }},
   bark:{rough:.98,depth:1.9,relief:(u,v)=>.6*fine(u, .15*Math.sin(v*6.283)+u*.08)+.26*coarse(u*3,v)+.14*grit(u,v)},
-  stone:{rough:.91,depth:1.6,relief:(u,v)=>.43*coarse(u,v)+.35*fine(u,v)+.22*grit(u,v)},
+  // Dressed stone: broad mottling, pitted grain, hairline veins and patches of lichen.
+  stone:{rough:.91,depth:2.2,size:512,relief:(u,v)=>{
+    const vein=Math.pow(1-Math.abs(fine(u+.15*coarse(u,v),v)-.5)*2,40);
+    return .36*coarse(u,v)+.3*fine(u,v)+.24*grit(u,v)+.1*grit(u*2,v*2)-.2*vein-.18*Math.max(0,grit(u*3,v*3)-.72)*3;
+  },paint:(u,v)=>{
+    const vein=Math.pow(1-Math.abs(fine(u+.15*coarse(u,v),v)-.5)*2,40);
+    const tone=.8+.2*coarse(u,v)+.08*fine(u*2,v*2)-.1*grit(u,v)-.16*vein-.14*Math.max(0,grit(u*3,v*3)-.7)*3;
+    const lichen=Math.max(0,Math.min(1,(fine(u*2+.3,v*2)*coarse(u+.5,v)-.38)*7));
+    return [255*tone*(1-.06*lichen),255*tone*(1+.03*lichen),255*tone*(1-.22*lichen)].map(c=>Math.max(0,Math.min(255,c)));
+  }},
   clay:{rough:.74,depth:.85,relief:(u,v)=>.26*coarse(u,v)+.18*fine(u,v)+.18*grit(u,v)+.38*Math.cos(u*6.283)**2},
   plaster:{rough:.98,depth:.95,relief:(u,v)=>.32*coarse(u,v)+.33*fine(u,v)+.35*grit(u,v)},
   soil:{rough:.97,depth:1.4,relief:(u,v)=>.45*fine(u*2,v*2)+.3*grit(u,v)+.25*coarse(u*4,v*4)},
   leaf:{rough:.66,depth:.58,relief:(u,v)=>.62*coarse(u,v)+.28*fine(u,v)+.1*grit(u,v)}
 };
 const cache=new Map();
+// Box-built kinds get world-scale UVs (see createAtmosphere); '-uv' variants keep a mesh's own UVs.
+const BOXED=['wood','stone','clay','plaster'];
 export function surface(name){
   if(cache.has(name))return cache.get(name);
-  const recipe=recipes[name];
+  const recipe=recipes[name.replace(/-uv$/,'')];
   const mat=new T.MeshStandardMaterial({name,flatShading:true,roughness:recipe?.rough??.9});
   if(recipe){
-    const h=recipe.relief,n=128;
-    mat.map=texture(n,(u,v)=>{const a=183+70*h(u,v);return [a,a,a]},true);
+    const h=recipe.relief,n=recipe.size??128;
+    mat.map=texture(n,recipe.paint??((u,v)=>{const a=183+70*h(u,v);return [a,a,a]}),true);
     mat.normalMap=texture(n,(u,v)=>{
       const x=(h(u-1/n,v)-h(u+1/n,v))*recipe.depth,y=(h(u,v+1/n)-h(u,v-1/n))*recipe.depth;
       const scale=127/Math.hypot(x,y,1);return [128+x*scale,128+y*scale,128+scale];
@@ -126,6 +156,25 @@ uniform vec4 trample[${TRAMPLE_SLOTS}];
     mat.onBeforeCompile=shader=>{
       if(bendingMaterials.has(mat))sway(shader,mat.name==='grass');
       else shader.vertexShader='uniform float elapsed,wet,breeze;\n'+shader.vertexShader;
+      if(BOXED.includes(mat.name)){
+        // World-scale box mapping: each face samples the texture at its true size, with the
+        // grain (texture v) along the longer in-plane edge and a per-instance offset, instead
+        // of one stretched copy per face.
+        shader.vertexShader=shader.vertexShader.replace('#include <uv_vertex>',`#include <uv_vertex>
+          #if defined(USE_INSTANCING) && defined(USE_MAP)
+          {
+            vec3 sc=vec3(length(instanceMatrix[0].xyz),length(instanceMatrix[1].xyz),length(instanceMatrix[2].xyz));
+            vec3 bp=position*sc,an=abs(normal);
+            vec2 q=an.x>.5?(sc.z>sc.y?bp.yz:bp.zy):an.y>.5?(sc.z>sc.x?bp.xz:bp.zx):(sc.y>sc.x?bp.xy:bp.yx);
+            vec3 o=instanceMatrix[3].xyz;
+            q+=fract(sin(vec2(dot(o,vec3(12.99,78.23,37.72)),dot(o,vec3(39.35,11.13,83.17))))*43758.55)*vec2(5.,9.);
+            vMapUv=q*${({wood:1,stone:.75,clay:1.4,plaster:.8})[mat.name].toFixed(2)};
+            #ifdef USE_NORMALMAP
+            vNormalMapUv=vMapUv;
+            #endif
+          }
+          #endif`);
+      }
       Object.assign(shader.uniforms,{cloudMap,cloudAmount,wind,elapsed:clock,breeze,wet,snowDepth,foliageTint});
       shader.vertexShader='varying vec3 landPosition;\n'+shader.vertexShader.replace('#include <project_vertex>',`
         vec4 land=vec4(transformed,1.);
@@ -164,9 +213,12 @@ uniform vec4 trample[${TRAMPLE_SLOTS}];
           '#include <color_fragment>\ndiffuseColor.rgb*=mix(vec3(1.),foliageTint,'+influence.toFixed(2)+');');
       }
       if(mat.name==='terrain'){
-        shader.uniforms.winterBare=winterBare;
-        shader.fragmentShader='uniform float winterBare;\n'+shader.fragmentShader.replace('#include <color_fragment>',`
+        shader.uniforms.winterBare=winterBare;shader.uniforms.soilMap={value:mat.userData.soilMap};
+        shader.fragmentShader='uniform float winterBare; uniform sampler2D soilMap;\n'+shader.fragmentShader.replace('#include <color_fragment>',`
           #include <color_fragment>
+          float trailMask=texture2D(roughnessMap,vRoughnessMapUv).b;
+          vec3 soilDetail=texture2D(soilMap,vBumpMapUv).rgb*2.;
+          diffuseColor.rgb*=mix(vec3(1.),soilDetail,.25+.75*trailMask);
           float soilGrain=dot(diffuseColor.rgb,vec3(.3,.5,.2));
           diffuseColor.rgb=mix(diffuseColor.rgb,vec3(.36,.235,.135)*(soilGrain*1.8+.25),winterBare);`);
       }

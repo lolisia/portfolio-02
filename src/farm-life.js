@@ -10,8 +10,7 @@ export function createFarmLife(scene,world){
     const m=new T.Mesh(geometry,material);m.position.set(x,y,z);m.castShadow=true;group.add(m);return m;
   }
   const vane=new T.Group();vane.name='roof-weather-vane';
-  const roofY=world.height(-1,-1.8)+3.36;
-  vane.position.set(-.45,roofY,-1.4);scene.add(vane);
+  vane.position.copy(world.cottage.ridge);scene.add(vane);
   mesh(vane,new T.CylinderGeometry(.025,.04,.9,8),metal,0,.45,0);
   const arrow=new T.Group();arrow.position.y=.82;vane.add(arrow);
   mesh(arrow,new T.BoxGeometry(.045,.045,1.35),metal,0,0,0);

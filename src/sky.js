@@ -10,8 +10,8 @@ export function createSky(renderer,scene,water){
   let probe;
   const zenith=new T.Color(),horizon=new T.Color(),land=new T.Color(),dir=new T.Vector3(),pixel=new T.Color(),sunDir=new T.Vector3();
   return (time,weather,sun)=>{
-    zenith.copy(time.color([0x578db7,0x518ac3,0x706f99,0x131f37]));
-    horizon.copy(time.color([0xffdcaa,0xdbedf1,0xff9661,0x34445b]));
+    zenith.copy(time.color([0x578db7,0x518ac3,0x7677a8,0x131f37,0x4f4a8c]));
+    horizon.copy(time.color([0xffdcaa,0xdbedf1,0xffae94,0x34445b,0xff7f3c]));
     land.copy(time.color([0x697153,0x737962,0x766552,0x161e21]));
     sunDir.copy(sun.position).normalize();
     for(let j=0;j<height;j++)for(let i=0;i<width;i++){
