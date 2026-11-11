@@ -45,6 +45,10 @@ Godot 4.7 프로젝트. 원본 Three.js 디오라마(`../src`)를 PC/모바일 �
 - 모바일 품질 프로파일, 배터리/발열/해상도 스케일링 튜닝
 - 실기기 프로파일링(중급 Android 우선)
 
+## 다음 작업
+
+남은 작업의 우선순위·파일·완료 기준은 [ROADMAP.md](ROADMAP.md)에 정리되어 있습니다.
+
 ## 변환 노트
 
 원본 `public/models/unitychan/sd_unitychan.glb`는 `EXT_texture_webp`를 필수로 요구해 Godot 코어 glTF 임포터가 거부합니다. `convert_unitychan_glb.py`가 임베디드 WebP를 PNG로 바꾸고 `godot/assets/models/unitychan/`에 다시 저장합니다. 원본 에셋과 라이선스는 `public/models/unitychan/`을 참고하세요.
