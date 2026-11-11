@@ -50,6 +50,8 @@ var _trail: Array = []
 var _trail_clock := 0.0
 
 func _ready() -> void:
+	_apply_content_scale()
+	get_window().size_changed.connect(_apply_content_scale)
 	_setup_environment()
 	_setup_lights()
 
@@ -192,8 +194,39 @@ func _ready() -> void:
 		character._begin_journey("gather")
 		orbit.max_zoom = 12.0
 		orbit.set_view(Vector3(-2.2, 1.3, 3.4), 0.4, 0.95, 6.0)
+	var shot_index := cli.find("--shot")
+	if shot_index >= 0 and shot_index + 1 < cli.size():
+		_capture_screenshot(String(cli[shot_index + 1]))
+	orbit.v_offset = _desired_v_offset()
 	ui.set_time_value(hour)
 	ui.set_wind_value(wind)
+
+func _desired_v_offset() -> float:
+	if ui == null:
+		return 0.0
+	var viewport_size := get_viewport().get_visible_rect().size
+	if viewport_size.x >= viewport_size.y:
+		return 0.0
+	return -16.0 if ui.is_panel_open() else -4.0
+
+func _capture_screenshot(path: String) -> void:
+	# Development helper: save the current window at its real resolution.
+	await get_tree().process_frame
+	await get_tree().process_frame
+	await RenderingServer.frame_post_draw
+	var image := get_viewport().get_texture().get_image()
+	image.save_png(path)
+	get_tree().quit()
+
+func _apply_content_scale() -> void:
+	# Keep the UI at a readable physical size on phones while still scaling up
+	# comfortably on very large desktop windows. With canvas_items stretch the
+	# content size is the layout space; 0 would mean "use the window size".
+	var window_size := get_window().size
+	var ui_scale := clampf(float(window_size.y) / 720.0, 1.0, 1.75)
+	get_window().content_scale_size = Vector2i(
+		maxi(1, roundi(float(window_size.x) / ui_scale)),
+		maxi(1, roundi(float(window_size.y) / ui_scale)))
 
 func _setup_environment() -> void:
 	sky_material = ProceduralSkyMaterial.new()
@@ -301,6 +334,10 @@ func _process(delta: float) -> void:
 	if absf(_wind_applied - wind) > 0.001:
 		world.set_wind(wind)
 		_wind_applied = wind
+
+	var wanted_v_offset := _desired_v_offset()
+	if orbit != null and absf(orbit.v_offset - wanted_v_offset) > 0.01:
+		orbit.v_offset = lerpf(orbit.v_offset, wanted_v_offset, 1.0 - exp(-delta * 7.0))
 
 	if farm_life != null:
 		farm_life.hour = hour

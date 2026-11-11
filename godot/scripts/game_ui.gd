@@ -19,35 +19,46 @@ var panel_control: PanelContainer
 var body_control: VBoxContainer
 var toggle_button: Button
 var _syncing := false
+var ui_theme: Theme
+var panel_style: StyleBoxFlat
+var bottom_box: VBoxContainer
+var credit_label: LinkButton
+var weather_label: Label
+var season_label: Label
+var option_box: BoxContainer
+var reset_button: Button
+var reset_spacer: Control
+var auto_label_full := "시간 자동 진행 (120초 / 하루)"
+var auto_label_compact := "시간 자동 진행"
 
 func _ready() -> void:
-	var theme := Theme.new()
+	ui_theme = Theme.new()
 	var font := SystemFont.new()
 	font.font_names = PackedStringArray(["Malgun Gothic", "Noto Sans KR", "Apple SD Gothic Neo", "Segoe UI", "sans-serif"])
-	theme.default_font = font
-	theme.default_font_size = 14
-	theme.set_color("font_color", "Label", Color(1, 1, 1, 0.94))
-	theme.set_color("font_color", "Button", Color(1, 1, 1, 0.94))
-	theme.set_color("font_color", "CheckBox", Color(1, 1, 1, 0.9))
-	theme.set_color("font_color", "OptionButton", Color(1, 1, 1, 0.94))
+	ui_theme.default_font = font
+	ui_theme.default_font_size = 14
+	ui_theme.set_color("font_color", "Label", Color(1, 1, 1, 0.94))
+	ui_theme.set_color("font_color", "Button", Color(1, 1, 1, 0.94))
+	ui_theme.set_color("font_color", "CheckBox", Color(1, 1, 1, 0.9))
+	ui_theme.set_color("font_color", "OptionButton", Color(1, 1, 1, 0.94))
 
 	var root := Control.new()
 	root.name = "Root"
 	root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	root.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	root.theme = theme
+	root.theme = ui_theme
 	add_child(root)
 
-	var credit := LinkButton.new()
-	credit.text = "SD Unity-chan © Unity Technologies Japan/UCL"
-	credit.uri = "https://unity-chan.com/contents/license_en/"
-	credit.add_theme_font_size_override("font_size", 10)
-	credit.set_anchors_and_offsets_preset(Control.PRESET_TOP_LEFT)
-	credit.offset_left = 12
-	credit.offset_top = 8
-	root.add_child(credit)
+	credit_label = LinkButton.new()
+	credit_label.text = "SD Unity-chan © Unity Technologies Japan/UCL"
+	credit_label.uri = "https://unity-chan.com/contents/license_en/"
+	credit_label.add_theme_font_size_override("font_size", 10)
+	credit_label.set_anchors_and_offsets_preset(Control.PRESET_TOP_LEFT)
+	credit_label.offset_left = 12
+	credit_label.offset_top = 8
+	root.add_child(credit_label)
 
-	var bottom_box := VBoxContainer.new()
+	bottom_box = VBoxContainer.new()
 	bottom_box.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_WIDE)
 	bottom_box.offset_left = 14
 	bottom_box.offset_right = -14
@@ -61,16 +72,16 @@ func _ready() -> void:
 	panel.custom_minimum_size = Vector2(650, 0)
 	panel.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	panel.mouse_filter = Control.MOUSE_FILTER_STOP
-	var style := StyleBoxFlat.new()
-	style.bg_color = Color(0.055, 0.095, 0.115, 0.52)
-	style.border_color = Color(1, 1, 1, 0.38)
-	style.set_border_width_all(1)
-	style.set_corner_radius_all(16)
-	style.content_margin_left = 20
-	style.content_margin_right = 20
-	style.content_margin_top = 10
-	style.content_margin_bottom = 12
-	panel.add_theme_stylebox_override("panel", style)
+	panel_style = StyleBoxFlat.new()
+	panel_style.bg_color = Color(0.055, 0.095, 0.115, 0.52)
+	panel_style.border_color = Color(1, 1, 1, 0.38)
+	panel_style.set_border_width_all(1)
+	panel_style.set_corner_radius_all(16)
+	panel_style.content_margin_left = 20
+	panel_style.content_margin_right = 20
+	panel_style.content_margin_top = 10
+	panel_style.content_margin_bottom = 12
+	panel.add_theme_stylebox_override("panel", panel_style)
 	panel_control = panel
 	bottom_box.add_child(panel)
 
@@ -142,40 +153,53 @@ func _ready() -> void:
 	wind_value.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	wind_row.add_child(wind_value)
 
-	# Weather / season row.
-	var option_row := HBoxContainer.new()
-	option_row.add_theme_constant_override("separation", 18)
-	body.add_child(option_row)
-	var weather_label := Label.new()
+	# Weather / season rows: side by side on desktop, stacked on phones.
+	option_box = BoxContainer.new()
+	option_box.vertical = false
+	option_box.add_theme_constant_override("separation", 18)
+	body.add_child(option_box)
+
+	var weather_row := HBoxContainer.new()
+	weather_row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	weather_row.add_theme_constant_override("separation", 12)
+	option_box.add_child(weather_row)
+	weather_label = Label.new()
 	weather_label.text = "날씨"
 	weather_label.custom_minimum_size = Vector2(48, 0)
-	option_row.add_child(weather_label)
+	weather_row.add_child(weather_label)
 	weather_option = OptionButton.new()
 	for name in ["맑음", "흐림", "비", "안개", "눈", "눈보라"]:
 		weather_option.add_item(name)
 	weather_option.selected = 0
 	weather_option.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	option_row.add_child(weather_option)
+	weather_option.custom_minimum_size = Vector2(0, 34)
+	weather_row.add_child(weather_option)
 
-	var season_label := Label.new()
+	var season_row := HBoxContainer.new()
+	season_row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	season_row.add_theme_constant_override("separation", 12)
+	option_box.add_child(season_row)
+	season_label = Label.new()
 	season_label.text = "계절"
 	season_label.custom_minimum_size = Vector2(48, 0)
-	option_row.add_child(season_label)
+	season_row.add_child(season_label)
 	season_option = OptionButton.new()
 	for name in ["봄", "여름", "가을", "겨울"]:
 		season_option.add_item(name)
 	season_option.selected = 1
 	season_option.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	option_row.add_child(season_option)
+	season_option.custom_minimum_size = Vector2(0, 34)
+	season_row.add_child(season_option)
 
 	# Footer.
 	var footer := HBoxContainer.new()
 	body.add_child(footer)
-	var spacer := Control.new()
-	spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	footer.add_child(spacer)
-	var reset_button := Button.new()
+	reset_spacer = Control.new()
+	reset_spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	footer.add_child(reset_spacer)
+	reset_button = Button.new()
 	reset_button.text = "처음 시점"
+	reset_button.custom_minimum_size = Vector2(0, 34)
 	reset_button.pressed.connect(func() -> void: reset_requested.emit())
 	footer.add_child(reset_button)
 
@@ -184,6 +208,40 @@ func _ready() -> void:
 	auto_check.toggled.connect(func(on: bool) -> void: auto_toggled.emit(on))
 	weather_option.item_selected.connect(func(index: int) -> void: weather_changed.emit(index))
 	season_option.item_selected.connect(func(index: int) -> void: season_changed.emit(index))
+
+	time_slider.custom_minimum_size = Vector2(0, 28)
+	wind_slider.custom_minimum_size = Vector2(0, 28)
+	auto_check.custom_minimum_size = Vector2(0, 30)
+	get_viewport().size_changed.connect(_apply_responsive_layout)
+	_apply_responsive_layout()
+
+func _apply_responsive_layout() -> void:
+	if panel_control == null:
+		return
+	var viewport_size := get_viewport().get_visible_rect().size
+	var compact := viewport_size.x < 560.0
+	var margin := 8.0 if compact else 14.0
+	bottom_box.offset_left = margin
+	bottom_box.offset_right = -margin
+	bottom_box.offset_top = -minf(640.0, maxf(viewport_size.y - 16.0, 160.0))
+	panel_control.custom_minimum_size = Vector2(minf(650.0, maxf(viewport_size.x - margin * 2.0, 220.0)), 0.0)
+	panel_style.content_margin_left = 14.0 if compact else 20.0
+	panel_style.content_margin_right = 14.0 if compact else 20.0
+	panel_style.set_corner_radius_all(12 if compact else 16)
+	ui_theme.default_font_size = 13 if compact else 14
+	auto_check.text = auto_label_compact if compact else auto_label_full
+	auto_check.tooltip_text = "120초에 하루가 지납니다"
+	option_box.vertical = compact
+	option_box.add_theme_constant_override("separation", 6 if compact else 18)
+	reset_spacer.visible = not compact
+	reset_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL if compact else Control.SIZE_SHRINK_END
+	var slider_height := 34.0 if compact else 28.0
+	time_slider.custom_minimum_size.y = slider_height
+	wind_slider.custom_minimum_size.y = slider_height
+	auto_check.custom_minimum_size.y = 34.0 if compact else 30.0
+	toggle_button.custom_minimum_size.y = 36.0 if compact else 30.0
+	weather_label.custom_minimum_size.x = 40.0 if compact else 48.0
+	season_label.custom_minimum_size.x = 40.0 if compact else 48.0
 
 func _on_time_changed(value: float) -> void:
 	time_value.text = format_hour(value)
@@ -214,6 +272,9 @@ func set_auto(enabled: bool) -> void:
 
 func is_auto() -> bool:
 	return auto_check.button_pressed
+
+func is_panel_open() -> bool:
+	return body_control != null and body_control.visible
 
 func get_time() -> float:
 	return time_slider.value
