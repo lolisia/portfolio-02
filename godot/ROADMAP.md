@@ -129,6 +129,7 @@ Godot의 사용자 인자는 `--` 뒤에 전달합니다.
   - 실제 창 크기 기반 content scale + 패널 열림 시 카메라 v_offset/줌 보정
   - 터치용 슬라이더/버튼 높이, `--shot <path>` 스크린샷 헬퍼
   - 품질 프리셋 높음/보통/낮음 (MSAA, 3D 스케일, SSAO/볼류메트릭, 반사, 잔디/파티클)
+  - 모션 프리뷰: 지평선(시각), 풍속계(바람), 날씨 카드 (`motion.js` 포트)
 - 물 반사 (이번 세션)
   - SubViewport 반사 텍스처의 상하 뒤집힘 수정 (`mirror_uv.y = 1.0 - y`)
   - Schlick 5제곱 Fresnel로 상공 시 투명, 저각 시 반사 강화
@@ -152,6 +153,7 @@ Godot의 사용자 인자는 `--` 뒤에 전달합니다.
 | `scripts/orbit_camera.gd` | 직교 카메라 오빗/터치 줌 |
 | `scripts/unity_chan.gd` | 캐릭터 임포트, 태스크 AI, 낚시 장비 |
 | `scripts/farm_paths.gd` | 0.6 타일 워킹 그래프, A* 경로 |
+| `scripts/motion_preview.gd` | 지평선/풍속계/날씨 UI 카드 |
 | `scripts/farm_life.gd` | 닭, 풍향계/수탉, 연기, 물고기 점프, 새 |
 | `scripts/weather_fx.gd` | 비/눈 강도 크로스페이드, 물보라/수면 파문, 폭포 spray |
 | `scripts/seasons_fx.gd` | 봄 벚꽃잎, 가을 낙엽 |
@@ -350,7 +352,7 @@ Godot의 사용자 인자는 `--` 뒤에 전달합니다.
 
 ---
 
-### P6. UI/모바일 — 반응형/품질 프리셋 완료
+### P6. UI/모바일 — 반응형/품질 프리셋/모션 프리뷰 완료
 
 **현재 상태**
 - `content_scale_size`를 실제 창 크기로 맞추고, 세로 화면에서는 패널을 화면 폭에 맞춤.
@@ -361,20 +363,20 @@ Godot의 사용자 인자는 `--` 뒤에 전달합니다.
 - 품질 프리셋 높음/보통/낮음:
   - MSAA, 3D 해상도 스케일, SSAO/볼류메트릭, 물 반사 해상도/비활성, 잔디 수, 파티클 비율.
   - 모바일 렌더러 기본값은 보통.
+- 모션 프리뷰: `motion_preview.gd`로 지평선/풍속계/날씨 카드 포팅.
 - 모바일 실기기 테스트 없음.
-- 원본의 캔버스 모션 프리뷰(시각/바람/날씨) 없음.
 
 **남은 일**
-1. 원본 모션 프리뷰 포트:
-   - `motion.js`의 지평선/풍속계/날씨 드로잉을 `Control._draw`로.
-2. 모바일 실기기 프로파일링:
+1. 모바일 실기기 프로파일링:
    - 중급 Android 우선.
    - 발열/배터리/프레임 측정.
-3. 적응형 해상도/그림자 갱신.
-4. safe area(노치) 대응.
+2. 적응형 해상도/그림자 갱신.
+3. safe area(노치) 대응.
+4. 프리뷰 모션 감소(prefers-reduced-motion) 옵션.
 
 **파일**
 - `scripts/game_ui.gd`
+- `scripts/motion_preview.gd`
 - `scripts/quality_manager.gd`
 - `scripts/main.gd`
 - `project.godot`
@@ -447,9 +449,9 @@ Godot의 사용자 인자는 `--` 뒤에 전달합니다.
 1. **빛줄기/안개 튜닝** (P1)
    - `--house` 아침/저녁, `--winter`, `--rain`에서 FogVolume/조명 확인
    - 커스텀 CompositorEffect는 리스크가 크므로 먼저 내장 볼류메트릭으로 목표치 확인
-2. **모바일 품질/모션 프리뷰** (P6)
-   - High/Medium/Low 프리셋, 해상도 스케일/그림자/파티클 예산
-   - `motion.js`의 지평선/풍속계/날씨 카드 이식
+2. **모바일 품질/프로파일링** (P6)
+   - High/Medium/Low 실기기 검증, 해상도 스케일/그림자/파티클 예산
+   - safe area, 적응형 해상도
 3. **농장/야생 남은 디테일** (P4)
    - 닭장 출입, 새 착륙 flare, 물고기 점프 물보라, 꽃정원
 4. **계절/날씨 남은 디테일** (P3)
@@ -487,7 +489,7 @@ Godot의 사용자 인자는 `--` 뒤에 전달합니다.
 | `src/wildlife.js` | `farm_life.gd` (fish leap, bird) | 부분 |
 | `src/unitychan.js` | `unity_chan.gd`, `farm_paths.gd` | A* 경로/문 통과 포함 |
 | `src/interior.js` | `night_life.gd` (window/TV light) | 부분 (사람 실루엣 없음) |
-| `src/panel.js`, `motion.js` | `game_ui.gd` | 반응형 완료, 모션 프리뷰 누락 |
+| `src/panel.js`, `motion.js` | `game_ui.gd`, `motion_preview.gd` | 반응형 + 모션 프리뷰 완료 |
 | `src/daylight.js` | `daylight.gd` | 이식 |
 | `src/garden.js` | `world.gd::_build_garden_beds` | 꽃정원 대신 작물밭으로 대체 |
 | `src/farm-paths.js` | `scripts/farm_paths.gd` | 완료 |

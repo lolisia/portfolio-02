@@ -9,6 +9,8 @@ signal auto_toggled(enabled: bool)
 signal reset_requested
 signal quality_changed(index: int)
 
+const MotionPreviewScript = preload("res://scripts/motion_preview.gd")
+
 var time_slider: HSlider
 var wind_slider: HSlider
 var time_value: Label
@@ -17,6 +19,9 @@ var auto_check: CheckBox
 var weather_option: OptionButton
 var season_option: OptionButton
 var quality_option: OptionButton
+var horizon_preview: MotionPreviewScript
+var wind_preview: MotionPreviewScript
+var weather_preview: MotionPreviewScript
 var panel_control: PanelContainer
 var body_control: VBoxContainer
 var toggle_button: Button
@@ -128,6 +133,11 @@ func _ready() -> void:
 	time_value.custom_minimum_size = Vector2(48, 0)
 	time_value.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	time_row.add_child(time_value)
+	horizon_preview = MotionPreviewScript.new()
+	horizon_preview.mode = 0
+	horizon_preview.custom_minimum_size = Vector2(110, 58)
+	horizon_preview.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	time_row.add_child(horizon_preview)
 
 	auto_check = CheckBox.new()
 	auto_check.text = "시간 자동 진행 (120초 / 하루)"
@@ -154,6 +164,11 @@ func _ready() -> void:
 	wind_value.custom_minimum_size = Vector2(58, 0)
 	wind_value.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	wind_row.add_child(wind_value)
+	wind_preview = MotionPreviewScript.new()
+	wind_preview.mode = 1
+	wind_preview.custom_minimum_size = Vector2(110, 58)
+	wind_preview.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	wind_row.add_child(wind_preview)
 
 	# Weather / season rows: side by side on desktop, stacked on phones.
 	option_box = BoxContainer.new()
@@ -176,6 +191,11 @@ func _ready() -> void:
 	weather_option.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	weather_option.custom_minimum_size = Vector2(0, 34)
 	weather_row.add_child(weather_option)
+	weather_preview = MotionPreviewScript.new()
+	weather_preview.mode = 2
+	weather_preview.custom_minimum_size = Vector2(94, 54)
+	weather_preview.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	weather_row.add_child(weather_preview)
 
 	var season_row := HBoxContainer.new()
 	season_row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -223,7 +243,9 @@ func _ready() -> void:
 	time_slider.value_changed.connect(_on_time_changed)
 	wind_slider.value_changed.connect(_on_wind_changed)
 	auto_check.toggled.connect(func(on: bool) -> void: auto_toggled.emit(on))
-	weather_option.item_selected.connect(func(index: int) -> void: weather_changed.emit(index))
+	weather_option.item_selected.connect(func(index: int) -> void:
+		weather_preview.set_weather(index)
+		weather_changed.emit(index))
 	season_option.item_selected.connect(func(index: int) -> void: season_changed.emit(index))
 	quality_option.item_selected.connect(func(index: int) -> void: quality_changed.emit(index))
 
@@ -232,6 +254,9 @@ func _ready() -> void:
 	auto_check.custom_minimum_size = Vector2(0, 30)
 	get_viewport().size_changed.connect(_apply_responsive_layout)
 	_apply_responsive_layout()
+	horizon_preview.set_time(time_slider.value)
+	wind_preview.set_wind(wind_slider.value)
+	weather_preview.set_weather(weather_option.selected)
 
 func _apply_responsive_layout() -> void:
 	if panel_control == null:
@@ -260,14 +285,26 @@ func _apply_responsive_layout() -> void:
 	toggle_button.custom_minimum_size.y = 36.0 if compact else 30.0
 	weather_label.custom_minimum_size.x = 40.0 if compact else 48.0
 	season_label.custom_minimum_size.x = 40.0 if compact else 48.0
+	var preview_width := 86.0 if compact else 110.0
+	var preview_height := 50.0 if compact else 58.0
+	if horizon_preview != null:
+		horizon_preview.custom_minimum_size = Vector2(preview_width, preview_height)
+	if wind_preview != null:
+		wind_preview.custom_minimum_size = Vector2(preview_width, preview_height)
+	if weather_preview != null:
+		weather_preview.custom_minimum_size = Vector2(preview_width - 12.0, preview_height - 4.0)
 
 func _on_time_changed(value: float) -> void:
 	time_value.text = format_hour(value)
+	if horizon_preview != null:
+		horizon_preview.set_time(value)
 	if not _syncing:
 		time_changed.emit(value)
 
 func _on_wind_changed(value: float) -> void:
 	wind_value.text = str(round(value * 10.0) / 10.0) + " m/s"
+	if wind_preview != null:
+		wind_preview.set_wind(value)
 	if not _syncing:
 		wind_changed.emit(value)
 
@@ -276,12 +313,16 @@ func set_time_value(value: float) -> void:
 	time_slider.value = value
 	_syncing = false
 	time_value.text = format_hour(value)
+	if horizon_preview != null:
+		horizon_preview.set_time(value)
 
 func set_wind_value(value: float) -> void:
 	_syncing = true
 	wind_slider.value = value
 	_syncing = false
 	wind_value.text = str(round(value * 10.0) / 10.0) + " m/s"
+	if wind_preview != null:
+		wind_preview.set_wind(value)
 
 func set_auto(enabled: bool) -> void:
 	_syncing = true
@@ -302,6 +343,8 @@ func get_wind() -> float:
 
 func set_weather(index: int) -> void:
 	weather_option.selected = index
+	if weather_preview != null:
+		weather_preview.set_weather(index)
 
 func set_season(index: int) -> void:
 	season_option.selected = index
