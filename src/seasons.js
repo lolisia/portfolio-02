@@ -63,7 +63,9 @@ export function createSeasons(scene,world,atmosphere){
     if(season===3&&world.water.userData.freeze.value>.995)world.water.userData.freeze.value=1;
     const storm=blend?blend.storm:weather===5?1:0,snowing=blend?blend.snow:weather>=4?1:0;
     petals(season===0,dt,time,wind,storm);leaves(season===2,dt,time,wind,storm);snow(snowing,dt,time,wind,storm);
-    const melt=blend?T.MathUtils.lerp([.007,.014,.006,.002][season],.020,blend.rain):weather===2?.020:[.007,.014,.006,.002][season];
+    // Outside winter a snow cover is gone in a few seconds (rain clears it fastest).
+    const thaw=[.14,.24,.09,.002][season];
+    const melt=blend?T.MathUtils.lerp(thaw,Math.max(thaw,.3),blend.rain):weather===2?Math.max(thaw,.3):thaw;
     const rate=Number(snowing)*(.016+.017*Number(storm))-(1-Number(snowing))*melt;
     amount=T.MathUtils.clamp(amount+elapsed*rate,0,1);
     if(season===3)amount=T.MathUtils.damp(amount,1,1.25,elapsed);

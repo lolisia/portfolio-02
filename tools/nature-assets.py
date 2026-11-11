@@ -145,8 +145,10 @@ def oak(name, seed, spread=1.):
             for _ in range(13 if len(limb) > 5 else 11):
                 t = rng.random(); base = p0.lerp(p1, t)
                 along = (p1 - p0).normalized()
-                out = (along*.6 + (base - center).normalized()*.5 +
-                       Vector((rng.uniform(-.7, .7), rng.uniform(-.7, .7), rng.uniform(-.2, .8)))).normalized()
+                # Sprigs fan around their own twig (not around the crown centre) and lean upward.
+                sd = along.cross(Vector((0, 0, 1)))
+                sd = (sd.normalized() if sd.length > 1e-4 else Vector((1, 0, 0)))*rng.choice((-1, 1))
+                out = (along*.7 + sd*rng.uniform(.3, 1.) + Vector((rng.uniform(-.25, .25), rng.uniform(-.25, .25), rng.uniform(0, .6)))).normalized()
                 ln = rng.uniform(.5, .78)
                 shade = .62 + .38*max(0, min(1, (base.z - center.z + .9)/1.7))
                 directed_card(leaves, base, out, ln*.85, ln, shade=shade)
@@ -155,33 +157,60 @@ def oak(name, seed, spread=1.):
 
 
 # ---------------------------------------------------------------- conifer
+def flat_card(bm, base, along, width, length, droop=.0, shade=1.):
+    """A spray lying roughly flat: v runs from the twig (base) toward the tip along `along`."""
+    uv, col = layers(bm)
+    d = Vector((along.x, along.y, along.z)).normalized()
+    side = d.cross(Vector((0, 0, 1)))
+    side = side.normalized() if side.length > 1e-4 else Vector((1, 0, 0))
+    tip = base + d*length + Vector((0, 0, -droop))
+    corners = [base - side*width*.3, base + side*width*.3, tip + side*width*.5, tip - side*width*.5]
+    f = bm.faces.new([bm.verts.new(c) for c in corners])
+    for loop, t, g in zip(f.loops, ((0, 0), (1, 0), (1, 1), (0, 1)), (shade*.75, shade*.75, shade, shade)):
+        loop[uv].uv = t; loop[col] = (g, g, g, 1)
+
+
 def pine(name, seed):
     rng = random.Random(seed)
     bark = bmesh.new(); needles = bmesh.new()
-    trunk = curve(Vector((0, 0, 0)), Vector((0, 0, 1)), 4.35, 8, wobble=.015, rng=rng)
-    tube(bark, trunk, [.22 - .022*i for i in range(9)], sides=8, shade=(.55, 1), uv_scale=(1, .8))
+    height = 4.35
+    trunk = curve(Vector((0, 0, 0)), Vector((0, 0, 1)), height, 10, wobble=.02, rng=rng)
+    tube(bark, trunk, [.22 - .019*i for i in range(11)], sides=8, shade=(.55, 1), uv_scale=(1, .8))
     for k in range(4):
         a = k/4*TAU + .4
         tube(bark, curve(Vector((0, 0, .25)), Vector((math.cos(a), math.sin(a), -.8)), .4, 2, rng=rng), [.09, .06, .03], sides=5, shade=(.5, .6))
-    tiers = 9
-    for i in range(tiers):
-        t = i/(tiers-1)
-        z = 1.05 + t*3.05
-        reach = 1.45*(1-t)**.85 + .22
-        count = int(10 + 8*(1-t))
-        for k in range(count):
-            a = k/count*TAU + rng.uniform(-.15, .15) + i*.7
-            out = Vector((math.cos(a), math.sin(a), -.32 - .25*(1-t) + rng.uniform(-.08, .08)))
-            base = Vector((math.cos(a)*.05, math.sin(a)*.05, z + rng.uniform(-.06, .06)))
-            if k % 2 == 0 and reach > .5:
-                tube(bark, [base, base + out.normalized()*reach*.85], [.03, .012], sides=4, shade=(.7, .8))
-            for layer in range(2):
-                tilt = Quaternion(Vector((-math.sin(a), math.cos(a), 0)), (layer - .5)*.35)
-                directed_card(needles, base + Vector((0, 0, layer*.07)), tilt @ out, reach*.62, reach*1.08,
-                              shade=.58 + .42*t + .1*layer)
-    directed_card(needles, Vector((0, 0, 4.0)), Vector((0, .05, 1)), .35, .55, shade=1)
+    # Irregular whorls of real branches; each carries flat, drooping sprays along its length,
+    # so the crown reads as stacked boughs instead of cards fanned out from the trunk.
+    z, azimuth = 1.0, rng.uniform(0, TAU)
+    while z < height - .45:
+        t = (z - 1.0)/(height - 1.45)
+        reach = (1.55*(1 - t)**.9 + .25)*rng.uniform(.85, 1.1)
+        for k in range(rng.randint(4, 6)):
+            azimuth += 2.39996 + rng.uniform(-.35, .35)
+            ln = reach*rng.uniform(.75, 1.15)
+            d = Vector((math.cos(azimuth), math.sin(azimuth), rng.uniform(-.05, .12)))
+            branch = curve(Vector((0, 0, z + rng.uniform(-.05, .05))), d, ln, 4, droop=.05, wobble=.06, rng=rng)
+            # tips lift a little, like a real fir bough
+            branch[-1] = branch[-1] + Vector((0, 0, .05*ln))
+            tube(bark, branch, [.035, .028, .02, .013, .006], sides=4, shade=(.6, .8))
+            for i in range(1, len(branch)):
+                p0, p1 = branch[i-1], branch[i]
+                along = p1 - p0
+                for side in (-1, 1):
+                    base = p0.lerp(p1, rng.uniform(.1, .9))
+                    sd = along.normalized().cross(Vector((0, 0, 1)))*side
+                    out = (along.normalized()*.55 + sd*.8 + Vector((0, 0, rng.uniform(-.15, .05)))).normalized()
+                    size = ln*(.42 - .06*i)*rng.uniform(.85, 1.15) + .12
+                    flat_card(needles, base, out, size*.9, size, droop=size*.18, shade=.55 + .35*t + .1*(i/len(branch)))
+            # a spray capping the branch tip
+            tipdir = branch[-1] - branch[-2]
+            flat_card(needles, branch[-2], tipdir, ln*.32 + .1, ln*.38 + .12, droop=.04, shade=.8 + .2*t)
+        z += rng.uniform(.26, .36)
+    for k in range(3):  # leader
+        a = k/3*TAU
+        flat_card(needles, Vector((0, 0, height - .55 + k*.12)), Vector((math.cos(a), math.sin(a), 1.4)), .28, .5, shade=1)
     finish(name+'Bark', bark)
-    finish(name+'Needles', needles, lambda co, n, c: Vector((co.x, co.y, 0)).normalized()*.9 + Vector((0, 0, .7)))
+    finish(name+'Needles', needles, lambda co, n, c: Vector((co.x, co.y, 0)).normalized()*.45 + Vector((0, 0, 1)))
 
 
 # ---------------------------------------------------------------- undergrowth

@@ -180,9 +180,16 @@ uniform vec4 trample[${TRAMPLE_SLOTS}];
         shader.fragmentShader='uniform float snowDepth;\n'+shader.fragmentShader.replace('#include <normal_fragment_maps>',`
           #include <normal_fragment_maps>
           vec3 snowNormal=inverseTransformDirection(normal,viewMatrix);
-          float uneven=texture2D(cloudMap,landPosition.xz*.20+landPosition.y*.07).r;
+          // Triplanar noise: projecting along the surface normal avoids the streaks a single
+          // top-down lookup smears down trunks, cones and walls.
+          vec3 tri=pow(abs(snowNormal),vec3(4.));tri/=dot(tri,vec3(1.));
+          vec3 q=landPosition;
+          #define SNOW_NOISE(s,o) (texture2D(cloudMap,q.yz*s+o).r*tri.x+texture2D(cloudMap,q.xz*s+o).r*tri.y+texture2D(cloudMap,q.xy*s+o).r*tri.z)
+          float uneven=SNOW_NOISE(.21,0.)*.6+SNOW_NOISE(.83,.37)*.3+SNOW_NOISE(3.1,.71)*.1;
           float settle=smoothstep(.14,.84,snowNormal.y)*smoothstep(.43,.69,landPosition.y);
-          float coverSnow=smoothstep(.0,.32,snowDepth*1.49-uneven*.73)*settle;
+          // Steep and thin spots thaw first, open flat ground holds snow longest.
+          float hold=mix(.6,1.,smoothstep(.35,.95,snowNormal.y));
+          float coverSnow=smoothstep(.0,.16,snowDepth*1.55*hold-uneven*.82)*settle;
           diffuseColor.rgb=mix(diffuseColor.rgb,vec3(.80,.88,.95)*(.87+.17*uneven),coverSnow);
           roughnessFactor=mix(roughnessFactor,.87,coverSnow);`);
       }

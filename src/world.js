@@ -69,7 +69,7 @@ export function buildWorld(scene,b){
   dressGround(ground,cv,treeList,paths,wet);
   treeList.forEach(([x,z,s],i)=>{at(x,z,s,r()*6,()=>b.canopy(()=>kit.tree([3,6,12,24,29].includes(i))));occupy(x,z,.58*s);colliders.circle(x,z,.32*s,'tree')});
   function clear(x,z){return free(x,z,.16)&&wet(x,z)<-.13&&!paths.some(([a,c])=>(a-x)**2+(c-z)**2<.42)}
-  for(let i=0;i<440;i++){const x=r()*29.2-14.6,z=r()*29.2-14.6;if(!clear(x,z))continue;
+  for(let i=0;i<440;i++){const x=r()*28.4-14.2,z=r()*28.4-14.2;if(!clear(x,z))continue;
     if(i%4===0){at(x,z,.6+r()*.76,r()*6,kit.flowers)}
     else if(i%5===0){for(let j=0;j<5;j++){const a=x+(r()-.5)*.75,c=z+(r()-.5)*.75,s=.18+r()*.5;p('boulder',a,height(a,c)+s*.16,c,s,s*.74,s*.88,pick(['#82877a','#989c87','#747b73','#a3a48d']),0,r()*5)}}
     else if(i%6===0){const kind=r()>.5?'bushA':'bushB',s=.8+r()*.55,turn=r()*6.28;
@@ -80,8 +80,10 @@ export function buildWorld(scene,b){
   for(let gx=-14.85;gx<14.9;gx+=.26)for(let gz=-14.85;gz<14.9;gz+=.26){
     const x=gx+(r()-.5)*.24,z=gz+(r()-.5)*.24;if(!clear(x,z))continue;
     const lush=.5+.5*Math.sin(x*.83+Math.cos(z*1.1))*Math.sin(z*.67-x*.31),s=.8+r()*.45;
+    // keep every blade (patch radius .24 x scale, plus lean) on the tile, not hanging past its rim
+    const edge=14.97-.36*s;if(Math.abs(x)>edge||Math.abs(z)>edge)continue;
     p(pick(['turf0','turf1','turf2']),x,height(x,z)-.01,z,s,s*(.55+.75*lush+r()*.25),s,pick(greens),0,r()*6.28);
-    if(r()<.12){const k=.5+r()*.5;p(pick(['grass0','grass1','grass2']),x,height(x,z)-.01,z,k,k*(.9+r()*.6),k,pick(greens),0,r()*6.28)}
+    if(r()<.12&&Math.max(Math.abs(x),Math.abs(z))<14.6){const k=.5+r()*.5;p(pick(['grass0','grass1','grass2']),x,height(x,z)-.01,z,k,k*(.9+r()*.6),k,pick(greens),0,r()*6.28)}
   }
   for(const [x,z] of [[-8.5,-4.2],[7.6,10.4],[-6,8]]){at(x,z,1,r()*6.28,()=>{p('stumpBark',0,-.04,0,1,1,1,'#7a5a3a');p('stumpTop',0,-.04,0,1,1,1,'#d1b07a')});occupy(x,z,.45);stumps.push([x,z,.4])}
   // Gravel in the shallows and clumps of reeds give the transparent shoreline scale.
