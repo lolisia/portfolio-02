@@ -135,18 +135,24 @@ function glide(dt){
   if(Math.abs(dw)>1e-3){windShown+=dw*(1-Math.exp(-dt*1.6));if(Math.abs(windTarget-windShown)<.01)windShown=windTarget;setWind()}
 }
 // Walkers flatten the turf around them and leave a short trail that springs back.
-const trail=[];let trailClock=0;
+// Walkers press the turf. Every press eases in and out (no slot ever switches on or off at
+// full strength), and when slots run short the faintest press is the one dropped.
+const presses=new Map(),trail=[];let trailClock=0;
 function trample(dt){
-  const slots=atmosphere.trample.value,live=world.colliders.bodies.filter(b=>b.active);
+  const slots=atmosphere.trample.value,ease=1-Math.exp(-dt*7);
+  for(const b of world.colliders.bodies){
+    let p=presses.get(b);if(!p){p={x:b.x,z:b.z,r:b.r*1.5,s:0};presses.set(b,p)}
+    p.x=b.x;p.z=b.z;p.s+=((b.active?1:0)-p.s)*ease;
+  }
   trailClock+=dt;
-  if(trailClock>.18){trailClock=0;for(const b of live){
-    if(Math.hypot(b.x-(b.tx??1e9),b.z-(b.tz??1e9))>.12){b.tx=b.x;b.tz=b.z;trail.push({x:b.x,z:b.z,r:b.r,life:1})}
+  if(trailClock>.15){trailClock=0;for(const b of world.colliders.bodies){
+    if(b.active&&Math.hypot(b.x-(b.tx??1e9),b.z-(b.tz??1e9))>.14){b.tx=b.x;b.tz=b.z;trail.push({x:b.x,z:b.z,r:b.r*1.4,life:1,s:0})}
   }}
-  for(const t of trail)t.life-=dt/2.4;
-  while(trail.length&&(trail[0].life<=0||trail.length>slots.length-live.length))trail.shift();
+  for(const t of trail){t.life-=dt/2.6;const target=.7*Math.max(0,t.life)**1.5;t.s+=(target-t.s)*ease}
+  for(let k=trail.length-1;k>=0;k--)if(trail[k].life<=0&&trail[k].s<.01)trail.splice(k,1);
+  const all=[...presses.values(),...trail].filter(p=>p.s>.005).sort((a,b)=>b.s-a.s);
   let i=0;
-  for(const b of live)if(i<slots.length)slots[i++].set(b.x,b.z,b.r*1.5,1);
-  for(let k=trail.length-1;k>=0&&i<slots.length;k--){const t=trail[k];slots[i++].set(t.x,t.z,t.r*1.4,.75*t.life*t.life)}
+  for(;i<slots.length&&i<all.length;i++){const p=all[i];slots[i].set(p.x,p.z,p.r,p.s)}
   for(;i<slots.length;i++)slots[i].w=0;
 }
 weather.onchange=e=>{weatherIndex=Number(e.target.value);weatherBlend.select(weatherIndex);drawWeather(weatherIndex)};

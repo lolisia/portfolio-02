@@ -136,24 +136,33 @@ def oak(name, seed, spread=1.):
     tube(bark, leader, [.07, .05, .03, .015], sides=5, shade=(.8, 1)); limbs.append(leader)
     pts = [p for limb in limbs for p in limb]
     center = Vector((0, 0, sum(p.z for p in pts)/len(pts) + .25))
-    # Sprigs grow out of points on the outer part of every branch: the texture's stem
-    # (v=0) sits on the wood, so no leaf hangs in the air.
+    # Foliage grows as lumpy lobes around twig ends and the outer half of each limb. Each lobe
+    # is filled with small crossed sprig pairs, so it has volume from every side instead of
+    # reading as flat plates pinned to the branches.
+    lobes = []
     for limb in limbs:
-        seg = [(limb[i], limb[i+1]) for i in range(len(limb)-1)]
-        for i, (p0, p1) in enumerate(seg):
-            if i < len(seg)*.25: continue
-            for _ in range(13 if len(limb) > 5 else 11):
-                t = rng.random(); base = p0.lerp(p1, t)
-                along = (p1 - p0).normalized()
-                # Sprigs fan around their own twig (not around the crown centre) and lean upward.
-                sd = along.cross(Vector((0, 0, 1)))
-                sd = (sd.normalized() if sd.length > 1e-4 else Vector((1, 0, 0)))*rng.choice((-1, 1))
-                out = (along*.7 + sd*rng.uniform(.3, 1.) + Vector((rng.uniform(-.25, .25), rng.uniform(-.25, .25), rng.uniform(0, .6)))).normalized()
-                ln = rng.uniform(.5, .78)
-                shade = .62 + .38*max(0, min(1, (base.z - center.z + .9)/1.7))
-                directed_card(leaves, base, out, ln*.85, ln, shade=shade)
+        for i in range(max(1, len(limb)//2), len(limb)):
+            if i == len(limb) - 1 or rng.random() < .45:
+                r = rng.uniform(.34, .5) if i == len(limb) - 1 else rng.uniform(.26, .38)
+                lobes.append((limb[i] + Vector((0, 0, r*.25)), r))
+    for c, r in lobes:
+        for _ in range(int(16 + 40*r)):
+            d = Vector((rng.gauss(0, 1), rng.gauss(0, 1), rng.gauss(0, 1))).normalized()
+            p = c + Vector((d.x, d.y, d.z*.8))*r*rng.uniform(.35, 1.)**.6
+            out = ((p - c).normalized()*.55 + (p - center).normalized()*.25 +
+                   Vector((rng.uniform(-.5, .5), rng.uniform(-.5, .5), rng.uniform(-.1, .6)))).normalized()
+            size = rng.uniform(.26, .4)
+            depth = (p - c).length/r
+            shade = (.5 + .5*depth)*(.75 + .25*max(0, min(1, (p.z - center.z + .9)/1.7)))
+            spin = rng.uniform(0, TAU)
+            card(leaves, p, out, (size, size), spin, shade=shade)
+            card(leaves, p, (out + Vector((rng.uniform(-1, 1), rng.uniform(-1, 1), .3))).normalized(), (size*.9, size*.9), spin + 1.6, shade=shade)
+    lobe_list = lobes
+    def crown_normal(co, n, col):
+        c, r = min(lobe_list, key=lambda l: (co - l[0]).length - l[1])
+        return (co - c).normalized()*.65 + (co - center).normalized()*.35 + Vector((0, 0, .25))
     finish(name+'Bark', bark)
-    finish(name+'Leaves', leaves, outward(center, .3))
+    finish(name+'Leaves', leaves, crown_normal)
 
 
 # ---------------------------------------------------------------- conifer
@@ -214,7 +223,7 @@ def pine(name, seed):
 
 
 # ---------------------------------------------------------------- undergrowth
-def grass(name, seed, blades=9, height=.42, spread=.07, segments=3):
+def grass(name, seed, blades=9, height=.42, spread=.07, segments=3, base_width=(.026, .042), tip=.08):
     rng = random.Random(seed)
     bm = bmesh.new(); uv, col = layers(bm)
     for _ in range(blades):
@@ -222,7 +231,7 @@ def grass(name, seed, blades=9, height=.42, spread=.07, segments=3):
         base = Vector((math.cos(a)*r, math.sin(a)*r, 0))
         b = rng.uniform(0, TAU)
         lean = Vector((math.cos(b), math.sin(b), 0))*rng.uniform(.12, .5)
-        h = height*rng.uniform(.55, 1.15); w = rng.uniform(.026, .042)
+        h = height*rng.uniform(.55, 1.15); w = rng.uniform(*base_width)
         side = Vector((-math.sin(b+1.2), math.cos(b+1.2), 0))
         if segments == 1:  # a single tapered triangle: cheapest blade that still reads as grass
             tip = base + Vector((0, 0, h)) + lean*h
@@ -234,7 +243,7 @@ def grass(name, seed, blades=9, height=.42, spread=.07, segments=3):
         for s_ in range(segments+1):
             t = s_/segments
             c = base + Vector((0, 0, h*t)) + lean*h*t*t
-            half = w*(1-t*.92)/2
+            half = w*(1-t*(1-tip))/2
             rows.append((bm.verts.new(c - side*half), bm.verts.new(c + side*half), t))
         for s_ in range(segments):
             (a0, b0, t0), (a1, b1, t1) = rows[s_], rows[s_+1]
@@ -392,7 +401,7 @@ def stump(seed):
 oak('oakA', 11); oak('oakB', 23, spread=1.12)
 pine('pineA', 5)
 for i in range(3): grass(f'grass{i}', 100 + i, segments=2)
-for i in range(3): grass(f'turf{i}', 300 + i, blades=15, height=.36, spread=.24, segments=1)
+for i in range(3): grass(f'turf{i}', 300 + i, blades=12, height=.34, spread=.24, segments=2, base_width=(.05, .075), tip=.32)
 grass('reed', 200, blades=7, height=.75)
 bush('bushA', 31); bush('bushB', 47, radius=.42)
 flower('flower', 3)

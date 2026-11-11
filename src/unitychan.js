@@ -59,7 +59,7 @@ export function createUnityChan(scene,world,onReady=()=>{}){
   const s={state:'inside',x:door.x,z:door.z,heading:0,route:[],wait:0,pace:0,intent:false,reaction:2,
     rng:90731,action:null,anchor:null,stuck:0,blink:2,blinkT:0,task:null,steps:[],stepTime:0,face:0,prop:null};
   let mixer=null,actions={},face=null,blinkIndex=-1,ready=false,hands=[];
-  const body=world.colliders.body(door.x,door.z,RADIUS,3);
+  const body=world.colliders.body(door.x,door.z,RADIUS,3);body.kind='unitychan';
   const random=()=>{s.rng=(Math.imul(s.rng,1664525)+1013904223)>>>0;return s.rng/4294967296};
 
   // Fishing rod, line and float are simple props kept in world space.

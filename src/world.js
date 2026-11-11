@@ -63,7 +63,22 @@ export function buildWorld(scene,b){
       paths.push([x,z]);
     }
   }
-  path(-7,-10,-5,-6.3);path(-5,-6.3,-4.4,-2.25,true);path(-4.4,-2.25,-2,.8);path(-2,.8,5.5,.82);path(5.5,.82,10.8,3.0);path(1,.8,1,2.6);
+  // Hillside stairs: a switchback across the slope with level treads and ~0.11 risers, sized
+  // for the SD character instead of slabs laid on the raw 25-degree terrain.
+  function stairs(points){
+    const legs=[];let total=0;
+    for(let i=1;i<points.length;i++){const [ax,az]=points[i-1],[bx,bz]=points[i],len=Math.hypot(bx-ax,bz-az);legs.push({ax,az,bx,bz,len,start:total});total+=len}
+    const top=height(...points[0]),bottom=height(...points.at(-1)),count=Math.max(Math.ceil(Math.abs(top-bottom)/.11),Math.ceil(total/.42));
+    const run=total/count;
+    for(let k=0;k<count;k++){
+      const at=(k+.5)*run,leg=legs.find(l=>at<=l.start+l.len)||legs.at(-1),u=(at-leg.start)/leg.len;
+      const x=leg.ax+(leg.bx-leg.ax)*u,z=leg.az+(leg.bz-leg.az)*u,angle=Math.atan2(leg.bx-leg.ax,leg.bz-leg.az);
+      const tread=top+(bottom-top)*(k+1)/count+.03,ground=Math.min(height(x,z),tread)-.16;
+      p('stone',x,(tread+ground)/2,z,1.05,tread-ground,run+.07,pick(['#aaa58b','#92967e','#a7a48a','#9d9a82']),0,angle+(r()-.5)*.05);
+      paths.push([x,z]);
+    }
+  }
+  path(-7,-10,-5,-6.3);stairs([[-5,-6.3],[-6.4,-5.0],[-5.0,-3.9],[-4.4,-2.25]]);path(-4.4,-2.25,-2,.8);path(-2,.8,5.5,.82);path(5.5,.82,10.8,3.0);path(1,.8,1,2.6);
   place(13.7,waterY+.48,6.1,1,0,()=>kit.bridge(3.9));
   const treeList=[[-13,-12,1.40],[-10.8,-13.9,1.02],[-9,-12.1,1.22],[-5,-13.5,1.26],[-1.8,-13,1.28],[2,-13.6,1.45],[5.6,-12.1,1.12],[9.5,-12.8,1.35],[12.5,-10,1.45],[-13,-8.7,1.18],[-11,-6.4,1.25],[-13,-3.8,1.52],[-12,.2,1.13],[-13.4,3.7,1.21],[-11.8,7.2,1.28],[-13,11.4,1.35],[-8.9,12.7,1.27],[-5,13.1,1.36],[-1.4,12.1,1.05],[3.1,13.2,1.24],[7.4,12.7,1.13],[12.1,11.8,1.25],[12.2,.1,1.28],[10.5,-3.5,1.16],[12.5,-5.6,1.1],[-6.1,1.8,.76],[-3.95,2.0,.69],[-8.5,6.2,.83],[6.1,-8.2,.88],[.4,-9.8,1.08],[-9, -2.7,.77]];
   dressGround(ground,cv,treeList,paths,wet);

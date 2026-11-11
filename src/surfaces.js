@@ -13,7 +13,7 @@ function field(size,seed){
     return (1-b)*((1-a)*at(i,j)+a*at(i+1,j))+b*((1-a)*at(i,j+1)+a*at(i+1,j+1));
   };
 }
-export const TRAMPLE_SLOTS=12;
+export const TRAMPLE_SLOTS=16;
 const coarse=field(5,722),fine=field(27,998),grit=field(96,417);
 function texture(size,paint,color=false){
   const cv=document.createElement('canvas');cv.width=cv.height=size;
@@ -89,9 +89,11 @@ export function createAtmosphere(scene,world){
           if(abs(away.x)+abs(away.y)>t.z*2.4)continue;
           float dist=length(away);
           float f=t.w*(1.-smoothstep(t.z*.35,t.z*1.7,dist));
-          parted+=away/max(dist,.001)*f;pressed=max(pressed,f);
+          // lateral push fades to zero at the centre, so a blade never flips sides
+          parted+=away/max(dist,t.z*.7)*f;pressed=max(pressed,f);
         }
-        swaying[3].xz+=parted*h*.85;swaying[3].y-=pressed*h*.5;
+        parted/=max(1.,length(parted));
+        swaying[3].xz+=parted*h*.8;swaying[3].y-=pressed*h*.45;
       #endif
       #define instanceMatrix swaying
     #endif`;
@@ -118,7 +120,7 @@ uniform vec4 trample[${TRAMPLE_SLOTS}];
     }else o.customDepthMaterial=shadowDepth;
   });
   const materials=new Set();
-  scene.traverse(o=>{if(o.material?.isMeshStandardMaterial)materials.add(o.material)});
+  scene.traverse(o=>{if(o.material?.isMeshStandardMaterial&&!o.material.userData.clock)materials.add(o.material)});  // the foam disc keeps its own shader
   for(const mat of materials){
     const isWater=mat===water.material;
     mat.onBeforeCompile=shader=>{

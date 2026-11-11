@@ -115,6 +115,21 @@ export function createFarmLife(scene,world){
     if(d<.045)f.route.shift();
     return f.route.length===0;
   }
+  // Startled: dash to a node well away from Unity-chan (path search allowed immediately).
+  function flee(f,threat){
+    let ax=f.x-threat.x,az=f.z-threat.z;const d=Math.hypot(ax,az)||1;ax/=d;az/=d;
+    let best=null,score=-Infinity;
+    for(const n of paths.nodes){
+      const dx=n.x-f.x,dz=n.z-f.z,reach=Math.hypot(dx,dz);
+      if(reach<1.3||reach>3.4||inEntrance(n))continue;
+      const facing=(dx*ax+dz*az)/reach;if(facing<.45)continue;
+      const value=Math.hypot(n.x-threat.x,n.z-threat.z)+facing+random(f)*.6;
+      if(value>score){score=value;best=n}
+    }
+    f.route=best?paths.route(f,best):[];
+    if(!f.route.length)f.route=[{x:f.x+ax*1.4,z:f.z+az*1.4}];
+    f.state='fleeing';f.wait=0;f.fleeCool=.7;f.legSpeed=1.15+random(f)*.3;
+  }
   return (dt,seconds,hour,weather,wind,camera,night=0)=>{
     const gust=Math.sin(seconds*1.37)+.42*Math.sin(seconds*2.31);
     const target=windHeading+gust*.11*Math.min(1,wind/8);
@@ -125,6 +140,7 @@ export function createFarmLife(scene,world){
     rotor.userData.speed=rotorSpeed;vane.userData.windSpeed=wind;
     updateSmoke(dt,seconds,wind,camera,night);
     const outside=hour>=6&&hour<18&&weather<=1&&wind<11;
+    const threat=world.colliders.bodies.find(b=>b.kind==='unitychan'&&b.active);
     for(const f of flock){
       if(f.noticed!==outside){
         f.noticed=outside;
@@ -141,11 +157,16 @@ export function createFarmLife(scene,world){
       let moving=false;
       f.retry=Math.max(0,(f.retry||0)-dt);
       if(f.state==='foraging'&&f.wait>0&&inEntrance(f)){f.wait=0;if(!f.route.length)setTrip(f)}
+      f.fleeCool=Math.max(0,(f.fleeCool||0)-dt);
+      if(threat&&(f.state==='foraging'||f.state==='fleeing')&&f.fleeCool===0&&Math.hypot(f.x-threat.x,f.z-threat.z)<1.5)flee(f,threat);
       if(f.wait>0){f.wait=Math.max(0,f.wait-dt);f.pace=T.MathUtils.damp(f.pace,0,6,dt)}
       else if(f.state==='exiting'){
         moving=true;if(walk(f,dt,.85)){f.state='foraging';f.wait=0;setTrip(f)}
       }else if(f.state==='returning'){
         moving=true;if(walk(f,dt,1.25)){f.state='inside';f.group.visible=false;f.pace=0}
+      }else if(f.state==='fleeing'){
+        moving=true;
+        if(walk(f,dt,3)){f.state='foraging';f.wait=.4+random(f)*1.2;f.legSpeed=.7+random(f)*.65}
       }else if(f.state==='foraging'){
         moving=true;
         if(walk(f,dt,1)){
