@@ -45,14 +45,26 @@ export function createVolume(renderer,world,sun,clouds){
       vec3 lo=min(a,b),hi=max(a,b);
       float start=max(0.,max(lo.x,max(lo.y,lo.z)));
       float end=min(surfaceDist,min(hi.x,min(hi.y,hi.z)));
-      float ds=max(0.,end-start)/36.;
+      // The mist thins out with height and the tree shadows that carve shafts into it stay near
+      // the ground, so samples are spent where they show: a few long steps through the thin air
+      // above y=5, the rest packed into the layer below it (finer there than an even split).
+      float split=ray.y<-.001?clamp((5.-origin.y)/ray.y,start,max(start,end)):start;
+      float dsHigh=(split-start)/6.,dsLow=max(0.,end-split)/18.;
       vec3 sum=vec3(0.);float through=1.;
-      if(ds>0.){
-        float jitter=fract(52.9829189*fract(dot(gl_FragCoord.xy,vec2(.06711056,.00583715))));
-        vec3 p=origin+ray*(start+ds*(.25+.5*jitter));
+      if(end>start){
+        float jitter=.25+.5*fract(52.9829189*fract(dot(gl_FragCoord.xy,vec2(.06711056,.00583715))));
+        vec3 p=origin+ray*(start+dsHigh*jitter);float ds=dsHigh;
         // Low sun: a tighter, brighter forward lobe turns shafts through the trees golden.
         float phase=.35+(.75+1.9*golden)*pow(max(dot(sunDir,ray),0.),3.+4.*golden);
-        for(int i=0;i<36;i++,p+=ray*ds){
+        // A lantern only lights the mist within a few metres of it: find the lamps this ray
+        // passes close to once, instead of weighing all five at every step of every ray.
+        bool nearLamp[5];bool anyLit=false;
+        if(lampPower>.01)for(int j=0;j<5;j++){
+          vec3 toLamp=lamps[j]-origin;float along=dot(toLamp,ray);
+          nearLamp[j]=dot(toLamp,toLamp)-along*along<30.;anyLit=anyLit||nearLamp[j];
+        }
+        for(int i=0;i<24;i++,p+=ray*ds){
+          if(i==6){p=origin+ray*(split+dsLow*jitter);ds=dsLow;}
           float edge=1.-smoothstep(13.4,17.,max(abs(p.x),abs(p.z)));
           float bank=texture2D(cloudMap,p.xz*.039+p.y*vec2(.019,-.027)+clock*vec2(-.0014,.0008)).r;
           float pool=exp(-.029*dot(p.xz-vec2(10.5,6.),p.xz-vec2(10.5,6.)));
@@ -64,9 +76,11 @@ export function createVolume(renderer,world,sun,clouds){
           float lit=texture(shadowDepth,vec3(shadowCoord.xy,shadowCoord.z-.00045));
           float cover=texture2D(cloudMap,(p.xz+p.y*vec2(.25,-.16))*.024+clock*vec2(.0019,.0008)).r;
           vec3 incident=scatterColor+sunColor*(phase*lit*(1.-cloudAmount*smoothstep(.31,.66,cover)));
-          if(lampPower>.01){
+          if(anyLit){
             for(int j=0;j<5;j++){
+              if(!nearLamp[j])continue;
               vec3 v=p-lamps[j];float d2=dot(v,v);
+              if(d2>30.)continue;
               float cone=smoothstep(.22,.72,-v.y*inversesqrt(d2+.001));
               incident+=lampPower*vec3(2.8,1.45,.50)*cone*exp(-d2*.26)/(1.+d2*.45);
             }

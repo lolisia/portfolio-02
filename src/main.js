@@ -187,7 +187,7 @@ function warmUp(){
   const hidden=[];scene.traverse(o=>{if(!o.visible){hidden.push(o);o.visible=true}});
   const saved=lanterns.map(({spot})=>spot.intensity);
   for(const {spot} of lanterns){spot.intensity=1;spot.shadow.needsUpdate=true}
-  renderer.shadowMap.needsUpdate=true;
+  renderer.shadowMap.needsUpdate=true;sun.shadow.needsUpdate=true;
   volume.render(scene,camera,0);
   for(const o of hidden)o.visible=false;
   lanterns.forEach(({spot},i)=>spot.intensity=saved[i]);
@@ -206,14 +206,20 @@ function warmUp(){
 }
 warmUp();unityChanReady.then(warmUp);
 let previous=0,frameIndex=0;
-renderer.shadowMap.autoUpdate=false;
+renderer.shadowMap.autoUpdate=false;sun.shadow.autoUpdate=false;
 renderer.setAnimationLoop(ms=>{
   advanceTime(ms);
   const elapsedFrame=Math.max(0,(ms-previous)/1000),dt=Math.min(.05,elapsedFrame);previous=ms;controls.update();
-  // Shadows: the sun's map refreshes every other frame (swaying canopies stay smooth at 30 Hz);
-  // lantern maps, which only see a slight swing, refresh one lamp per frame in turn.
-  frameIndex++;renderer.shadowMap.needsUpdate=frameIndex%2===0;
-  if(renderer.shadowMap.needsUpdate&&nightLevel>.01)lanterns[(frameIndex/2)%lanterns.length].spot.shadow.needsUpdate=true;
+  // Shadows: the sun's map refreshes every other frame (swaying canopies stay smooth at 30 Hz).
+  // A lantern's map refreshes every frame while a walker is inside its pool of light, so the
+  // walker's shadow keeps up; otherwise it only sees a slight swing and the lamps take turns.
+  frameIndex++;const sunTurn=frameIndex%2===0;let lampTurn=false;
+  sun.shadow.needsUpdate=sunTurn;
+  if(nightLevel>.01)lanterns.forEach(({spot,pivot},i)=>{
+    const p=pivot.position;
+    if(world.colliders.bodies.some(b=>b.active&&(b.x-p.x)**2+(b.z-p.z)**2<30)||(sunTurn&&(frameIndex/2)%lanterns.length===i)){spot.shadow.needsUpdate=true;lampTurn=true}
+  });
+  renderer.shadowMap.needsUpdate=sunTurn||lampTurn;
   glide(elapsedFrame);trample(dt);
   const changingWeather=weatherBlend.active;weatherBlend.update(Math.min(.1,elapsedFrame));
   if(changingWeather)lighting();
@@ -236,4 +242,3 @@ renderer.setAnimationLoop(ms=>{
   }
   volume.render(scene,camera,seconds);
 });
-

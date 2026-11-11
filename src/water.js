@@ -19,8 +19,33 @@ export function makeWater(height,level){
   water.userData.reflection=water.material.uniforms;
   water.material=new T.MeshStandardMaterial({color:0xffffff,roughness:.17,transparent:true,depthWrite:true});
   water.receiveShadow=true;water.renderOrder=1;
+  // The mirror pass only has to cover the part of the view the pond occupies. Rendering it with
+  // the main camera's whole frame spent most of the pass (and of the texture) on reflections
+  // nobody can see; cropping the camera to the pond's screen bounds lets everything else clip
+  // away and gives the pond the full texture resolution.
+  let west=Infinity,east=-Infinity,north=Infinity,south=-Infinity;
+  for(let i=0;i<positions.count;i++)if(depth[i]>-.03){
+    const x=10+positions.getX(i),z=6.1-positions.getY(i);
+    west=Math.min(west,x);east=Math.max(east,x);north=Math.min(north,z);south=Math.max(south,z);
+  }
+  const crop=new T.OrthographicCamera(),corner=new T.Vector3(),mirrorScale={value:new T.Vector2(1,1)};
+  water.userData.mirrorScale=mirrorScale;
   const reflect=water.onBeforeRender;
   water.onBeforeRender=function(renderer,scene,camera){
+    let l=1,r=-1,b=1,t=-1;
+    for(const x of [west,east])for(const z of [north,south]){
+      corner.set(x,level,z).project(camera);
+      l=Math.min(l,corner.x);r=Math.max(r,corner.x);b=Math.min(b,corner.y);t=Math.max(t,corner.y);
+    }
+    l=Math.max(-1,l-.04);r=Math.min(1,r+.04);b=Math.max(-1,b-.04);t=Math.min(1,t+.04);
+    if(r<=l||t<=b)return;
+    const cx=(camera.right+camera.left)/2,dx=(camera.right-camera.left)/(2*camera.zoom);
+    const cy=(camera.top+camera.bottom)/2,dy=(camera.top-camera.bottom)/(2*camera.zoom);
+    crop.left=cx+l*dx;crop.right=cx+r*dx;crop.bottom=cy+b*dy;crop.top=cy+t*dy;
+    crop.near=camera.near;crop.far=camera.far;crop.updateProjectionMatrix();
+    crop.matrixWorld.copy(camera.matrixWorld);
+    mirrorScale.value.set(2/(r-l),2/(t-b));  // keeps the ripple distortion the same size on screen
+    camera=crop;
     const background=scene.background;
     const alpha=renderer.getClearAlpha();renderer.getClearColor(savedClear);
     scene.background=null;renderer.setClearColor(0,0);
@@ -60,14 +85,14 @@ const waves=`
 export function shadeWater(shader,water){
   const capture=water.userData.reflection;
   shader.uniforms.pondIce=water.userData.freeze;
-  Object.assign(shader.uniforms,{impacts:{value:water.userData.impacts},reflectionMap:capture.tDiffuse,reflectionMatrix:capture.textureMatrix,radianceMap:{value:water.userData.skyTexture}});
+  Object.assign(shader.uniforms,{impacts:{value:water.userData.impacts},reflectionMap:capture.tDiffuse,reflectionMatrix:capture.textureMatrix,mirrorScale:water.userData.mirrorScale,radianceMap:{value:water.userData.skyTexture}});
   shader.vertexShader=waves+'uniform float pondIce; attribute float bedDepth; varying float depthBelow; varying vec4 mirrorCoord; uniform mat4 reflectionMatrix;\n'+shader.vertexShader.replace('#include <begin_vertex>',`
     #include <begin_vertex>
     vec3 base=(modelMatrix*vec4(position,1.)).xyz;
     float bank=smoothstep(.0,.24,bedDepth)*(1.-smoothstep(14.45,15.,base.x));
     transformed.z+=waterWaves(base.xz,elapsed,breeze).x*bank*(1.-pondIce);
     depthBelow=bedDepth;mirrorCoord=reflectionMatrix*vec4(transformed,1.);`);
-  shader.fragmentShader=waves+'uniform float pondIce; uniform vec4 impacts[18]; uniform sampler2D radianceMap; uniform sampler2D reflectionMap; varying float depthBelow; varying vec4 mirrorCoord;\n'+shader.fragmentShader;
+  shader.fragmentShader=waves+'uniform float pondIce; uniform vec2 mirrorScale; uniform vec4 impacts[18]; uniform sampler2D radianceMap; uniform sampler2D reflectionMap; varying float depthBelow; varying vec4 mirrorCoord;\n'+shader.fragmentShader;
   shader.fragmentShader=shader.fragmentShader.replace('#include <color_fragment>',`
     #include <color_fragment>
     vec2 q=landPosition.xz;
@@ -110,7 +135,7 @@ export function shadeWater(shader,water){
     #include <normal_fragment_maps>
     normal=normalize(mat3(viewMatrix)*waterNormal);`);
   shader.fragmentShader=shader.fragmentShader.replace('#include <opaque_fragment>',`
-    vec4 capture=texture2D(reflectionMap,clamp(mirrorCoord.xy/mirrorCoord.w+(mat3(viewMatrix)*vec3(-slope.x,0.,-slope.y)).xy*.036,.002,.998));
+    vec4 capture=texture2D(reflectionMap,clamp(mirrorCoord.xy/mirrorCoord.w+.036*mirrorScale*(mat3(viewMatrix)*vec3(-slope.x,0.,-slope.y)).xy,.002,.998));
     vec3 eye=inverseTransformDirection(vec3(0.,0.,1.),viewMatrix);
     vec3 skyRay=reflect(-eye,waterNormal);
     vec3 sky=texture2D(radianceMap,equirectUv(skyRay)).rgb;

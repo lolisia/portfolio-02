@@ -13,6 +13,22 @@ export function field(size,seed,rows=size){
     return (1-b)*((1-a)*at(i,j)+a*at(i+1,j))+b*((1-a)*at(i,j+1)+a*at(i+1,j+1));
   };
 }
+// three.js shades every point and spot light at every fragment, shadow lookups included, even
+// where the light cannot reach or is switched off (the lanterns stay in the scene all day at
+// zero intensity). Skip the shadow filter and the BRDF for lights that contribute nothing.
+{
+  const chunk=T.ShaderChunk.lights_fragment_begin,from=chunk.indexOf('#if ( NUM_POINT_LIGHTS > 0 )'),to=chunk.indexOf('#if ( NUM_SUN_LIGHTS > 0 )');
+  const call='RE_Direct( directLight, geometryPosition, geometryNormal, geometryViewDir, geometryClearcoatNormal, material, reflectedLight );';
+  const reaches=' if(directLight.visible&&directLight.color.r+directLight.color.g+directLight.color.b>0.){';
+  const local=chunk.slice(from,to)
+    .replace('getPointLightInfo( pointLight, geometryPosition, directLight );','getPointLightInfo( pointLight, geometryPosition, directLight );'+reaches)
+    .replace('getSpotLightInfo( spotLight, geometryPosition, directLight );','getSpotLightInfo( spotLight, geometryPosition, directLight );'+reaches)
+    .replaceAll(call,call+' }');
+  if(!chunk.includes(reaches)){  // a hot reload runs this module again with the chunk already patched
+    if(from<0||to<0||local.split(reaches).length!==3)throw new Error('light loop patch no longer matches three.js');
+    T.ShaderChunk.lights_fragment_begin=chunk.slice(0,from)+local+chunk.slice(to);
+  }
+}
 export const TRAMPLE_SLOTS=16;
 const coarse=field(5,722),fine=field(27,998),grit=field(96,417);
 // Wood fibres: many cells across the grain, few along it, so streaks run the length of a board.
@@ -235,6 +251,9 @@ uniform vec4 trample[${TRAMPLE_SLOTS}];
         shader.fragmentShader='uniform float snowDepth;\n'+shader.fragmentShader.replace('#include <normal_fragment_maps>',`
           #include <normal_fragment_maps>
           vec3 snowNormal=inverseTransformDirection(normal,viewMatrix);
+          float coverSnow=0.,crystal=0.;vec3 crystalNormal=normal;
+          float grainSpan=max(length(dFdx(landPosition)),length(dFdy(landPosition)));
+          if(snowDepth>0.){
           // Triplanar noise: projecting along the surface normal avoids the streaks a single
           // top-down lookup smears down trunks, cones and walls.
           vec3 tri=pow(abs(snowNormal),vec3(4.));tri/=dot(tri,vec3(1.));
@@ -244,17 +263,18 @@ uniform vec4 trample[${TRAMPLE_SLOTS}];
           float settle=smoothstep(.14,.84,snowNormal.y)*smoothstep(.43,.69,landPosition.y);
           // Steep and thin spots thaw first, open flat ground holds snow longest.
           float hold=mix(.6,1.,smoothstep(.35,.95,snowNormal.y));
-          float coverSnow=smoothstep(.0,.16,snowDepth*1.55*hold-uneven*.82)*settle;
+          coverSnow=smoothstep(.0,.16,snowDepth*1.55*hold-uneven*.82)*settle;
           diffuseColor.rgb=mix(diffuseColor.rgb,vec3(.80,.88,.95)*(.87+.17*uneven),coverSnow);
           roughnessFactor=mix(roughnessFactor,.87,coverSnow);
           // Snow sparkle: scattered ice facets, about two pixels across, each tilted its own way.
           // The few that mirror the sun toward the eye flash (see the glint added to the sun's
           // light below), and which ones do changes as the view turns.
-          float grainSpan=max(length(dFdx(landPosition)),length(dFdy(landPosition)));
           vec3 grain=floor(landPosition*exp2(-floor(log2(grainSpan*1.6))));
           vec3 facet=fract(sin(vec3(dot(grain,vec3(127.1,311.7,74.7)),dot(grain,vec3(269.5,183.3,246.1)),dot(grain,vec3(113.5,271.9,124.6))))*43758.5453);
-          float crystal=step(.7,facet.x)*coverSnow;
-          vec3 crystalNormal=normalize(normal+(vec3(facet.y,facet.z,fract(facet.x*57.))-.5)*1.1);
+          crystal=step(.7,facet.x)*coverSnow;
+          crystalNormal=normalize(normal+(vec3(facet.y,facet.z,fract(facet.x*57.))-.5)*1.1);
+          }
+          if(wet>0.){
           // Rain soaks in: wet surfaces turn darker and richer, and shine. Faces turned to the
           // sky take the most water.
           float wetness=wet*mix(.35,1.,smoothstep(-.1,.7,snowNormal.y))*(1.-coverSnow);
@@ -279,11 +299,12 @@ uniform vec4 trample[${TRAMPLE_SLOTS}];
             push*=.45*rainNow;
             normal=normalize(mix(normal,normalize((viewMatrix*vec4(push.x,1.,push.y,0.)).xyz),puddle));
             diffuseColor.rgb*=1.-.55*puddle;roughnessFactor=mix(roughnessFactor,.045,puddle);
-          }`:''}`);
+          }`:''}
+          }`);
         const direct='RE_Direct( directLight, geometryPosition, geometryNormal, geometryViewDir, geometryClearcoatNormal, material, reflectedLight );';
         const index=shader.fragmentShader.indexOf(direct,shader.fragmentShader.indexOf('getDirectionalLightInfo( directionalLight, directLight );'));
         shader.fragmentShader=shader.fragmentShader.slice(0,index)+`
-            reflectedLight.directSpecular += directLight.color * crystal * 7.
+            if(crystal>0.)reflectedLight.directSpecular += directLight.color * crystal * 7.
               * pow(max(0.,dot(crystalNormal,normalize(directLight.direction+geometryViewDir))),900.);
           `+shader.fragmentShader.slice(index);
       }
