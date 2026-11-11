@@ -5,6 +5,7 @@ class_name FarmLife
 ## compact version of src/farm-life.js: wander around the coop, pause, peck.
 
 var world: FarmWorld
+var footprints: Footprints
 var chickens: Array = []
 var vane_root: Node3D
 var vane_arrow: Node3D
@@ -271,7 +272,7 @@ func _chicken(chick: bool, index: int) -> Dictionary:
 		"group": group, "head": head, "legs": legs, "chick": chick, "index": index,
 		"x": 0.0, "z": 0.0, "target": Vector2.ZERO, "wait": 0.0,
 		"gait": randf() * 4.0, "speed": (0.31 if chick else 0.27) + randf() * 0.12,
-		"state": "foraging",
+		"state": "foraging", "stride": -1,
 	}
 
 func _pick_target(c: Dictionary) -> Vector2:
@@ -413,6 +414,21 @@ func _update_bird(delta: float) -> void:
 			bird.rotation.x = 0.0
 			bird_timer = 6.0 + randf() * 8.0
 
+## Walker discs for the turf trample shader: one per visible chicken.
+func tramplers() -> Array:
+	var result: Array = []
+	for c in chickens:
+		var group: Node3D = c["group"]
+		if not group.visible:
+			continue
+		result.append({
+			"id": "chicken-%d" % int(c["index"]),
+			"x": float(c["x"]), "z": float(c["z"]),
+			"r": 0.09 if c["chick"] else 0.15,
+			"active": true,
+		})
+	return result
+
 func _process(delta: float) -> void:
 	if world == null:
 		return
@@ -462,3 +478,14 @@ func _process(delta: float) -> void:
 			for i in range(legs.size()):
 				var leg: MeshInstance3D = legs[i]
 				leg.rotation.x = sin(c.gait + i * PI) * 0.28
+			# Each half stride sets a foot down: a three-toed print in the snow.
+			var stride := int(floor(c.gait / PI))
+			if footprints != null and stride != int(c["stride"]):
+				var heading: float = group.rotation.y
+				var side := 1.0 if stride % 2 else -1.0
+				var chick_scale := 0.48 if c["chick"] else 1.0
+				footprints.press("claw",
+					float(c["x"]) + cos(heading) * side * 0.075 * chick_scale,
+					float(c["z"]) - sin(heading) * side * 0.075 * chick_scale,
+					heading, chick_scale * (0.9 + 0.2 * randf()))
+			c["stride"] = stride

@@ -5,6 +5,7 @@ uniform sampler2D path_mask : filter_linear;
 uniform float wet : hint_range(0.0, 1.0) = 0.0;
 uniform float snow_depth : hint_range(0.0, 1.0) = 0.0;
 uniform float winter : hint_range(0.0, 1.0) = 0.0;
+uniform float water_y = 0.44;
 
 varying vec3 v_world;
 varying vec3 v_world_normal;
@@ -35,6 +36,13 @@ float fbm(vec2 p) {
 
 void vertex() {
 	v_world = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
+	// Snow accumulates on the banks above the waterline and lifts the visible
+	// surface, matching src/seasons.js. The ground node has an identity
+	// transform, so a world-space lift can be added straight to VERTEX.y.
+	float bank = smoothstep(water_y + 0.015, water_y + 0.3, v_world.y);
+	float lift = snow_depth * bank * (0.078 + 0.031 * sin(v_world.x * 1.7 + cos(v_world.z * 0.91)));
+	VERTEX.y += lift;
+	v_world.y += lift;
 	v_world_normal = normalize((MODEL_NORMAL_MATRIX * NORMAL));
 	v_color = COLOR.rgb;
 }

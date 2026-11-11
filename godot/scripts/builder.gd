@@ -123,6 +123,9 @@ func _material_for(kind: String) -> Material:
 		var shader_mat := ShaderMaterial.new()
 		shader_mat.shader = preload("res://shaders/foliage.gdshader")
 		shader_mat.set_shader_parameter("wind_strength", 1.0)
+		# Only low ground cover is flattened by walkers; trees keep their sway.
+		if kind.begins_with("turf") or kind.begins_with("grass"):
+			shader_mat.set_shader_parameter("trample_strength", 1.0)
 		return shader_mat
 	if kind == "glass" or kind == "lampglass":
 		var mat := StandardMaterial3D.new()

@@ -1,10 +1,10 @@
 # Godot 이식 로드맵 / 핸드오프
 
-- 기준일: 2026-11-11
+- 기준일: 2026-11-12
 - 엔진: Godot 4.7.2 stable (mono)
 - 경로: `D:\Godot\Godot_v4.7.2-stable_mono_win64`
 - 프로젝트: `D:\DEV\portfolio-02\godot\project.godot`
-- 문서 작성 기준 커밋: `c93dd0b Add Forward+ planar pond reflection and volumetric mist`
+- 문서 작성 기준 커밋: `3f00ce8` 이후 이번 세션 변경 포함
 - 타깃: PC 네이티브(Forward+) / 모바일 네이티브(Mobile). 웹 배포는 고려하지 않음.
 
 ---
@@ -34,10 +34,12 @@ Godot의 사용자 인자는 `--` 뒤에 전달합니다.
 ```powershell
 ... -- --house          # 농가 근처
 ... -- --pond           # 연못
+... -- --pondside       # 연못을 낮은 각도에서 (수면 반사 확인)
 ... -- --door           # 정문 근처
 ... -- --fishtest       # 연못가 낚시 확인
 ... -- --char           # 캐릭터 근처
 ... -- --char2          # 캐릭터 측면
+... -- --charclose      # 캐릭터/발자국 근접
 ... -- --panel          # 환경 설정 패널 펼침
 
 ... -- --gather         # 채소밭 수확 태스크
@@ -45,6 +47,7 @@ Godot의 사용자 인자는 `--` 뒤에 전달합니다.
 ... -- --salute         # 경례 + 문 열기
 ... -- --fishnear       # 연못 근처에서 낚시 시작
 ... -- --gathernear     # 채소밭 근처에서 수확 시작
+... -- --snowtest       # 눈 위 이동/발자국/풀 눌림 확인
 
 ... -- --winter         # 겨울 상태 즉시 적용
 ... -- --snow           # 눈 날씨
@@ -104,6 +107,16 @@ Godot의 사용자 인자는 `--` 뒤에 전달합니다.
   - 시각/바람 슬라이더, 자동 시간, 날씨/계절, 리셋, 패널 접기
   - 패널 뒤 유리 렌즈 + 색조/비네트 후처리
   - Unity-chan 크레딧 링크
+- 물 반사 (이번 세션)
+  - SubViewport 반사 텍스처의 상하 뒤집힘 수정 (`mirror_uv.y = 1.0 - y`)
+  - Schlick 5제곱 Fresnel로 상공 시 투명, 저각 시 반사 강화
+  - `--pondside`로 저각 반사 확인, Mobile은 화면공간 폴백 유지
+- 눈/발자국 (이번 세션)
+  - 지형 셰이더 정점 융기 + `FarmWorld.snow_surface()` 분석식 일치
+  - 부츠/닭 발자국 MultiMesh 2레이어, 눈이 쌓이면 수명 감소
+  - 발자국은 물가/눈 깊이 조건을 만족할 때만 생성
+- 풀 눌림 (이번 세션)
+  - 16슬롯 trample을 turf/grass 셰이더에만 적용, 캐릭터/닭 이동 트레일
 
 ### 주요 파일
 
@@ -120,10 +133,12 @@ Godot의 사용자 인자는 `--` 뒤에 전달합니다.
 | `scripts/weather_fx.gd` | 비/눈 GPU 파티클 |
 | `scripts/post_process.gd` | 패널 렌즈/그레이드 |
 | `scripts/water_reflection.gd` | Forward+ 평면 반사 SubViewport |
+| `scripts/footprints.gd` | 부츠/닭 발자국 MultiMesh, 수명/눈 표면 추적 |
 | `scripts/nature_assets.gd` | `nature.glb` 메시 추출 |
 | `shaders/surface.gdshader` | 건축/소품 표면 |
-| `shaders/terrain.gdshader` | 지형/경로/눈/습기 |
-| `shaders/foliage.gdshader` | 바람/눈/겨울 낙엽 |
+| `shaders/terrain.gdshader` | 지형/경로/눈/습기, 겨울 정점 융기 |
+| `shaders/foliage.gdshader` | 바람/눈/겨울 낙엽, 풀 눌림 |
+| `shaders/footprint.gdshader` | 발자국 알파/수명 |
 | `shaders/water.gdshader` | 물결/반사/색 |
 | `shaders/waterfall.gdshader` | 폭포 |
 | `shaders/post_process.gdshader` | 화면 후처리 |
@@ -139,31 +154,26 @@ Godot의 사용자 인자는 `--` 뒤에 전달합니다.
 
 ## 3. 남은 작업 우선순위
 
-### P0. 물 반사/미스트 검증 및 튜닝
+### P0. 물 반사/미스트 검증 및 튜닝 — 반사 샘플링/프레넬 완료
 
 **현재 상태**
 - Forward+에서 SubViewport 미러 카메라가 동작.
-- 반사 텍스처는 생성되지만, 수면 Fresnel/블렌딩이 약해 눈에 띄는 반사가 부족할 수 있음.
+- `mirror_uv.y` 뒤집힘을 수정해 수면이 하늘이 아니라 지형/건물을 비추던 문제를 해결.
+- Fresnel을 원본과 같은 Schlick 5제곱으로 바꿔 상공 시 투명, 저각 시 반사가 강해짐.
+- `--pondside` 저각 뷰에서 수면에 하늘/수변 반사가 확인됨. `--pond` 상공 뷰에서는 바닥이 비침.
 - `Camera3D`에 4.7에서 `clip_plane`이 없어, 물 아래 지오메트리를 셰이더 `discard`로 제거하는 우회 사용.
 - 반사 카메라가 물속 지형/암반을 보지 않도록 `surface/terrain/foliage` 셰이더에 하드코딩된 `0.44` 수면 컷이 있음.
 
-**할 일**
-1. 여러 카메라 각도/줌에서 반사 방향/상하 반전이 맞는지 확인.
-2. `water_reflection.gd`의 미러 카메라 목표/업 벡터 검증.
-3. `reflection_strength`, Fresnel, 수면 알파 튜닝.
-4. 필요 시 격프레임 갱신/반사 해상도 조절(`viewport.size`).
-5. 물 반사가 필요 없는 Mobile에서는 현재처럼 비활성화 유지.
-
-**파일**
-- `scripts/water_reflection.gd`
-- `shaders/water.gdshader`
-- `scripts/main.gd` (`high_end_rendering`)
+**남은 선택 작업**
+1. 여러 카메라 각도/줌에서 반사 방향 최종 확인.
+2. 격프레임 갱신/반사 해상도 조절(`viewport.size`)로 비용 절감 검토.
+3. 물보라/물결 노멀 디테일 추가.
 
 **완료 기준**
-- 연못에 나무/농가/하늘이 자연스럽게 비침.
+- 연못에 나무/농가/하늘이 자연스럽게 비침. (저각에서 확인)
 - 물속 바닥/암반이 반사면에 나타나지 않음.
 - Forward+에서 프레임 저하가 과하지 않음.
-- Mobile에서 오류/검은 수면이 없음.
+- Mobile에서 오류/검은 수면이 없음. (확인)
 
 **리스크**
 - 미러 카메라의 음수 행렬식으로 인한 컬링/클리핑 이슈.
@@ -201,36 +211,25 @@ Godot의 사용자 인자는 `--` 뒤에 전달합니다.
 
 ---
 
-### P2. 겨울 지면 변위 + 발자국
+### P2. 겨울 지면 변위 + 발자국 — 완료 (셰이더 변위)
 
 **현재 상태**
-- 눈은 셰이더 색/표면 덮임만 적용.
-- 실제 지형 정점 융기 없음.
-- 캐릭터/닭 발자국 없음.
+- 눈은 셰이더 색/표면 덮임 + 지형 정점 융기로 표현.
+- `terrain.gdshader`가 `snow_depth`와 수면 위 은행 높이로 지형을 들어 올림.
+- `FarmWorld.snow_surface()`가 같은 해석식을 제공해 발자국이 눈 표면에 정확히 놓임.
+- `scripts/footprints.gd`: 부츠 360 + 닭 420 인스턴스, 64px 절차적 텍스처, 수명 감소.
+- `--winter --snowtest`에서 캐릭터/닭 발자국이 남는 것 확인.
+- `main.gd` trample 16슬롯 + `foliage.gdshader`로 캐릭터/닭 주변 풀이 눌리고 회복.
 
-**할 일**
-1. `world.gd`의 지형 `ArrayMesh` 정점을 `snow_depth`에 따라 융기.
-   - `seasons.js`의 `ground.setY` 로직 참고.
-   - 변경 시 `computeVertexNormals`/`surface update` 비용 주의.
-2. `footprints.gd` 신규 포트:
-   - `MultiMesh` 평면/발자국 텍스처.
-   - `snow_depth`와 이동 거리 기반 스폰.
-   - 눈이 내리면 서서히 메워짐.
-3. 캐릭터/닭 이동 시 발자국 API 호출.
-4. 지면 변위와 경로 마스크/발자국이 겹치지 않게 처리.
-5. 풀 trample: 걷는 캐릭터/닭 주변 풀이 눌리고 회복되는 셰이더/데이터 추가.
+**메모**
+- 원본 `seasons.js`는 CPU에서 `ArrayMesh` 정점을 갱신하지만, Godot에서는 14k 정점/노멀 재계산 비용을 피하려고 동일한 해석식을 정점 셰이더에 넣었음. 발자국/충돌 높이는 `snow_surface()`로 일치.
+- 발자국은 원본과 동일하게 눈 깊이 0.3 이상, 물가 제외 조건에서만 생성.
+- 눈이 내리는 동안 수명이 빨리 줄어들고, 눈이 그치면 약 2분 유지.
 
-**파일**
-- `scripts/world.gd`
-- `scripts/unity_chan.gd`
-- `scripts/farm_life.gd`
-- 신규 `scripts/footprints.gd`
-- `shaders/terrain.gdshader`
-
-**완료 기준**
-- 겨울에 지면이 실제로 눈 높이만큼 올라감.
-- 캐릭터/닭이 지나간 자리에 발자국이 남고 시간이 지나면 사라짐.
-- 경사면/물가에서 발자국이 떠 보이지 않음.
+**남은 선택 작업**
+1. `world.stand()`에 처마/계단 높이를 반영해 발자국이 데크 위에 남지 않게 보강.
+2. 발자국 해상도/수명 모바일 프리셋.
+3. 눈보라 시 발자국이 더 빨리 메워지는지 튜닝.
 
 ---
 
@@ -400,15 +399,16 @@ Godot의 사용자 인자는 `--` 뒤에 전달합니다.
 - **물 반사**
   - `Camera3D.clip_plane`이 Godot 4.7에 없어 물 아래 지오메트리를 셰이더 `discard`로 제거.
   - `surface/terrain/foliage` 셰이더에 `0.44` 수면 컷이 하드코딩되어 있음 → 수면 높이 변경 시 함께 수정.
-  - 반사 텍스처의 상하/좌우가 카메라 각도에 따라 뒤집힐 수 있음 → 여러 각도에서 확인.
+  - SubViewport 반사 UV는 상하 뒤집힘 보정(`mirror_uv.y = 1 - y`)이 필요. 수정 완료.
   - SubViewport가 매 프레임 렌더링됨 → 필요 시 격프레임/해상도 조정.
 - **안개**
   - `FogVolume`과 Environment volumetric fog는 Forward+ 전용.
   - Mobile은 depth fog 폴백.
   - 커스텀 레이마칭/광선 샤프트는 아직 없음.
 - **눈**
-  - 지형 변위가 아니라 셰이더 색만 적용.
+  - 지형 융기는 CPU 메시가 아니라 `terrain.gdshader` 정점 변위. `snow_surface()` 분석식과 반드시 함께 수정.
   - 겨울에 식물 95% discard; 일부만 남음.
+  - 발자국은 투명 쿼드 데칼이며 그림자를 받지 않음(원본과 유사).
 - **태스크 AI**
   - A* 그래프가 아니라 근거리 웨이포인트 + 충돌 슬라이드.
   - 작은 덤불/램프는 통과 가능하게 처리.
@@ -428,25 +428,29 @@ Godot의 사용자 인자는 `--` 뒤에 전달합니다.
 
 ---
 
-## 5. 내일 이어서 할 일 (추천 순서)
+## 5. 다음 세션 이어서 할 일 (추천 순서)
 
-1. **물 반사 검증/튜닝** (P0)
-   - `--pond` + 여러 각도/줌에서 반사 확인
-   - 필요 시 `WaterReflection` 미러 목표/업 벡터 수정
-2. **빛줄기/안개 튜닝** (P1)
+1. **빛줄기/안개 튜닝** (P1)
    - `--house` 아침/저녁, `--winter`, `--rain`에서 FogVolume/조명 확인
    - 커스텀 CompositorEffect는 리스크가 크므로 먼저 내장 볼류메트릭으로 목표치 확인
-3. **눈 지면 변위 + 발자국** (P2)
-   - 눈 높이와 캐릭터/닭 발자국이 눈에 띄는 개선
-4. **경로 그래프/A* + 실내** (P5)
-5. **모바일 UI/품질 프로파일** (P6)
+2. **경로 그래프/A* + 실내** (P5)
+   - `farm-paths.js`의 0.6 타일 그래프를 `scripts/farm_paths.gd`로
+   - 문 열기 → 실내 → 다시 나오는 상태 추가
+3. **모바일 UI/품질 프로파일** (P6)
+   - 360px 폭 패널, 터치 타깃, High/Medium/Low
+   - 반사/눈 파티클/잔디 밀도 예산
+4. **농장/야생 디테일** (P4)
+   - 닭 도망/닭장 출입, 물고기 점프, 램프 깜빡임, 반딧불
+5. **계절 파티클/날씨 크로스페이드** (P3)
+   - 벚꽃/낙엽, rainfall 가중치 보간, 수면 파문
+6. **빌드/배포** (P7)
 
 ### 세션 시작 체크리스트
 
 - [ ] `git status` 확인 (preview/reference 제외)
 - [ ] `git log --oneline -3` 확인
 - [ ] 헤드리스 실행으로 파싱 오류 확인
-- [ ] `--pond` / `--house` 렌더로 회귀 확인
+- [ ] `--pondside` / `--pond` / `--winter --snowtest` 렌더로 회귀 확인
 - [ ] 작업 후 `git add godot` + 커밋
 
 ---
@@ -462,10 +466,10 @@ Godot의 사용자 인자는 `--` 뒤에 전달합니다.
 | `src/sky.js` | `day_cycle.gd` + ProceduralSky | 근사 |
 | `src/water.js` | `water.gdshader` + `water_reflection.gd` | 근사 |
 | `src/cascade.js` | `world.gd::_build_cascade`, `waterfall.gdshader` | 간략화 |
-| `src/seasons.js` | `day_cycle.gd`, `weather_fx.gd`, shaders | 부분 |
+| `src/seasons.js` | `day_cycle.gd`, `weather_fx.gd`, shaders, `terrain.gdshader` | 겨울 지면 융기 포함 |
 | `src/weather.js` | `main.gd` wet/snow state | 부분 |
 | `src/rain.js` | `weather_fx.gd` | 간략화 |
-| `src/footprints.js` | 없음 | 미이식 |
+| `src/footprints.js` | `scripts/footprints.gd` | 완료 |
 | `src/farm-life.js` | `farm_life.gd` | 부분 |
 | `src/wildlife.js` | `farm_life.gd` | 부분 |
 | `src/unitychan.js` | `unity_chan.gd` | 부분 |

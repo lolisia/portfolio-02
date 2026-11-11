@@ -12,6 +12,7 @@ const WeatherFX = preload("res://scripts/weather_fx.gd")
 const PostProcess = preload("res://scripts/post_process.gd")
 const FarmLife = preload("res://scripts/farm_life.gd")
 const WaterReflection = preload("res://scripts/water_reflection.gd")
+const Footprints = preload("res://scripts/footprints.gd")
 
 var world: FarmWorld
 var orbit: OrbitCamera
@@ -21,6 +22,7 @@ var weather_fx: WeatherFX
 var post: PostProcess
 var farm_life: FarmLife
 var water_reflection: WaterReflection
+var footprints: Footprints
 var high_end_rendering := true
 var day_cycle: DayCycle
 var sun: DirectionalLight3D
@@ -43,6 +45,9 @@ var auto_start := 8.5
 var auto_elapsed := 0.0
 var _wind_applied := -1.0
 var _last_apply_hour := -999.0
+var _presses: Dictionary = {}
+var _trail: Array = []
+var _trail_clock := 0.0
 
 func _ready() -> void:
 	_setup_environment()
@@ -71,6 +76,14 @@ func _ready() -> void:
 	add_child(farm_life)
 	farm_life.build()
 
+	footprints = Footprints.new()
+	footprints.name = "Footprints"
+	footprints.world = world
+	add_child(footprints)
+	footprints.setup()
+	character.footprints = footprints
+	farm_life.footprints = footprints
+
 	orbit = OrbitCamera.new()
 	orbit.name = "OrbitCamera"
 	orbit.position = Vector3(31.0, 34.0, 41.0)
@@ -96,8 +109,13 @@ func _ready() -> void:
 		orbit.set_view(Vector3(-1.0, 0.65, 0.85), 0.0, 1.05, 7.0)
 	if "--char2" in cli:
 		orbit.set_view(Vector3(-1.0, 0.55, 1.75), 0.0, 1.35, 8.0)
+	if "--charclose" in cli:
+		orbit.max_zoom = 12.0
+		orbit.set_view(Vector3(-0.35, 1.25, 1.0), 1.1, 1.12, 10.0)
 	if "--pond" in cli:
 		orbit.set_view(Vector3(10.8, 0.3, 6.1), 0.7, 0.98, 2.8)
+	if "--pondside" in cli:
+		orbit.set_view(Vector3(8.6, 0.6, 6.0), 1.95, 0.46, 2.3)
 	if "--fishtest" in cli:
 		orbit.set_view(Vector3(6.6, 0.6, 4.0), 0.55, 1.2, 4.0)
 	if "--door" in cli:
@@ -169,6 +187,11 @@ func _ready() -> void:
 	if "--gathernear" in cli:
 		character.position = Vector3(1.0, 0.0, 2.2)
 		character._begin_journey("gather")
+	if "--snowtest" in cli:
+		character.position = Vector3(-3.0, 0.0, 4.0)
+		character._begin_journey("gather")
+		orbit.max_zoom = 12.0
+		orbit.set_view(Vector3(-2.2, 1.3, 3.4), 0.4, 0.95, 6.0)
 	ui.set_time_value(hour)
 	ui.set_wind_value(wind)
 
@@ -297,6 +320,11 @@ func _process(delta: float) -> void:
 		_surface_wet = wet
 		_surface_snow = snow_depth
 
+	if footprints != null:
+		footprints.snow_depth = snow_depth
+		footprints.snowfall = 1.0 if weather == 4 else (2.0 if weather == 5 else 0.0)
+	_update_trample(delta)
+
 	if post != null:
 		var t := Daylight.evaluate(hour)
 		var coverage: float = [0.0, 1.0, 2.0, 1.0, 1.0, 2.0][clampi(weather, 0, 5)]
@@ -348,5 +376,86 @@ func _on_auto_toggled(enabled: bool) -> void:
 
 func _on_reset_requested() -> void:
 	orbit.reset_view()
+
+## Port of the trample pass in src/main.js: each walker presses the turf and
+## leaves a short trail that springs back, packed into 16 shader slots.
+func _update_trample(delta: float) -> void:
+	if world == null:
+		return
+	var ease := 1.0 - exp(-delta * 7.0)
+	var bodies: Array = []
+	if character != null and character.model != null:
+		bodies.append({
+			"id": "unitychan", "x": character.position.x, "z": character.position.z,
+			"r": 0.2, "active": true,
+		})
+	if farm_life != null:
+		bodies.append_array(farm_life.tramplers())
+
+	var seen := {}
+	for body in bodies:
+		var id := String(body["id"])
+		seen[id] = true
+		if not _presses.has(id):
+			_presses[id] = {
+				"x": float(body["x"]), "z": float(body["z"]),
+				"r": float(body["r"]) * 1.5, "s": 0.0, "tx": 1e9, "tz": 1e9,
+			}
+		var press: Dictionary = _presses[id]
+		press["x"] = float(body["x"])
+		press["z"] = float(body["z"])
+		press["r"] = float(body["r"]) * 1.5
+		var target := 1.0 if bool(body["active"]) else 0.0
+		press["s"] = float(press["s"]) + (target - float(press["s"])) * ease
+	for id in _presses.keys():
+		if seen.has(id):
+			continue
+		var stale: Dictionary = _presses[id]
+		stale["s"] = float(stale["s"]) * (1.0 - ease)
+		if float(stale["s"]) < 0.005:
+			_presses.erase(id)
+
+	_trail_clock += delta
+	if _trail_clock > 0.15:
+		_trail_clock = 0.0
+		for body in bodies:
+			if not bool(body["active"]):
+				continue
+			var press: Dictionary = _presses[String(body["id"])]
+			var walked := Vector2(float(press["x"]) - float(press["tx"]), float(press["z"]) - float(press["tz"])).length()
+			if walked > 0.14 or float(press["tx"]) > 1e8:
+				press["tx"] = float(press["x"])
+				press["tz"] = float(press["z"])
+				_trail.append({
+					"x": float(press["x"]), "z": float(press["z"]),
+					"r": float(body["r"]) * 1.4, "life": 1.0, "s": 0.0,
+				})
+	for i in range(_trail.size() - 1, -1, -1):
+		var item: Dictionary = _trail[i]
+		item["life"] = float(item["life"]) - delta / 2.6
+		var life := maxf(float(item["life"]), 0.0)
+		var wanted := 0.7 * pow(life, 1.5)
+		item["s"] = float(item["s"]) + (wanted - float(item["s"])) * ease
+		if float(item["life"]) <= 0.0 and float(item["s"]) < 0.01:
+			_trail.remove_at(i)
+
+	var all: Array = []
+	for press in _presses.values():
+		if float(press["s"]) > 0.005:
+			all.append(press)
+	for item in _trail:
+		if float(item["s"]) > 0.005:
+			all.append(item)
+	all.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+		return float(a["s"]) > float(b["s"]))
+	var slots := PackedVector4Array()
+	slots.resize(16)
+	for i in range(16):
+		if i < all.size():
+			var entry: Dictionary = all[i]
+			slots[i] = Vector4(float(entry["x"]), float(entry["z"]), float(entry["r"]), float(entry["s"]))
+		else:
+			slots[i] = Vector4.ZERO
+	world.set_trample(slots)
 
 

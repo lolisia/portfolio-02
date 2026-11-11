@@ -20,6 +20,7 @@ var b: DioramaBuilder
 var meshes: Dictionary = {}
 var ground: MeshInstance3D
 var terrain_material: ShaderMaterial
+var _trample_materials: Array[ShaderMaterial] = []
 var path_mask: ImageTexture
 var water: MeshInstance3D
 var veg_beds: Array = []
@@ -128,6 +129,16 @@ func height(x: float, z: float) -> float:
 
 func stand(x: float, z: float) -> float:
 	return height(x, z)
+
+## Height of the snow cover above the bare terrain. Mirrors the lift applied
+## in shaders/terrain.gdshader and src/seasons.js.
+func snow_lift(x: float, z: float, base_y: float, snow_value: float) -> float:
+	var bank := smoothstep(WATER_Y + 0.015, WATER_Y + 0.3, base_y)
+	return snow_value * bank * (0.078 + 0.031 * sin(x * 1.7 + cos(z * 0.91)))
+
+func snow_surface(x: float, z: float, snow_value: float) -> float:
+	var base := height(x, z)
+	return base + snow_lift(x, z, base, snow_value) + 0.012
 
 func is_free(x: float, z: float, pad: float = 0.0) -> bool:
 	for obstacle in obstacles:
@@ -737,6 +748,12 @@ func set_surface_state(wet_value: float, snow_value: float, season_value: int) -
 				mat.set_shader_parameter("snow_depth", snow_value)
 				mat.set_shader_parameter("winter", winter_value)
 
+## 16 x (x, z, radius, strength) presses written by main.gd. Only the turf /
+## grass materials receive the array, so trees and crops skip the loop.
+func set_trample(slots: PackedVector4Array) -> void:
+	for mat in _trample_materials:
+		mat.set_shader_parameter("trample", slots)
+
 func _build_trees() -> void:
 	for i in range(TREE_LIST.size()):
 		var item: Array = TREE_LIST[i]
@@ -889,10 +906,14 @@ func _build_extra_lights() -> void:
 
 func _collect_materials() -> void:
 	for child in get_children():
-		if child is MultiMeshInstance3D and child.name == "lampglass":
-			var mat := (child as MultiMeshInstance3D).material_override
-			if mat is StandardMaterial3D:
+		if child is MultiMeshInstance3D:
+			var mmi := child as MultiMeshInstance3D
+			var mat := mmi.material_override
+			if mmi.name == "lampglass" and mat is StandardMaterial3D:
 				lamp_glass_material = mat
+			var name := String(mmi.name)
+			if mat is ShaderMaterial and (name.begins_with("turf") or name.begins_with("grass")):
+				_trample_materials.append(mat)
 
 func set_night(night: float) -> void:
 	for entry in lamps:

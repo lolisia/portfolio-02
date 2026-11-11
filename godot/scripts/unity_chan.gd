@@ -11,6 +11,7 @@ const HUB := Vector2(0.4, 1.7)
 const POND := Vector2(10.7, 6.3)
 
 var world: FarmWorld
+var footprints: Footprints
 var model: Node3D
 var animation: AnimationPlayer
 var blend_face: MeshInstance3D
@@ -36,6 +37,8 @@ var task_phase := 0
 var task_timer := 0.0
 var task_face := 0.0
 var time := 0.0
+var stride_left := 0.0
+var foot := 1.0
 
 var rod: Node3D
 var line: MeshInstance3D
@@ -282,6 +285,7 @@ func _walk_route(delta: float) -> void:
 	var direction := flat.normalized()
 	var step := minf(walk_speed * delta, flat.length())
 	var moved := false
+	var start := Vector2(position.x, position.z)
 	var candidates := [
 		Vector2(position.x + direction.x * step, position.z + direction.y * step),
 		Vector2(position.x + direction.x * step, position.z),
@@ -297,6 +301,7 @@ func _walk_route(delta: float) -> void:
 	if not moved:
 		route.pop_front()
 		return
+	_track_feet(start.distance_to(Vector2(position.x, position.z)))
 	rotation.y = lerp_angle(rotation.y, atan2(direction.x, direction.y), 1.0 - exp(-delta * 7.0))
 	_play("Walking", 0.3)
 	if animation != null:
@@ -306,6 +311,21 @@ func _can_stand(p: Vector2) -> bool:
 	if world == null:
 		return true
 	return world.is_free_for_walker(p.x, p.y, 0.16)
+
+## One print per stride, alternating feet either side of her path.
+func _track_feet(moved: float) -> void:
+	if footprints == null or moved <= 0.0001:
+		return
+	stride_left -= moved
+	if stride_left > 0.0:
+		return
+	stride_left = 0.19
+	foot = -foot
+	var heading := rotation.y
+	footprints.press("boot",
+		position.x + cos(heading) * foot * 0.055 + sin(heading) * 0.04,
+		position.z - sin(heading) * foot * 0.055 + cos(heading) * 0.04,
+		heading)
 
 func _start_task(type: String) -> void:
 	mode = "task"

@@ -39,10 +39,15 @@ void fragment() {
 		cos(world_pos.z * 2.4 - TIME * 1.1)) * 0.006;
 	vec3 reflected = texture(screen_tex, clamp(SCREEN_UV + ripple, vec2(0.001), vec2(0.999))).rgb;
 	vec2 mirror_uv = mirror_coord.xy / max(mirror_coord.w, 0.0001) * 0.5 + 0.5;
+	// SubViewport textures use a top-left origin while clip space is bottom-left.
+	mirror_uv.y = 1.0 - mirror_uv.y;
 	vec3 mirror = texture(reflection_tex, clamp(mirror_uv + ripple * 1.5, vec2(0.001), vec2(0.999))).rgb;
 	reflected = mix(reflected, mirror, reflection_strength);
-	float fresnel = pow(1.0 - clamp(dot(normalize(NORMAL), normalize(VIEW)), 0.0, 1.0), 3.0);
-	ALBEDO = mix(ALBEDO, reflected, 0.10 + fresnel * 0.55);
-	ALPHA = mix(ALPHA, 0.98, 0.04 + fresnel * 0.35);
+	float facing = clamp(dot(normalize(NORMAL), normalize(VIEW)), 0.0, 1.0);
+	// Water is almost transparent looking straight down and mirrors the sky and
+	// banks at grazing angles (Schlick, matching the web original's fifth power).
+	float fresnel = 0.03 + 0.97 * pow(1.0 - facing, 5.0);
+	ALBEDO = mix(ALBEDO, reflected, fresnel);
+	ALPHA = mix(ALPHA, 0.97, fresnel * 0.55);
 }
 
