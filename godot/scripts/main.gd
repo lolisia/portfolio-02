@@ -8,11 +8,15 @@ const OrbitCamera = preload("res://scripts/orbit_camera.gd")
 const GameUI = preload("res://scripts/game_ui.gd")
 const DayCycle = preload("res://scripts/day_cycle.gd")
 const UnityChan = preload("res://scripts/unity_chan.gd")
+const WeatherFX = preload("res://scripts/weather_fx.gd")
+const PostProcess = preload("res://scripts/post_process.gd")
 
 var world: FarmWorld
 var orbit: OrbitCamera
 var ui: GameUI
 var character: UnityChan
+var weather_fx: WeatherFX
+var post: PostProcess
 var day_cycle: DayCycle
 var sun: DirectionalLight3D
 var fill: DirectionalLight3D
@@ -25,6 +29,10 @@ var hour_target := 8.5
 var wind := 3.0
 var weather := 0
 var season := 1
+var wet := 0.0
+var snow_depth := 0.0
+var _surface_wet := -1.0
+var _surface_snow := -1.0
 var auto_time := false
 var auto_start := 8.5
 var auto_elapsed := 0.0
@@ -45,6 +53,10 @@ func _ready() -> void:
 	character.world = world
 	character.position = Vector3(-0.35, 0.0, 1.0)
 	add_child(character)
+
+	weather_fx = WeatherFX.new()
+	weather_fx.name = "WeatherFX"
+	add_child(weather_fx)
 
 	orbit = OrbitCamera.new()
 	orbit.name = "OrbitCamera"
@@ -68,7 +80,12 @@ func _ready() -> void:
 
 	ui = GameUI.new()
 	ui.name = "GameUI"
+	ui.layer = 2
 	add_child(ui)
+	post = PostProcess.new()
+	post.name = "PostProcess"
+	add_child(post)
+	post.setup(ui)
 	ui.time_changed.connect(_on_time_changed)
 	ui.wind_changed.connect(_on_wind_changed)
 	ui.weather_changed.connect(_on_weather_changed)
@@ -80,7 +97,38 @@ func _ready() -> void:
 	day_cycle.setup(sun, fill, env, sky_material, world)
 	_apply_time(true)
 	world.set_wind(wind)
+	world.set_surface_state(0.0, 0.0, season)
+	_surface_wet = 0.0
+	_surface_snow = 0.0
 	_wind_applied = wind
+	weather_fx.set_weather(weather)
+
+	# Development shortcuts for previewing a settled weather/season state.
+	if "--winter" in cli:
+		season = 3
+		ui.set_season(3)
+		snow_depth = 1.0
+		_surface_snow = 1.0
+		world.set_surface_state(wet, snow_depth, season)
+		day_cycle.apply(hour, weather, season)
+	if "--snow" in cli:
+		weather = 4
+		ui.set_weather(4)
+		snow_depth = 1.0
+		_surface_snow = 1.0
+		world.set_surface_state(wet, snow_depth, season)
+		day_cycle.apply(hour, weather, season)
+		weather_fx.set_weather(weather)
+	if "--rain" in cli:
+		weather = 2
+		ui.set_weather(2)
+		wet = 1.0
+		_surface_wet = 1.0
+		world.set_surface_state(wet, snow_depth, season)
+		day_cycle.apply(hour, weather, season)
+		weather_fx.set_weather(weather)
+	if "--panel" in cli:
+		ui.set_panel_open(true)
 	ui.set_time_value(hour)
 	ui.set_wind_value(wind)
 
@@ -176,6 +224,30 @@ func _process(delta: float) -> void:
 		world.set_wind(wind)
 		_wind_applied = wind
 
+	var wet_target := 1.0 if weather == 2 else (0.65 if weather == 3 else 0.0)
+	wet = lerpf(wet, wet_target, 1.0 - exp(-delta * 0.8))
+	var snow_target := 1.0 if season == 3 or weather >= 4 else 0.0
+	var snow_speed := 0.55 if season == 3 else 1.1
+	snow_depth = lerpf(snow_depth, snow_target, 1.0 - exp(-delta * snow_speed))
+	if absf(wet - _surface_wet) > 0.002 or absf(snow_depth - _surface_snow) > 0.002:
+		world.set_surface_state(wet, snow_depth, season)
+		_surface_wet = wet
+		_surface_snow = snow_depth
+
+	if post != null:
+		var t := Daylight.evaluate(hour)
+		var coverage: float = [0.0, 1.0, 2.0, 1.0, 1.0, 2.0][clampi(weather, 0, 5)]
+		var overcast: float = clampf(coverage * 0.42, 0.0, 0.88)
+		var tint := Color(1, 1, 1)
+		if t["golden"] > 0.01:
+			tint = tint.lerp(Color(1.03, 1.0, 0.94), 0.25 * float(t["golden"]))
+		if t["night"] > 0.01:
+			tint = tint.lerp(Color(0.88, 0.94, 1.0), 0.25 * float(t["night"]))
+		var sat: float = 1.03 + 0.10 * float(t["golden"]) - 0.06 * overcast
+		var con: float = 1.01 + 0.03 * overcast
+		var vig: float = 0.08 + 0.08 * float(t["night"])
+		post.set_grade(tint, sat, con, vig)
+
 func _apply_time(force: bool) -> void:
 	if not force and absf(hour - _last_apply_hour) < 0.0005:
 		return
@@ -196,10 +268,14 @@ func _on_wind_changed(value: float) -> void:
 
 func _on_weather_changed(index: int) -> void:
 	weather = index
+	weather_fx.set_weather(index)
 	_apply_time(true)
 
 func _on_season_changed(index: int) -> void:
 	season = index
+	world.set_surface_state(wet, snow_depth, season)
+	_surface_wet = wet
+	_surface_snow = snow_depth
 	_apply_time(true)
 
 func _on_auto_toggled(enabled: bool) -> void:

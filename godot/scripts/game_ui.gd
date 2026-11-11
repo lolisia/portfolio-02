@@ -15,6 +15,9 @@ var wind_value: Label
 var auto_check: CheckBox
 var weather_option: OptionButton
 var season_option: OptionButton
+var panel_control: PanelContainer
+var body_control: VBoxContainer
+var toggle_button: Button
 var _syncing := false
 
 func _ready() -> void:
@@ -68,6 +71,7 @@ func _ready() -> void:
 	style.content_margin_top = 10
 	style.content_margin_bottom = 12
 	panel.add_theme_stylebox_override("panel", style)
+	panel_control = panel
 	bottom_box.add_child(panel)
 
 	var outer := VBoxContainer.new()
@@ -80,14 +84,15 @@ func _ready() -> void:
 	toggle.alignment = HORIZONTAL_ALIGNMENT_LEFT
 	toggle.add_theme_font_size_override("font_size", 14)
 	outer.add_child(toggle)
+	toggle_button = toggle
 
 	var body := VBoxContainer.new()
 	body.add_theme_constant_override("separation", 8)
 	body.visible = false
 	outer.add_child(body)
+	body_control = body
 	toggle.pressed.connect(func() -> void:
-		body.visible = not body.visible
-		toggle.text = "환경 설정  ▴" if body.visible else "환경 설정  ▾"
+		set_panel_open(not body.visible)
 	)
 
 	# Time row.
@@ -221,6 +226,17 @@ func set_weather(index: int) -> void:
 
 func set_season(index: int) -> void:
 	season_option.selected = index
+
+func set_panel_open(open: bool) -> void:
+	if body_control == null:
+		return
+	body_control.visible = open
+	toggle_button.text = "환경 설정  ▴" if open else "환경 설정  ▾"
+
+func get_panel_rect() -> Rect2:
+	if panel_control == null:
+		return Rect2()
+	return panel_control.get_global_rect()
 
 static func format_hour(hour: float) -> String:
 	var minutes := int(round(hour * 60.0))

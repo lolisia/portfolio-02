@@ -19,6 +19,8 @@ const COTTAGE := {
 var b: DioramaBuilder
 var meshes: Dictionary = {}
 var ground: MeshInstance3D
+var terrain_material: ShaderMaterial
+var path_mask: ImageTexture
 var water: MeshInstance3D
 var lamps: Array = []
 var window_light: OmniLight3D
@@ -67,6 +69,7 @@ func build() -> void:
 	_build_shed(4.45, -1.90, -0.035)
 	_build_garden_beds()
 	_build_paths()
+	_build_path_mask()
 	_build_trees()
 	_build_ground_cover()
 	_build_lamps()
@@ -167,22 +170,19 @@ func _build_terrain() -> void:
 			var b_ := a + 1
 			var d := c + 1
 			st.add_index(a)
-			st.add_index(c)
-			st.add_index(b_)
 			st.add_index(b_)
 			st.add_index(c)
+			st.add_index(b_)
 			st.add_index(d)
+			st.add_index(c)
 	st.generate_normals()
 	var mesh := st.commit()
-	var mat := StandardMaterial3D.new()
-	mat.vertex_color_use_as_albedo = true
-	mat.roughness = 1.0
-	mat.metallic = 0.0
-	mat.cull_mode = BaseMaterial3D.CULL_DISABLED
+	terrain_material = ShaderMaterial.new()
+	terrain_material.shader = preload("res://shaders/terrain.gdshader")
 	ground = MeshInstance3D.new()
 	ground.name = "Ground"
 	ground.mesh = mesh
-	ground.material_override = mat
+	ground.material_override = terrain_material
 	ground.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
 	add_child(ground)
 
@@ -604,6 +604,33 @@ func _build_paths() -> void:
 	_path(-2.0, 0.8, 5.5, 0.82)
 	_path(5.5, 0.82, 10.8, 3.0)
 	_path(1.0, 0.8, 1.0, 2.6)
+
+func _build_path_mask() -> void:
+	var size := 512
+	var image := Image.create(size, size, false, Image.FORMAT_RGBA8)
+	image.fill(Color.BLACK)
+	for p in path_points:
+		var px := int((p.x + 15.0) / 30.0 * size)
+		var pz := int((p.y + 15.0) / 30.0 * size)
+		var radius := 6
+		image.fill_rect(Rect2i(px - radius, pz - radius, radius * 2, radius * 2), Color.WHITE)
+	path_mask = ImageTexture.create_from_image(image)
+	if terrain_material != null:
+		terrain_material.set_shader_parameter("path_mask", path_mask)
+
+func set_surface_state(wet_value: float, snow_value: float, season_value: int) -> void:
+	var winter_value := 1.0 if season_value == 3 else 0.0
+	if terrain_material != null:
+		terrain_material.set_shader_parameter("wet", wet_value)
+		terrain_material.set_shader_parameter("snow_depth", snow_value)
+		terrain_material.set_shader_parameter("winter", winter_value)
+	for child in get_children():
+		if child is MultiMeshInstance3D:
+			var mat := (child as MultiMeshInstance3D).material_override
+			if mat is ShaderMaterial:
+				mat.set_shader_parameter("wet", wet_value)
+				mat.set_shader_parameter("snow_depth", snow_value)
+				mat.set_shader_parameter("winter", winter_value)
 
 func _build_trees() -> void:
 	for i in range(TREE_LIST.size()):

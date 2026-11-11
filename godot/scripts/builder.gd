@@ -124,39 +124,34 @@ func _material_for(kind: String) -> Material:
 		shader_mat.shader = preload("res://shaders/foliage.gdshader")
 		shader_mat.set_shader_parameter("wind_strength", 1.0)
 		return shader_mat
-	var mat := StandardMaterial3D.new()
-	mat.vertex_color_use_as_albedo = true
-	mat.roughness = 0.9
-	mat.metallic = 0.0
-	match kind:
-		"glass":
+	if kind == "glass" or kind == "lampglass":
+		var mat := StandardMaterial3D.new()
+		mat.vertex_color_use_as_albedo = true
+		if kind == "glass":
 			mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-			mat.albedo_color = Color(1.0, 1.0, 1.0, 0.42)
+			mat.albedo_color = Color(1, 1, 1, 0.42)
 			mat.emission_enabled = true
 			mat.emission = Color(1.0, 0.67, 0.32)
 			mat.emission_energy_multiplier = 0.03
 			mat.roughness = 0.23
 			mat.cull_mode = BaseMaterial3D.CULL_DISABLED
-		"lampglass":
+		else:
 			mat.emission_enabled = true
 			mat.emission = Color(1.0, 0.93, 0.80)
 			mat.emission_energy_multiplier = 0.03
 			mat.roughness = 0.2
 			mat.cull_mode = BaseMaterial3D.CULL_DISABLED
-		"iron":
-			mat.metallic = 0.55
-			mat.roughness = 0.55
-		"wood":
-			mat.roughness = 0.82
-		"stone":
-			mat.roughness = 0.92
-		"soil":
-			mat.roughness = 0.98
-		"clay":
-			mat.roughness = 0.74
-		"plaster":
-			mat.roughness = 0.98
-	if kind in ["oakALeaves", "oakBLeaves", "bushALeaves", "bushBLeaves"]:
-		mat.cull_mode = BaseMaterial3D.CULL_DISABLED
-	return mat
+		return mat
+	var kind_index := 1
+	match kind:
+		"wood": kind_index = 0
+		"stone", "boulder", "leaf": kind_index = 1
+		"clay": kind_index = 2
+		"plaster": kind_index = 3
+		"soil": kind_index = 4
+		"iron": kind_index = 5
+	var surface_mat := ShaderMaterial.new()
+	surface_mat.shader = preload("res://shaders/surface.gdshader")
+	surface_mat.set_shader_parameter("surface_kind", kind_index)
+	return surface_mat
 
