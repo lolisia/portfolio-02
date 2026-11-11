@@ -5,7 +5,7 @@ import {surface} from './surfaces.js';
 export function builder(scene, seed = 41573, assets = new Map()) {
   const batches = new Map(), dummy = new T.Object3D();
   const geo = {spray:new T.PlaneGeometry(1,1),needle:new T.PlaneGeometry(1,1),box:new T.BoxGeometry(1,1,1), rock:new T.DodecahedronGeometry(.52), cone:new T.ConeGeometry(.55,1,7), trunk:new T.CylinderGeometry(.40,.53,1,7)};
-  const types={wood:'box',stone:'box',clay:'box',plaster:'box',glass:'box',iron:'box',leaf:'rock',boulder:'rock'};
+  const types={wood:'box',stone:'box',clay:'box',plaster:'box',glass:'box',lampglass:'box',soil:'box',iron:'box',leaf:'rock',boulder:'rock'};
   let parent = new T.Matrix4(), windRoot=null,plantGroup=false;
   function vegetation(fn){const old=plantGroup;plantGroup=true;try{fn()}finally{plantGroup=old}}
   function canopy(fn){
@@ -44,7 +44,7 @@ export function builder(scene, seed = 41573, assets = new Map()) {
       mesh.castShadow=asset?.shadow!==false;mesh.receiveShadow=true;scene.add(mesh);
     }
   }
-  return {part,place,rand,pick,finish,canopy,vegetation};
+  return {part,place,rand,pick,finish,canopy,vegetation,assets};
 }
 
 // Family cottage dimensions (local tiles, front faces +z); world.js reuses them for the porch
@@ -61,12 +61,13 @@ export function modules(b) {
     if(pine){
       p('pineABark',0,0,0,1,1,1,pick(bark));
       p('pineANeedles',0,0,0,1,1,1,pick(['#5d7a45','#678449','#55703f']));
-      return;
+      return 'pineA';
     }
     const kind=r()>.5?'oakA':'oakB',light=r()>.32;
     const greens=light?['#8fa553','#9cb35c','#a9b660','#88a14f']:['#7d9447','#8ba14a','#90a451','#76903f'];
     p(kind+'Bark',0,0,0,1,1,1,pick(bark));
     p(kind+'Leaves',0,0,0,1,1,1,pick(greens));
+    return kind;
   }
   const timber=['#9c6a44','#a9764b','#8d5d3c','#b27e54','#a06c46','#956540'];
   const shakes=['#7b5a43','#6d4e3a','#866550','#5f4434','#8a6a52','#735240','#6a5342'];
@@ -83,14 +84,17 @@ export function modules(b) {
       for(const f of [-.3,.3])box(sx,y+f*h,z+.06,.24,.06,.02,'#5d6847');
     }
   }
-  // Plank door (facing +z) on a wall whose outer face is z, standing on y0.
-  function door(x,y0,z,w=.74,h=1.3){
+  // Plank door (facing +z) on a wall whose outer face is z, standing on y0. With `leaf` given,
+  // the planks, battens and handle are handed back (relative to the hinge at the left edge,
+  // z+.01) instead of built, so the caller can hang them on a pivot that swings open.
+  function door(x,y0,z,w=.74,h=1.3,leaf=null){
     box(x,y0+h/2,z+.005,w,h,.01,'#211811');
-    for(let i=0;i<5;i++)box(x-w/2+(i+.5)*w/5,y0+h/2,z+.03,w/5-.012,h-.02,.04,pick(['#6a432b','#73492f','#5f3c27']));
-    for(const f of [.22,.78])box(x,y0+h*f,z+.06,w-.08,.08,.02,'#4e3322');
+    const put=leaf?(kind,px,py,pz,...rest)=>leaf.push([kind,px-(x-w/2),py-y0,pz-(z+.01),...rest]):p;
+    for(let i=0;i<5;i++)put('wood',x-w/2+(i+.5)*w/5,y0+h/2,z+.03,w/5-.012,h-.02,.04,pick(['#6a432b','#73492f','#5f3c27']));
+    for(const f of [.22,.78])put('wood',x,y0+h*f,z+.06,w-.08,.08,.02,'#4e3322');
     for(const s of [-1,1])box(x+s*(w/2+.05),y0+(h+.08)/2,z+.045,.1,h+.08,.09,trim);
     box(x,y0+h+.08,z+.05,w+.22,.1,.1,trim);
-    p('iron',x+w/2-.12,y0+h*.5,z+.075,.04,.1,.04,'#2f2a24');
+    put('iron',x+w/2-.12,y0+h*.5,z+.075,.04,.1,.04,'#2f2a24');
   }
   // Open railing from a to b (local, level): top and bottom rails with balusters.
   function railing(ax,az,bx,bz,y,height=.55,endPost=true){
@@ -146,7 +150,7 @@ export function modules(b) {
   // The family cottage: stone plinth, board-clad walls, a front porch with steps and a gable
   // balcony under a deep shake roof. `drop` is how far the porch floor sits above the ground
   // in front of the steps.
-  function cottage(drop=.3){
+  function cottage(drop=.3,leaf=null){
     const {W,D,F,H,knee,P,B,BW,slope,over,E,run}=COTTAGE,top=F+H,span=W/2+over,pitch=Math.atan(slope);
     p('stone',0,F/2-.2,0,W+.1,F+.4,D+.1,'#7a7262');
     for(const [axis,s] of [['x',1],['x',-1],['z',-1]])for(const y of [.1,.3]){
@@ -170,7 +174,7 @@ export function modules(b) {
     for(const x of [-W/2,W/2])for(const z of [-D/2,D/2])box(x,F+(H+knee)/2,z,.2,H+knee,.2,trim);
     box(0,F+.06,0,W+.26,.12,D+.26,trim);
     box(0,top+.07,0,W+.26,.14,D+.26,trim);
-    door(0,F+.12,D/2);
+    door(0,F+.12,D/2,.74,1.3,leaf);
     for(const x of [-.95,.95])window(x,F+.95,D/2);
     for(const z of [-.65,.75])place(W/2,0,z,1,Math.PI/2,()=>window(0,F+.95,0));
     place(-W/2,0,0,1,-Math.PI/2,()=>window(0,F+.95,0));
@@ -265,7 +269,7 @@ export function modules(b) {
     if(section==='post')return;
     p('iron',.48,2.26,0,.045,.25,.05,'#403b32');
     p('iron',.48,2.12,0,.39,.095,.36,'#4d493e');
-    p('glass',.48,1.90,0,.265,.35,.25,'#f5d69b');
+    p('lampglass',.48,1.90,0,.265,.35,.25,'#f6f2ea');
     for(const x of [.33,.63])for(const z of [-.14,.14])p('iron',x,1.90,z,.035,.38,.035,'#453c32');
     p('iron',.48,1.68,0,.36,.085,.33,'#443c32');
   }

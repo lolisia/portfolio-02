@@ -18,10 +18,16 @@ function birdModel(){
     ellipsoid(wing,0x453e38,side*.295,0,-.094,.124,.021,.055);
     bird.add(wing);return wing;
   });
-  bird.scale.setScalar(1.35);return {bird,wings};
+  // Thin legs: tucked in flight, reaching forward for the touchdown, standing on the perch.
+  const legs=[-1,1].map(side=>{
+    const leg=new T.Group();leg.position.set(side*.04,.07,.01);
+    const shank=new T.Mesh(new T.CylinderGeometry(.008,.008,.07,4),new T.MeshStandardMaterial({color:0x8a6a45,roughness:.8}));
+    shank.position.y=-.035;leg.add(shank);bird.add(leg);return leg;
+  });
+  bird.scale.setScalar(1.35);return {bird,wings,legs};
 }
 export function createWildlife(scene,world){
-  const {bird,wings}=birdModel();
+  const {bird,wings,legs}=birdModel();
   scene.add(bird);bird.visible=false;
   // A school of ten swims the pond below the surface; now and then one of them leaps.
   const {height,waterY}=world,deep=(x,z)=>waterY-height(x,z);
@@ -44,42 +50,113 @@ export function createWildlife(scene,world){
       if(inPond(x,z)){f.target=[x,z];f.depth=.18+Math.random()*.32;return}
     }
   }
-  let state='away',since=0,duration=2.5,perchIndex=world.perches.length-5;
-  const start=new T.Vector3(),end=new T.Vector3(),pos=new T.Vector3(),ahead=new T.Vector3();
-  function flight(t){
+  // The bird's day: away, arriving (a long glide that slows into a flare), landing (wings
+  // fold, the body rocks to rest), perched, taking off (a crouch and a hop) and departing.
+  let state='away',since=0,duration=2.5,perch=null,seat='crown';
+  const perches=world.birdPerches,trees=perches.filter(p=>p.kind==='tree'),lamps=perches.filter(p=>p.kind==='lamp');
+  const start=new T.Vector3(),end=new T.Vector3(),pos=new T.Vector3(),ahead=new T.Vector3(),c1=new T.Vector3(),c2=new T.Vector3();
+  const choose=()=>{perch=Math.random()<.5?lamps[Math.floor(Math.random()*lamps.length)]:trees[Math.floor(Math.random()*trees.length)]};
+  choose();
+  // Where the seat is right now: the canopy bends in the wind (surfaces.js windVertex), and
+  // the bird rides along with the branch it sits on.
+  function seatAt(out,seconds,breeze){
+    out.copy(seat==='limb'?perch.limb:perch.crown);
+    if(perch.root){
+      const h=Math.max(0,out.y-perch.root.y),phase=perch.root.x*.39+perch.root.z*.23;
+      const gust=Math.sin(seconds*1.37-phase)+.42*Math.sin(seconds*2.31-phase*.71),bend=.014*h*h*gust*breeze;
+      out.x+=bend;out.z+=bend*.36;
+    }
+    return out;
+  }
+  // Arrival path: a cubic that comes in high and drops onto the seat from behind and above,
+  // so the last stretch is a descending glide.
+  function arrival(t,out){
+    const u=1-Math.pow(1-T.MathUtils.clamp(t,0,1),1.7),v=1-u;
+    return out.set(0,0,0).addScaledVector(start,v*v*v).addScaledVector(c1,3*v*v*u).addScaledVector(c2,3*v*u*u).addScaledVector(end,u*u*u);
+  }
+  function departure(t,out){
     const u=T.MathUtils.clamp(t,0,1);
-    pos.lerpVectors(start,end,u);pos.y+=Math.sin(u*Math.PI)*4.2;return pos;
+    out.lerpVectors(start,end,u*u*(1.6-.6*u));out.y+=Math.sin(u*Math.PI)*2.2+u*.4;return out;
   }
-  function launch(out,now,wind){
+  function aim(next,current,pitchScale=.5){
+    ahead.copy(next).sub(current);
+    if(ahead.lengthSq()<1e-8)return;
+    bird.rotation.y=Math.atan2(ahead.x,ahead.z);bird.rotation.x=-Math.atan2(ahead.y,Math.hypot(ahead.x,ahead.z))*pitchScale;
+  }
+  function launch(out,now,wind,seconds,breeze){
     start.copy(bird.position);
-    if(out){end.set(21+Math.random()*6,10+Math.random()*4,4+Math.random()*12);state='departing'}
-    else{end.copy(world.perches[perchIndex]);state='arriving'}
-    duration=out&&wind>=10?2.5:4.6;since=now;bird.visible=true;
+    if(out){end.set(21+Math.random()*6,10+Math.random()*4,4+Math.random()*12);state='departing';duration=wind>=10?2.5:4.6}
+    else{
+      seat=perch.kind==='tree'&&bare>.5?'limb':'crown';
+      seatAt(end,seconds,breeze);state='arriving';duration=5.2;
+      c1.lerpVectors(start,end,.35);c1.y+=3.2;
+      ahead.set(end.x-start.x,0,end.z-start.z).normalize();
+      c2.copy(end).addScaledVector(ahead,-1.6);c2.y+=1.1;
+    }
+    since=now;bird.visible=true;
   }
-  let last=0,nextLeap=5;
-  return (seconds,wind,night)=>{
+  function flap(seconds,rate,amp,sweep=0){
+    wings.forEach((w,i)=>{w.rotation.y=(i?1:-1)*sweep;w.rotation.z=(i?1:-1)*(.13+amp*Math.sin(seconds*rate))});
+  }
+  function fold(k){  // k: 0 spread, 1 folded along the back
+    wings.forEach((w,i)=>{w.rotation.z=(i?1:-1)*.5*(1-k)*(1-k);w.rotation.y=(i?1:-1)*1.2*k});
+  }
+  const legPose=a=>legs.forEach(l=>l.rotation.x=a);
+  let last=0,nextLeap=5,bare=0;
+  return (seconds,wind,night,breeze=0,bareness=0)=>{
+    bare=bareness;
     if(!last){since=seconds;nextLeap=seconds+4}
     const dt=Math.min(.1,last?seconds-last:0);last=seconds;
     let age=seconds-since;
     if(state==='away'&&age>=duration&&wind<10&&night<.8){
-      bird.position.set(-18,10,-11);launch(false,seconds,wind);age=0;
+      bird.position.set(-18,10,-11);launch(false,seconds,wind,seconds,breeze);age=0;
     }
-    if(state==='perched'&&(wind>=10||night>.85||age>=duration)){launch(true,seconds,wind);age=0}
+    if((state==='perched'||state==='landing')&&(wind>=10||night>.85||(state==='perched'&&age>=duration))){state='takeoff';since=seconds;age=0}
     if(state==='arriving'&&wind>=10){launch(true,seconds,wind);age=0}
-    if(state==='arriving'||state==='departing'){
-      const t=age/duration;bird.position.copy(flight(t));ahead.copy(flight(t+.012)).sub(bird.position);
-      bird.rotation.y=Math.atan2(ahead.x,ahead.z);bird.rotation.x=-Math.atan2(ahead.y,Math.hypot(ahead.x,ahead.z))*.5;
-      wings.forEach((w,i)=>{w.rotation.y=0;w.rotation.z=(i?1:-1)*(.13+.76*Math.sin(seconds*24))});
-      if(t>=1){
-        if(state==='arriving'){state='perched';duration=7+Math.random()*8;bird.rotation.x=0}
-        else{state='away';duration=9+Math.random()*13;bird.visible=false;
-          perchIndex=Math.random()<.5?world.perches.length-1-Math.floor(Math.random()*5):Math.floor(Math.random()*(world.perches.length-5))}
-        since=seconds;
-      }
+    if(state==='arriving'){
+      const t=age/duration;
+      // The seat keeps swaying; steer the end of the path onto it.
+      seatAt(end,seconds,breeze);
+      arrival(t,bird.position);arrival(t+.01,pos);
+      const flare=T.MathUtils.smoothstep(t,.72,1);
+      aim(pos,bird.position,.5*(1-flare));
+      bird.rotation.x=T.MathUtils.lerp(bird.rotation.x,-.75,flare);
+      // Cruise flapping with short glides, then slow, deep back-strokes to brake.
+      const glide=t<.72&&Math.sin(seconds*1.9)>.55?.25:1;
+      flap(seconds,T.MathUtils.lerp(24,13,flare),T.MathUtils.lerp(.76*glide,1.05,flare),-.35*flare);
+      legPose(T.MathUtils.lerp(1.3,-.5,flare));
+      if(t>=1){state='landing';since=seconds;age=0;bird.position.copy(end)}
+    }
+    if(state==='landing'){
+      // Touchdown: the body rocks forward and settles with a damped bob, the wings close.
+      const k=Math.min(1,age/.7);
+      seatAt(bird.position,seconds,breeze);
+      bird.position.y-=.035*Math.sin(Math.PI*Math.min(1,age/.35))*(1-k);
+      bird.rotation.x=-.75*Math.exp(-age*7)*Math.cos(age*11)+.12*Math.sin(Math.PI*k)*(1-k);
+      if(age<.3)flap(seconds,13,.9*(1-age/.3),-.35*(1-age/.3));else fold(T.MathUtils.smoothstep(age,.3,.7));
+      legPose(-.5*(1-k));
+      if(age>=.7){state='perched';since=seconds;duration=7+Math.random()*8;bird.rotation.x=0;fold(1)}
     }
     if(state==='perched'){
-      wings.forEach((w,i)=>{w.rotation.z=0;w.rotation.y=(i?1:-1)*1.2});
+      seatAt(bird.position,seconds,breeze);
+      fold(1);legPose(0);
       bird.rotation.z=Math.sin(seconds*2.4)*.033;
+      bird.rotation.x=.05*Math.max(0,Math.sin(seconds*.7))**8;  // the odd glance down
+    }
+    if(state==='takeoff'){
+      // Crouch, open the wings, spring.
+      seatAt(bird.position,seconds,breeze);
+      const k=Math.min(1,age/.28);
+      bird.position.y-=.03*Math.sin(Math.PI*k);
+      bird.rotation.x=.25*Math.sin(Math.PI*k);
+      fold(1-T.MathUtils.smoothstep(age,0,.2));
+      if(age>=.28){launch(true,seconds,wind);age=0}
+    }
+    if(state==='departing'){
+      const t=age/duration;departure(t,bird.position);departure(t+.012,pos);aim(pos,bird.position);
+      bird.rotation.x*=Math.min(1,age/.4);  // pitch into the climb instead of snapping
+      flap(seconds,24,.76);legPose(T.MathUtils.lerp(.5,1.3,Math.min(1,t*4)));
+      if(t>=1){state='away';duration=9+Math.random()*13;bird.visible=false;choose();since=seconds}
     }
     const frozen=world.water.userData.freeze.value>.15;
     if(!frozen&&seconds>nextLeap){

@@ -52,9 +52,9 @@ function findSpots(world,paths){
   return {beds,shore};
 }
 
-export function createUnityChan(scene,world,onReady=()=>{}){
+export function createUnityChan(scene,world,onReady=()=>{},prints=null){
   const paths=createFarmPaths(world),spots=findSpots(world,paths);
-  const {door,apron}=world.cottage;
+  const {door,apron,threshold,doorLeaf}=world.cottage;
   const root=new T.Group();root.name='sd-unity-chan';root.visible=false;scene.add(root);
   const s={state:'inside',x:door.x,z:door.z,heading:0,route:[],wait:0,pace:0,intent:false,reaction:2,
     rng:90731,action:null,anchor:null,stuck:0,blink:2,blinkT:0,task:null,steps:[],stepTime:0,face:0,prop:null};
@@ -126,7 +126,7 @@ export function createUnityChan(scene,world,onReady=()=>{}){
   }
   function setTrip(home=false){
     s.task=null;
-    if(home){s.route=plan(apron);s.route.push(door);return}
+    if(home){s.route=plan(apron);s.route.push(door,threshold);return}
     const far=random()>.5;
     const candidates=paths.nodes.filter(n=>{
       const r=Math.hypot(n.x-apron.x,n.z-apron.z);
@@ -152,7 +152,8 @@ export function createUnityChan(scene,world,onReady=()=>{}){
   function chooseNext(){
     const r=random();
     if(r<.3&&setTask(spots.beds,[{clip:'Gathering',time:5+random()*5}]))return;
-    if(r<.55&&setTask(spots.shore,[{clip:'FishingBegin'},{clip:'FishingLoop',time:12+random()*12,fade:.2},{clip:'FishingStop',fade:.2}],'rod'))return;
+    const frozen=world.water.userData.freeze.value>.3;
+    if(r<.55&&!frozen&&setTask(spots.shore,[{clip:'FishingBegin'},{clip:'FishingLoop',time:12+random()*12,fade:.2},{clip:'FishingStop',fade:.2}],'rod'))return;
     if(r<.75){
       const kneel=random()<.45;
       begin(kneel?[{clip:'KneelDown',fade:.25,time:length('KneelDown')+.2},{clip:'KneelDownToUp',fade:.15}]:[{clip:'Salute',fade:.25}]);
@@ -202,16 +203,44 @@ export function createUnityChan(scene,world,onReady=()=>{}){
     pos.needsUpdate=true;
   }
 
+  // The front door swings out when she comes or goes and falls shut behind her.
+  let doorOpen=0,doorWant=0;
+  function swingDoor(dt){
+    const rate=doorWant>doorOpen?1.6:1.15;
+    doorOpen=doorWant>doorOpen?Math.min(doorWant,doorOpen+dt*rate):Math.max(doorWant,doorOpen-dt*rate);
+    // ease out on opening; closing speeds up and lands with a small rebound off the jamb
+    const k=doorWant>=doorOpen?1-(1-doorOpen)**2:doorOpen**1.6;
+    doorLeaf.rotation.y=-1.68*k+(doorWant===0&&doorOpen<.06?.025*Math.sin(doorOpen/.06*Math.PI):0);
+    doorLeaf.userData.open=doorOpen;
+  }
+  // Footprints: one print per stride, alternating feet either side of her path.
+  let strideLeft=0,foot=1;
+  function trackFeet(moved,running){
+    strideLeft-=moved;
+    if(strideLeft>0)return;
+    strideLeft=running?.3:.19;foot=-foot;
+    const h=s.heading;
+    prints?.press('boot',s.x+Math.cos(h)*foot*.055+Math.sin(h)*.04,s.z-Math.sin(h)*foot*.055+Math.cos(h)*.04,h);
+  }
+  const inDoorway=()=>Math.abs(s.x-threshold.x)<.45&&s.z<door.z+.08;
   return (dt,seconds,hour,weather,wind)=>{
     if(!ready)return;
-    const outside=hour>=7&&hour<19&&weather<=1&&wind<11;
+    swingDoor(dt);
+    // Light snow does not keep her in; rain, fog, a blizzard or a gale do.
+    const outside=hour>=7&&hour<19&&(weather<=1||weather===4)&&wind<11;
     if(s.intent!==outside&&s.reaction<=0)s.reaction=2+random()*5;
     s.reaction=Math.max(0,s.reaction-dt);
     const want=s.reaction===0?outside:s.intent;s.intent=want;
 
     if(s.state==='inside'){
       root.visible=false;
-      if(want){s.state='exiting';s.x=door.x;s.z=door.z;s.heading=0;s.route=[apron];s.pace=0;root.visible=true}
+      if(want){s.state='opening';doorWant=1}
+      else doorWant=0;
+    }else if(s.state==='opening'){
+      // Step out once the door is most of the way open.
+      if(!want){s.state='inside';doorWant=0}
+      else if(doorOpen>.55){s.state='exiting';s.x=threshold.x;s.z=threshold.z;s.heading=0;s.route=[door,apron];s.pace=0;root.visible=true;play('Walking',0);
+        root.position.set(s.x,world.stand(s.x,s.z),s.z);root.rotation.y=0}
     }else{
       if(!want&&s.state!=='returning'){s.state='returning';s.wait=0;s.prop=null;s.steps=[];setTrip(true)}
       let moving=false,speed=.62;
@@ -219,10 +248,16 @@ export function createUnityChan(scene,world,onReady=()=>{}){
         turn(s.face,dt,4);
         s.stepTime-=dt;if(s.stepTime<=0)nextStep();
       }else if(s.wait>0){s.wait-=dt;s.pace=T.MathUtils.damp(s.pace,0,6,dt)}
-      else if(s.state==='exiting'){moving=true;if(walk(dt,speed)){s.state='strolling';s.wait=1+random()*2;setTrip()}}
+      else if(s.state==='exiting'){
+        moving=true;
+        if(Math.hypot(s.x-threshold.x,s.z-threshold.z)>.62)doorWant=0;
+        if(walk(dt,speed)){s.state='strolling';s.wait=1+random()*2;setTrip()}
+      }
       else if(s.state==='returning'){
         speed=weather>=2?1.45:.75;moving=true;
-        if(walk(dt,speed)){s.state='inside';root.visible=false;body.active=false;s.pace=0;play('Standing',0)}
+        // Reach for the door a few steps out, so it is open by the time she gets there.
+        if(Math.hypot(s.x-door.x,s.z-door.z)<1.15&&s.route.length<=2)doorWant=1;
+        if(walk(dt,speed)){s.state='inside';root.visible=false;body.active=false;s.pace=0;play('Standing',0);doorWant=0}
       }else if(s.state==='strolling'){
         moving=true;
         if(walk(dt,speed)){
@@ -238,8 +273,9 @@ export function createUnityChan(scene,world,onReady=()=>{}){
         }else{play('Standing',.35);if(s.action)s.action.timeScale=1}
       }else if(s.action)s.action.timeScale=1;
       // Standing still she is still solid: chickens bump off her and she never ends inside a prop.
-      body.active=root.visible;body.x=s.x;body.z=s.z;world.colliders.resolve(body);
-      if(s.state!=='activity'){s.x=body.x;s.z=body.z}
+      body.active=root.visible;body.x=s.x;body.z=s.z;body.ignore=inDoorway()?'house':'';world.colliders.resolve(body);
+      if(s.state!=='activity'){s.x=body.x;s.z=body.z;trackFeet(Math.hypot(s.x-(s.px??s.x),s.z-(s.pz??s.z)),s.pace>1.1)}
+      s.px=s.x;s.pz=s.z;
       root.position.set(s.x,world.stand(s.x,s.z),s.z);root.rotation.y=s.heading;
     }
     mixer.update(dt);

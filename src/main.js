@@ -15,6 +15,9 @@ import {createUnityChan} from './unitychan.js';
 import {buildWorld} from './world.js';
 import {loadNature} from './nature.js';
 import {createWeatherTransition} from './weather.js';
+import {gardenKinds} from './garden.js';
+import {createInterior} from './interior.js';
+import {createFootprints} from './footprints.js';
 
 const canvas=document.querySelector('#world');
 const scene=new T.Scene(), renderer=new T.WebGLRenderer({canvas,antialias:false,powerPreference:'high-performance'});
@@ -33,8 +36,8 @@ if(view==='water'||view==='falls'){
   }
   camera.zoom=3.25;camera.updateProjectionMatrix();controls.update();
 }
-// Close-ups for checking details: ?view=house|coop|stairs|pond, optionally &zoom=N.
-const closeUps={house:[-1,1.6,-1.2,3],coop:[2.25,1.7,-1.6,3.3],stairs:[-5.4,2.2,-4.4,3],pond:[10.2,.4,6.3,5]};
+// Close-ups for checking details: ?view=house|coop|stairs|garden|pond, optionally &zoom=N.
+const closeUps={house:[-1,1.6,-1.2,3],garden:[-1.1,3.2,-7.65,5],coop:[2.25,1.7,-1.6,3.3],stairs:[-5.4,2.2,-4.4,3],pond:[10.2,.4,6.3,5]};
 if(closeUps[view]){
   const [x,y,z,zoom]=closeUps[view],yaw=Number(new URLSearchParams(location.search).get('yaw'))||0;
   controls.target.set(x,y,z);camera.position.copy(controls.target).add(new T.Vector3(24,18,30).applyAxisAngle(new T.Vector3(0,1,0),yaw*Math.PI/180));
@@ -44,31 +47,55 @@ const sky=new T.DirectionalLight(0xc9e1fb,1.0),sun=new T.DirectionalLight(0xffe3
 sky.position.set(12,19,17);scene.add(sky,sun,new T.AmbientLight(0x8798ad,.11));sun.position.set(-13,24,9);sun.castShadow=true;
 Object.assign(sun.shadow.camera,{left:-24,right:24,top:24,bottom:-24,near:.1,far:78});sun.shadow.camera.updateProjectionMatrix();renderer.shadowMap.autoUpdate=true;sun.shadow.mapSize.set(2048,2048);sun.shadow.normalBias=.028;sun.shadow.bias=-.00016;
 const nature=await loadNature();
+for(const [name,kind] of gardenKinds())nature.set(name,kind);
 const b=builder(scene,undefined,nature), world=buildWorld(scene,b);b.finish();
 const windowLight=new T.PointLight(0xffaf52,0,7,1.5);windowLight.position.copy(world.cottage.window);scene.add(windowLight);
 const cascade=makeCascade(world);scene.add(cascade);
 const atmosphere=createAtmosphere(scene,world);
 const seasons=createSeasons(scene,world,atmosphere);
-const farmLife=createFarmLife(scene,world);
+const prints=createFootprints(scene,world,atmosphere);
+const farmLife=createFarmLife(scene,world,prints);
 let unityChanLoaded;const unityChanReady=new Promise(r=>unityChanLoaded=r);
-const unityChan=createUnityChan(scene,world,unityChanLoaded);
+const unityChan=createUnityChan(scene,world,unityChanLoaded,prints);
+const homeLife=createInterior(world,surface('glass'),windowLight);
 const setSky=createSky(renderer,scene,world.water);
 const volume=createVolume(renderer,world,sun,atmosphere.cloudMap);
 const glowCanvas=document.createElement('canvas');glowCanvas.width=glowCanvas.height=128;
 const glowContext=glowCanvas.getContext('2d');
 const halo=glowContext.createRadialGradient(64,64,0,64,64,64);
-for(const [stop,alpha] of [[0,1],[.09,.8],[.22,.32],[.5,.09],[1,0]])halo.addColorStop(stop,'rgba(255,206,134,'+alpha+')');
+// Neutral white halo: the lamps tint it a cool-white, the fireflies yellow.
+for(const [stop,alpha] of [[0,1],[.09,.8],[.22,.32],[.5,.09],[1,0]])halo.addColorStop(stop,'rgba(255,248,238,'+alpha+')');
 glowContext.fillStyle=halo;glowContext.fillRect(0,0,128,128);
 const haloMap=new T.CanvasTexture(glowCanvas);haloMap.colorSpace=T.SRGBColorSpace;
+let lampSeed=88411;const lampRand=()=>((lampSeed=(Math.imul(lampSeed,1664525)+1013904223)>>>0)/4294967296);
 const lanterns=world.lamps.map(pivot=>{
-  const spot=new T.SpotLight(0xffba6c,0,8,1.17,.72,1.65);
+  const spot=new T.SpotLight(0xfff0dc,0,8,1.17,.72,1.65);
   spot.position.set(0,-.765,0);
   spot.target.position.set(0,-3.485,0);
   spot.castShadow=true;spot.shadow.mapSize.set(256,256);spot.shadow.autoUpdate=false;spot.shadow.needsUpdate=true;spot.shadow.camera.near=.12;spot.shadow.bias=-.0007;
-  const glow=new T.Sprite(new T.SpriteMaterial({map:haloMap,color:0xffc179,blending:T.AdditiveBlending,depthWrite:false}));
+  const glow=new T.Sprite(new T.SpriteMaterial({map:haloMap,color:0xfff2e2,blending:T.AdditiveBlending,depthWrite:false}));
   glow.position.set(0,-.485,0);glow.scale.setScalar(2.4);
-  pivot.add(spot,spot.target,glow);return {spot,glow,pivot};
+  pivot.add(spot,spot.target,glow);
+  const glass=pivot.getObjectByName('lampglass').material;
+  return {spot,glow,pivot,glass,level:1,flicker:0,chunk:0,next:6+lampRand()*30};
 });
+// Lamps burn steady but now and then one stutters: a second or so of dropouts and buzzing.
+function flickerLamps(dt,seconds){
+  for(const l of lanterns){
+    l.next-=dt;
+    if(l.next<=0&&l.flicker<=0){l.flicker=.35+lampRand()*1.4;l.next=10+lampRand()*45}
+    if(l.flicker>0){
+      l.flicker-=dt;l.chunk-=dt;
+      if(l.chunk<=0){l.chunk=.03+lampRand()*.11;l.level=lampRand()<.45?.05+lampRand()*.3:lampRand()<.5?.6+lampRand()*.25:1}
+      if(l.flicker<=0)l.level=1;
+    }
+    const hum=1+.025*Math.sin(seconds*47+l.pivot.position.x)*Math.sin(seconds*3.1);
+    const level=l.level*hum;
+    l.spot.intensity=34*nightLevel*level;
+    l.glow.visible=nightLevel>.01;l.glow.material.opacity=nightLevel*.78*level;
+    l.glass.emissiveIntensity=.025+nightLevel*2.6*level;
+  }
+}
 function particles(count,material,initializer,lines=false){
   const data=new Float32Array(count*(lines?6:3));for(let i=0;i<count;i++)initializer(data,i*(lines?6:3));
   const geometry=new T.BufferGeometry();geometry.setAttribute('position',new T.BufferAttribute(data,3));
@@ -76,6 +103,29 @@ function particles(count,material,initializer,lines=false){
 }
 const rand=b.rand;
 const rain=createRain(scene,world),wildlife=createWildlife(scene,world);
+// Moths and midges whirl around each lit lamp on mild nights.
+const MOTHS=16,mothCount=MOTHS*lanterns.length;
+const moths=particles(mothCount,new T.PointsMaterial({color:0xfff4e4,size:2.6,transparent:true,depthWrite:false,blending:T.AdditiveBlending,toneMapped:false}),(a,i)=>{a[i]=0;a[i+1]=-99;a[i+2]=0});
+moths.frustumCulled=false;moths.visible=false;
+const mothState=Array.from({length:mothCount},(_,i)=>({lamp:Math.floor(i/MOTHS),angle:rand()*6.28,spin:(rand()<.5?-1:1)*(2+rand()*4),radius:.15+rand()*.35,
+  height:(rand()-.5)*.4,phase:rand()*50,dart:3+rand()*5}));
+const lampCenter=new T.Vector3();
+function flyMoths(dt,seconds,on){
+  moths.visible=on>.01;if(!moths.visible)return;
+  moths.material.opacity=on;
+  const pos=moths.geometry.attributes.position;
+  mothState.forEach((m,i)=>{
+    const l=lanterns[m.lamp];
+    lampCenter.set(0,-.485,0);l.pivot.localToWorld(lampCenter);
+    m.angle+=dt*m.spin*(1+.6*Math.sin(seconds*2.3+m.phase));
+    if(Math.sin(seconds*1.7+m.phase*3)>.97)m.spin*=-1;  // sudden turnabouts
+    // every few seconds a moth dives at the glass and bounces off
+    const dive=Math.max(0,Math.sin(seconds*Math.PI*2/m.dart+m.phase))**10;
+    const r=(m.radius+.08*Math.sin(seconds*5.1+m.phase))*(1-.75*dive)+.06;
+    pos.setXYZ(i,lampCenter.x+Math.cos(m.angle)*r,lampCenter.y+m.height+.12*Math.sin(seconds*3.7+m.phase)+.05*Math.sin(seconds*13+m.phase*2),lampCenter.z+Math.sin(m.angle)*r);
+  });
+  pos.needsUpdate=true;
+}
 const flies=particles(70,new T.PointsMaterial({color:0xffe794,size:6.5,map:haloMap,transparent:true,depthWrite:false,blending:T.AdditiveBlending,toneMapped:false}), (a,i)=>{a[i]=rand()*28-14;a[i+1]=1.6+rand()*3;a[i+2]=rand()*28-14});
 const time=document.querySelector('#time'),weather=document.querySelector('#weather');
 const wind=document.querySelector('#wind');
@@ -120,14 +170,10 @@ function lighting(){
   const updateProbe=()=>{setSky(t,w,sun);lastProbe=performance.now()};
   if(performance.now()-lastProbe>(weatherBlend.active?450:document.querySelector('#autoTime').checked?1200:350))updateProbe();else if(!document.querySelector('#autoTime').checked&&!weatherBlend.active)skyTimer=setTimeout(updateProbe,120);
   volume.set(t,w,weatherBlend.density);atmosphere.set(t,w,weatherBlend.rain);
-  surface('glass').emissiveIntensity=.025+nightLevel*2.5;
-  for(const {spot,glow} of lanterns){
-    // Lantern spots stay in the scene all day at zero intensity: toggling them would change the
-    // light count and force every material to recompile at dusk.
-    spot.intensity=34*nightLevel;
-    glow.visible=nightLevel>.01;glow.material.opacity=nightLevel*.78;
-  }
-  flies.visible=nightLevel>.6&&weatherIndex<2&&seasonIndex===1;windowLight.intensity=9*nightLevel;
+  // Lantern spots stay in the scene all day at zero intensity: toggling them would change the
+  // light count and force every material to recompile at dusk. Their level (and the window
+  // glass) is set every frame by flickerLamps and the interior.
+  flies.visible=nightLevel>.6&&weatherIndex<2&&seasonIndex===1;
   const minutes=Math.round(hour*60),label=String(Math.floor(minutes/60)).padStart(2,'0')+':'+String(minutes%60).padStart(2,'0');
   document.querySelector('#hourText').textContent=label;time.setAttribute('aria-valuetext',label);
   slider(time).style.setProperty('--f',hour/24);
@@ -205,7 +251,7 @@ function warmUp(){
   if(startWeather!==null||startSeason!==null)seasons(seasonIndex,weatherIndex,0,60,0,windShown,weatherBlend);
 }
 warmUp();unityChanReady.then(warmUp);
-let previous=0,frameIndex=0;
+let previous=0,frameIndex=0,mothLevel=0;
 renderer.shadowMap.autoUpdate=false;sun.shadow.autoUpdate=false;
 renderer.setAnimationLoop(ms=>{
   advanceTime(ms);
@@ -229,7 +275,13 @@ renderer.setAnimationLoop(ms=>{
   rain(dt,ms/1000,windShown,weatherBlend.rain,nightLevel);
   seasons(seasonIndex,weatherIndex,Math.min(elapsedFrame,.15),Math.min(elapsedFrame,4),ms/1000,windShown,weatherBlend);
   cascade.userData.update(ms/1000,atmosphere.breeze.value,1-.85*nightLevel);
-  wildlife(ms/1000,windShown,nightLevel);
+  wildlife(ms/1000,windShown,nightLevel,atmosphere.breeze.value,atmosphere.winterBare.value);
+  flickerLamps(dt,ms/1000);homeLife(dt,ms/1000,nightLevel);
+  // Insects: warm, calm, dry-ish nights only; none in winter or snow.
+  const mild=seasonIndex!==3&&[0,1,3].includes(weatherIndex)&&windShown<8;
+  mothLevel=T.MathUtils.damp(mothLevel,mild?T.MathUtils.smoothstep(nightLevel,.3,.7):0,1.5,dt);
+  flyMoths(dt,ms/1000,mothLevel*.85);
+  prints.update(dt,weatherBlend.snow*(1+weatherBlend.storm));
   farmLife(dt,ms/1000,hourShown,weatherIndex,windShown,camera,nightLevel);
   unityChan(dt,ms/1000,hourShown,weatherIndex,windShown);
   if(flies.visible){flies.position.y=Math.sin(ms*.0015)*.14;flies.rotation.y=Math.sin(ms*.00035)*.025;flies.material.opacity=.72+.25*Math.sin(ms*.0025)}

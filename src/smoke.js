@@ -2,26 +2,27 @@ import * as T from 'three';
 
 export function createChimneySmoke(scene,world){
   const source=world.cottage.chimney.clone();
-  const count=144,centers=new Float32Array(count*3),sizes=new Float32Array(count),ages=new Float32Array(count),seeds=new Float32Array(count);
+  const count=144,centers=new Float32Array(count*3),sizes=new Float32Array(count),ages=new Float32Array(count),seeds=new Float32Array(count),dense=new Float32Array(count).fill(.6);
   const plane=new T.PlaneGeometry(1,1),geo=new T.InstancedBufferGeometry();
   geo.index=plane.index;geo.attributes.position=plane.attributes.position;geo.attributes.uv=plane.attributes.uv;geo.instanceCount=count;
   geo.setAttribute('smokeCenter',new T.InstancedBufferAttribute(centers,3).setUsage(T.DynamicDrawUsage));
   geo.setAttribute('smokeSize',new T.InstancedBufferAttribute(sizes,1).setUsage(T.DynamicDrawUsage));
   geo.setAttribute('smokeAge',new T.InstancedBufferAttribute(ages,1).setUsage(T.DynamicDrawUsage));
   geo.setAttribute('smokeSeed',new T.InstancedBufferAttribute(seeds,1));
+  geo.setAttribute('smokeDense',new T.InstancedBufferAttribute(dense,1).setUsage(T.DynamicDrawUsage));
   const material=new T.ShaderMaterial({transparent:true,depthWrite:false,uniforms:{clock:{value:0},night:{value:0}},
     vertexShader:`
-      attribute vec3 smokeCenter;attribute float smokeSize,smokeAge,smokeSeed;
-      varying vec2 smokeUv;varying float age,seed;
+      attribute vec3 smokeCenter;attribute float smokeSize,smokeAge,smokeSeed,smokeDense;
+      varying vec2 smokeUv;varying float age,seed,dense;
       void main(){
-        smokeUv=uv;age=smokeAge;seed=smokeSeed;
+        smokeUv=uv;age=smokeAge;seed=smokeSeed;dense=smokeDense;
         float a=smokeSeed+smokeAge*2.;mat2 spin=mat2(cos(a),sin(a),-sin(a),cos(a));
         vec4 center=modelViewMatrix*vec4(smokeCenter,1.);
         center.xy+=spin*position.xy*smokeSize;
         gl_Position=projectionMatrix*center;
       }`,
     fragmentShader:`
-      uniform float clock,night;varying vec2 smokeUv;varying float age,seed;
+      uniform float clock,night;varying vec2 smokeUv;varying float age,seed,dense;
       float hash(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}
       float noise(vec2 p){vec2 i=floor(p),f=fract(p);f=f*f*(3.-2.*f);return mix(mix(hash(i),hash(i+vec2(1,0)),f.x),mix(hash(i+vec2(0,1)),hash(i+1.),f.x),f.y);}
       float fbm(vec2 p){float n=0.,a=.5;for(int i=0;i<4;i++){n+=a*noise(p);p=mat2(.8,.6,-.6,.8)*p*2.03+7.1;a*=.5;}return n;}
@@ -33,7 +34,7 @@ export function createChimneySmoke(scene,world){
         float edge=1.-smoothstep(.22,1.,length(p)+(billow-.5)*.34);
         float density=smoothstep(.16,.76,billow*.75+detail*.25);
         float life=smoothstep(0.,.035,age)*(1.-smoothstep(.68,1.,age));
-        float alpha=edge*density*life*.24;
+        float alpha=edge*density*life*.24*dense;
         vec3 soot=mix(vec3(.13,.135,.13),vec3(.42,.43,.40),smoothstep(0.,.55,age));
         soot+=vec3(.08,.075,.065)*detail;
         soot*=1.-night*.46;
@@ -48,6 +49,11 @@ export function createChimneySmoke(scene,world){
     return {age,life:32,seed,x:source.x+Math.log(1+age*.12)*3*.075/.12,y:source.y+.94*age+.009*age*age,z:source.z+Math.log(1+age*.12)*3*.027/.12};
   });
   const projected=new T.Vector3(),up=new T.Vector3();
+  // The fire is stoked, burns down and smoulders: every so often the draw heads for a new
+  // level and eases there over several seconds. Each puff leaves the chimney carrying the draw
+  // of its moment, so a thick spell rises through the plume as a denser band.
+  let seed=60317;const rand=()=>((seed=(Math.imul(seed,1664525)+1013904223)>>>0)/4294967296);
+  let draw=.65,drawTarget=.65,nextDraw=10;
   return (dt,seconds,wind,camera,night=0)=>{
     let rise=32;
     if(camera){
@@ -56,18 +62,25 @@ export function createChimneySmoke(scene,world){
     }
     const lifetime=T.MathUtils.clamp((- .94+Math.sqrt(.94*.94+.036*rise))/.018+5,24,54);
     let highest=source.y;
+    nextDraw-=dt;
+    if(nextDraw<=0){
+      const r=rand();drawTarget=r<.18?.06+rand()*.12:r<.4?1.05+rand()*.35:.35+rand()*.55;
+      nextDraw=7+rand()*22;
+    }
+    draw=T.MathUtils.damp(draw,drawTarget,.3,dt);
     puffs.forEach((p,i)=>{
       p.age+=dt;
-      if(p.age>=p.life){p.age=0;p.life=lifetime;p.x=source.x;p.y=source.y;p.z=source.z}
+      if(p.age>=p.life){p.age=0;p.life=lifetime;p.x=source.x;p.y=source.y;p.z=source.z;
+        dense[i]=draw*(.75+.5*rand());p.swell=.8+.35*Math.min(1.3,draw)}
       const age=p.age,turbulence=Math.min(1,age*.17);
       p.x+=dt*(wind*.075/(1+age*.12)+Math.sin(seconds*.73+p.seed)*.16*turbulence);
       p.z+=dt*(wind*.027/(1+age*.12)+Math.cos(seconds*.61+p.seed)*.13*turbulence);
       p.y+=dt*(.94+age*.018+Math.sin(seconds*.6+p.seed)*.09*turbulence);
-      centers.set([p.x,p.y,p.z],i*3);sizes[i]=.26+Math.pow(age,.85)*.23;ages[i]=age/p.life;
+      centers.set([p.x,p.y,p.z],i*3);sizes[i]=(.26+Math.pow(age,.85)*.23)*(p.swell??1);ages[i]=age/p.life;
       highest=Math.max(highest,p.y);
     });
-    for(const name of ['smokeCenter','smokeSize','smokeAge'])geo.attributes[name].needsUpdate=true;
+    for(const name of ['smokeCenter','smokeSize','smokeAge','smokeDense'])geo.attributes[name].needsUpdate=true;
     material.uniforms.clock.value=seconds;material.uniforms.night.value=night;
-    Object.assign(smoke.userData,{windSpeed:wind,highest,screenRise:rise,lifetime});
+    Object.assign(smoke.userData,{windSpeed:wind,highest,screenRise:rise,lifetime,draw});
   };
 }

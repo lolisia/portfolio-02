@@ -3,7 +3,7 @@ import {createFarmPaths} from './farm-paths.js';
 import {createChimneySmoke} from './smoke.js';
 
 const windHeading=Math.atan2(1,.36);
-export function createFarmLife(scene,world){
+export function createFarmLife(scene,world,prints=null){
   const metal=new T.MeshStandardMaterial({color:0x504d40,metalness:.65,roughness:.46});
   const brass=new T.MeshStandardMaterial({color:0xb49a62,metalness:.65,roughness:.42});
   function mesh(group,geometry,material,x,y,z){
@@ -138,7 +138,7 @@ export function createFarmLife(scene,world){
     rotor.rotation.y+=dt*rotorSpeed;
     rotor.userData.speed=rotorSpeed;vane.userData.windSpeed=wind;
     updateSmoke(dt,seconds,wind,camera,night);
-    const outside=hour>=6&&hour<18&&weather<=1&&wind<11;
+    const outside=hour>=6&&hour<18&&(weather<=1||weather===4)&&wind<11;
     const threat=world.colliders.bodies.find(b=>b.kind==='unitychan'&&b.active);
     for(const f of flock){
       if(f.noticed!==outside){
@@ -180,6 +180,13 @@ export function createFarmLife(scene,world){
       const peck=!moving&&f.state==='foraging'?.2+Math.max(0,Math.sin(seconds*(2.1+f.index*.19)+f.step))*.95:0;
       f.head.rotation.x=T.MathUtils.damp(f.head.rotation.x,peck,5,dt);
       f.legs.forEach((leg,i)=>leg.rotation.x=moving?Math.sin(f.gait+i*Math.PI)*.28:0);
+      // Each half stride sets a foot down: a three-toed print in the snow.
+      const stride=Math.floor(f.gait/Math.PI);
+      if(prints&&moving&&ramp===0&&f.group.visible&&stride!==f.stride){
+        const h=f.group.rotation.y,side=stride%2?1:-1,k=f.chick?.48:1;
+        prints.press('claw',f.x+Math.cos(h)*side*.075*k,f.z-Math.sin(h)*side*.075*k,h,k*(.9+.2*Math.random()));
+      }
+      f.stride=stride;
       Object.assign(f.group.userData,{activity:f.state,speed:f.pace,walked:f.walked,trip:f.trip});
     }
   };

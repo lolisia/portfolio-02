@@ -30,6 +30,9 @@ export function field(size,seed,rows=size){
   }
 }
 export const TRAMPLE_SLOTS=16;
+// Life behind the cottage windows (see interior.js): a TV's flickering colour reaching the
+// windows near it, and a person whose silhouette dims the window they pass.
+export const interior={tv:{value:new T.Vector3()},tvAt:{value:new T.Vector2()},person:{value:new T.Vector4(0,0,0,99)}};
 const coarse=field(5,722),fine=field(27,998),grit=field(96,417);
 // Wood fibres: many cells across the grain, few along it, so streaks run the length of a board.
 const fibre=field(180,5113,6),streak=field(46,2741,3);
@@ -106,6 +109,7 @@ export function surface(name){
   if(['grass','petal','cabbage'].includes(name)){mat.side=T.DoubleSide;mat.shadowSide=T.DoubleSide;mat.roughness=name==='petal'?.6:.82}
   if(name==='iron'){mat.metalness=.55;mat.roughness=.55}
   if(name==='glass'){mat.roughness=.23;mat.emissive.set(0xffac46);mat.emissiveIntensity=.025}
+  if(name==='lampglass'){mat.roughness=.2;mat.emissive.set(0xfff1dc);mat.emissiveIntensity=.025}
   cache.set(name,mat);return mat;
 }
 
@@ -247,7 +251,7 @@ uniform vec4 trample[${TRAMPLE_SLOTS}];
             *clamp((foliageTint.g-1.)*5.5,0.,1.);
           diffuseColor.rgb=mix(diffuseColor.rgb,vec3(1.,.69,.80),blossom);`);
       }
-      if(!isWater && !['glass','cascade',''].includes(mat.name)){
+      if(!isWater && !['glass','lampglass','cascade',''].includes(mat.name)){
         shader.fragmentShader='uniform float snowDepth;\n'+shader.fragmentShader.replace('#include <normal_fragment_maps>',`
           #include <normal_fragment_maps>
           vec3 snowNormal=inverseTransformDirection(normal,viewMatrix);
@@ -307,6 +311,16 @@ uniform vec4 trample[${TRAMPLE_SLOTS}];
             if(crystal>0.)reflectedLight.directSpecular += directLight.color * crystal * 7.
               * pow(max(0.,dot(crystalNormal,normalize(directLight.direction+geometryViewDir))),900.);
           `+shader.fragmentShader.slice(index);
+      }
+      if(mat.name==='glass'){
+        Object.assign(shader.uniforms,{houseTv:interior.tv,houseTvAt:interior.tvAt,housePerson:interior.person});
+        shader.fragmentShader='uniform vec3 houseTv; uniform vec2 houseTvAt; uniform vec4 housePerson;\n'+shader.fragmentShader.replace('#include <emissivemap_fragment>',`
+          #include <emissivemap_fragment>
+          float tvReach=1.-smoothstep(.4,2.4,distance(landPosition.xz,houseTvAt));
+          float passing=housePerson.z*(1.-smoothstep(.22,.62,distance(landPosition.xz,housePerson.xy)))*step(landPosition.y,housePerson.w);
+          // where the TV is the brightest thing in the room, its cold light displaces the lamp's
+          float screen=tvReach*min(1.,length(houseTv));
+          totalEmissiveRadiance=totalEmissiveRadiance*(1.-passing)*(1.-.45*screen)+houseTv*tvReach*1.4*(1.-.6*passing);`);
       }
       if(isWater)shadeWater(shader,water);
       if(mat.name==='cascade')shadeCascade(shader,water);
