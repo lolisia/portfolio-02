@@ -26,6 +26,8 @@ var lamps: Array = []
 var window_light: OmniLight3D
 var lamp_glass_material: StandardMaterial3D
 var cottage_window := Vector3.ZERO
+var cottage_ridge := Vector3.ZERO
+var cottage_chimney := Vector3.ZERO
 var obstacles: Array = []
 var path_points: Array[Vector2] = []
 var flight := {
@@ -312,6 +314,10 @@ func _build_cottage(cx: float, cz: float, rot: float) -> void:
 	obstacles.append([cx, cz, 2.3])
 	obstacles.append([cx, porch_z + 0.2, 0.75])
 	cottage_window = Vector3(cx, gy + COTTAGE.F + 1.1, cz + COTTAGE.D * 0.5 + 0.7)
+	var span: float = COTTAGE.W * 0.5 + COTTAGE.over
+	var ridge_y: float = gy + COTTAGE.E + span * COTTAGE.slope
+	cottage_ridge = Vector3(cx, ridge_y + 0.12, cz - 0.5)
+	cottage_chimney = Vector3(cx + COTTAGE.chimney.x, ridge_y + 0.58, cz + COTTAGE.chimney.y)
 
 func _cottage_parts(drop: float) -> void:
 	var W: float = COTTAGE.W

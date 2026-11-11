@@ -10,6 +10,7 @@ const DayCycle = preload("res://scripts/day_cycle.gd")
 const UnityChan = preload("res://scripts/unity_chan.gd")
 const WeatherFX = preload("res://scripts/weather_fx.gd")
 const PostProcess = preload("res://scripts/post_process.gd")
+const FarmLife = preload("res://scripts/farm_life.gd")
 
 var world: FarmWorld
 var orbit: OrbitCamera
@@ -17,6 +18,7 @@ var ui: GameUI
 var character: UnityChan
 var weather_fx: WeatherFX
 var post: PostProcess
+var farm_life: FarmLife
 var day_cycle: DayCycle
 var sun: DirectionalLight3D
 var fill: DirectionalLight3D
@@ -57,6 +59,12 @@ func _ready() -> void:
 	weather_fx = WeatherFX.new()
 	weather_fx.name = "WeatherFX"
 	add_child(weather_fx)
+
+	farm_life = FarmLife.new()
+	farm_life.name = "FarmLife"
+	farm_life.world = world
+	add_child(farm_life)
+	farm_life.build()
 
 	orbit = OrbitCamera.new()
 	orbit.name = "OrbitCamera"
@@ -102,6 +110,9 @@ func _ready() -> void:
 	_surface_snow = 0.0
 	_wind_applied = wind
 	weather_fx.set_weather(weather)
+	farm_life.hour = hour
+	farm_life.wind = wind
+	farm_life.weather = weather
 
 	# Development shortcuts for previewing a settled weather/season state.
 	if "--winter" in cli:
@@ -223,6 +234,11 @@ func _process(delta: float) -> void:
 	if absf(_wind_applied - wind) > 0.001:
 		world.set_wind(wind)
 		_wind_applied = wind
+
+	if farm_life != null:
+		farm_life.hour = hour
+		farm_life.wind = wind
+		farm_life.weather = weather
 
 	var wet_target := 1.0 if weather == 2 else (0.65 if weather == 3 else 0.0)
 	wet = lerpf(wet, wet_target, 1.0 - exp(-delta * 0.8))
