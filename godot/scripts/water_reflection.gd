@@ -12,6 +12,7 @@ var water: MeshInstance3D
 var material: ShaderMaterial
 var water_y := 0.44
 var ready_for_render := false
+var resolution_height := 360
 
 func setup(p_water: MeshInstance3D, p_camera: Camera3D, p_water_y: float) -> void:
 	water = p_water
@@ -64,9 +65,22 @@ func _process(_delta: float) -> void:
 	camera.look_at_from_position(mirrored_origin, mirrored_target, mirrored_up)
 
 	var viewport_size := get_viewport().get_visible_rect().size
-	var height := 360
+	var height := resolution_height
 	var width := maxi(1, int(round(height * viewport_size.x / maxf(viewport_size.y, 1.0))))
 	viewport.size = Vector2i(width, height)
 
 	material.set_shader_parameter("reflection_projection", camera.get_camera_projection())
 	material.set_shader_parameter("reflection_view", camera.global_transform.affine_inverse())
+
+func set_quality(level: int) -> void:
+	if material == null or viewport == null:
+		return
+	if level >= 2:
+		ready_for_render = false
+		viewport.render_target_update_mode = SubViewport.UPDATE_DISABLED
+		material.set_shader_parameter("reflection_strength", 0.0)
+	else:
+		resolution_height = 360 if level == 0 else 256
+		ready_for_render = true
+		viewport.render_target_update_mode = SubViewport.UPDATE_ALWAYS
+		material.set_shader_parameter("reflection_strength", 1.0)

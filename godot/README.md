@@ -17,6 +17,7 @@ Godot 4.7 프로젝트. 원본 Three.js 디오라마(`../src`)를 PC/모바일 �
 - 개발용 프리셋: `-- --house`, `-- --pond`, `-- --pondside`, `-- --char`, `-- --char2`, `-- --charclose`, `-- --panel`, `-- --fishtest`, `-- --door`, `-- --front`
 - 날씨/계절 프리뷰: `-- --winter`, `-- --snow`, `-- --rain`, `-- --spring`, `-- --autumn`, `-- --night`, `-- --dusk`
 - 태스크 프리뷰: `-- --gather`, `-- --fish`, `-- --salute`, `-- --fishnear`, `-- --gathernear`, `-- --snowtest`
+- 품질 프리뷰: `-- --high`, `-- --medium`, `-- --low`
 - 스크린샷: `-- --shot C:/path.png` (현재 창 해상도, 개발용)
 
 ## 현재 이식된 범위
@@ -30,6 +31,7 @@ Godot 4.7 프로젝트. 원본 Three.js 디오라마(`../src`)를 PC/모바일 �
 - 연못 물고기 10마리, 나무/램프/지붕을 옮겨 앉는 새
 - 시각/바람 슬라이더, 날씨/계절 선택, 자동 시간, 패널 접기, 리셋
 - 반응형 UI: 실제 창 크기 기준 content scale, 360px 폭/세로 모드 대응, 터치 타깃, 패널 열림 시 카메라 프레이밍 보정
+- 품질 프리셋: 높음/보통/낮음 (MSAA, 3D 해상도 스케일, SSAO/볼류메트릭, 물 반사, 잔디/파티클 밀도)
 - 태양/하늘/안개/톤매핑/글로우/SSAO 기본 환경
 - Forward+ 볼류메트릭 미스트(FogVolume)와 **SubViewport 평면 물 반사**(모바일은 화면공간 반사 폴백)
 - 표면 셰이더: 나무결·석재·기와·흙 디테일, 젖은 표면, 눈 덮임

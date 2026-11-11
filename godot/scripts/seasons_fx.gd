@@ -12,6 +12,7 @@ var petal_material: StandardMaterial3D
 var leaf_material: StandardMaterial3D
 var petal_level := 0.0
 var leaf_level := 0.0
+var quality_scale := 1.0
 var petal_process: ParticleProcessMaterial
 var leaf_process: ParticleProcessMaterial
 
@@ -108,8 +109,8 @@ func update(delta: float, season: int, wind: float) -> void:
 	leaf_level = lerpf(leaf_level, leaf_target, 1.0 - exp(-delta * 0.9))
 	petals.emitting = petal_level > 0.01
 	leaves.emitting = leaf_level > 0.01
-	petals.amount_ratio = clampf(petal_level, 0.0, 1.0)
-	leaves.amount_ratio = clampf(leaf_level, 0.0, 1.0)
+	petals.amount_ratio = clampf(petal_level * quality_scale, 0.0, 1.0)
+	leaves.amount_ratio = clampf(leaf_level * quality_scale, 0.0, 1.0)
 	var drift := wind * 0.055
 	if petal_process != null:
 		petal_process.gravity = Vector3(drift * 0.8, -0.52, drift * 0.35)

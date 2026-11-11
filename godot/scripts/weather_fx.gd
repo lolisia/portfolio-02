@@ -12,6 +12,7 @@ var world: FarmWorld
 var rain_level := 0.0
 var snow_level := 0.0
 var storm_level := 0.0
+var quality_scale := 1.0
 var ripples: MultiMeshInstance3D
 var ripple_mesh: MultiMesh
 var ripple_items: Array = []
@@ -172,7 +173,7 @@ func _place_ripple(index: int, item: Dictionary) -> void:
 func _update_ripples(delta: float) -> void:
 	if world == null:
 		return
-	ripple_accum += delta * (7.0 + 26.0 * rain_level)
+	ripple_accum += delta * (7.0 + 26.0 * rain_level) * quality_scale
 	while ripple_accum >= 1.0:
 		ripple_accum -= 1.0
 		if rain_level <= 0.02:
@@ -208,8 +209,10 @@ func set_intensity(rain_amount: float, snow_amount: float, storm_amount: float, 
 		return
 	rain.emitting = rain_level > 0.01
 	snow.emitting = snow_level > 0.01
-	rain.amount_ratio = rain_level
-	snow.amount_ratio = snow_level * (0.35 + 0.65 * storm_level)
+	rain.amount_ratio = rain_level * quality_scale
+	snow.amount_ratio = snow_level * (0.35 + 0.65 * storm_level) * quality_scale
+	if spray != null:
+		spray.amount_ratio = quality_scale
 	if delta > 0.0:
 		_update_ripples(delta)
 

@@ -7,6 +7,7 @@ signal weather_changed(index: int)
 signal season_changed(index: int)
 signal auto_toggled(enabled: bool)
 signal reset_requested
+signal quality_changed(index: int)
 
 var time_slider: HSlider
 var wind_slider: HSlider
@@ -15,6 +16,7 @@ var wind_value: Label
 var auto_check: CheckBox
 var weather_option: OptionButton
 var season_option: OptionButton
+var quality_option: OptionButton
 var panel_control: PanelContainer
 var body_control: VBoxContainer
 var toggle_button: Button
@@ -191,6 +193,21 @@ func _ready() -> void:
 	season_option.custom_minimum_size = Vector2(0, 34)
 	season_row.add_child(season_option)
 
+	var quality_row := HBoxContainer.new()
+	quality_row.add_theme_constant_override("separation", 12)
+	body.add_child(quality_row)
+	var quality_label := Label.new()
+	quality_label.text = "품질"
+	quality_label.custom_minimum_size = Vector2(48, 0)
+	quality_row.add_child(quality_label)
+	quality_option = OptionButton.new()
+	for name in ["높음", "보통", "낮음"]:
+		quality_option.add_item(name)
+	quality_option.selected = 0
+	quality_option.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	quality_option.custom_minimum_size = Vector2(0, 34)
+	quality_row.add_child(quality_option)
+
 	# Footer.
 	var footer := HBoxContainer.new()
 	body.add_child(footer)
@@ -208,6 +225,7 @@ func _ready() -> void:
 	auto_check.toggled.connect(func(on: bool) -> void: auto_toggled.emit(on))
 	weather_option.item_selected.connect(func(index: int) -> void: weather_changed.emit(index))
 	season_option.item_selected.connect(func(index: int) -> void: season_changed.emit(index))
+	quality_option.item_selected.connect(func(index: int) -> void: quality_changed.emit(index))
 
 	time_slider.custom_minimum_size = Vector2(0, 28)
 	wind_slider.custom_minimum_size = Vector2(0, 28)
@@ -287,6 +305,12 @@ func set_weather(index: int) -> void:
 
 func set_season(index: int) -> void:
 	season_option.selected = index
+
+func set_quality(index: int) -> void:
+	quality_option.selected = index
+
+func get_quality() -> int:
+	return quality_option.selected
 
 func set_panel_open(open: bool) -> void:
 	if body_control == null:

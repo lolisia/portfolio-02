@@ -18,6 +18,7 @@ var zoom := 1.0
 var home_yaw := 0.0
 var home_pitch := 0.0
 var home_zoom := 1.0
+var portrait_scale := 1.0
 
 var _dragging := false
 var _drag_button := 0
@@ -45,7 +46,7 @@ func _apply() -> void:
 	var viewport_size := get_viewport().get_visible_rect().size
 	var aspect := viewport_size.x / maxf(viewport_size.y, 1.0)
 	var span := maxf(base_span, 46.0 / maxf(aspect, 0.01))
-	size = span / zoom
+	size = span / zoom * portrait_scale
 	var cp := cos(pitch)
 	var sp := sin(pitch)
 	var offset := Vector3(distance * cp * sin(yaw), distance * sp, distance * cp * cos(yaw))
@@ -109,6 +110,12 @@ func reset_view() -> void:
 
 func set_zoom_target(value: float) -> void:
 	zoom = value
+	_apply()
+
+func set_portrait_scale(value: float) -> void:
+	if absf(portrait_scale - value) < 0.0005:
+		return
+	portrait_scale = value
 	_apply()
 
 func set_view(new_target: Vector3, new_yaw: float, new_pitch: float, new_zoom: float) -> void:

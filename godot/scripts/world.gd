@@ -770,6 +770,23 @@ func set_water_freeze(value: float) -> void:
 	if mat != null:
 		mat.set_shader_parameter("freeze", clampf(value, 0.0, 1.0))
 
+func set_quality(level: int) -> void:
+	var factor: float = [1.0, 0.78, 0.50][clampi(level, 0, 2)]
+	for child in get_children():
+		if not (child is MultiMeshInstance3D):
+			continue
+		var mmi := child as MultiMeshInstance3D
+		var kind := String(mmi.name)
+		if not (kind.begins_with("turf") or kind.begins_with("grass")):
+			continue
+		var multimesh := mmi.multimesh
+		if multimesh == null:
+			continue
+		if factor >= 1.0:
+			multimesh.visible_instance_count = -1
+		else:
+			multimesh.visible_instance_count = maxi(1, int(multimesh.instance_count * factor))
+
 func _build_trees() -> void:
 	for i in range(TREE_LIST.size()):
 		var item: Array = TREE_LIST[i]

@@ -15,6 +15,7 @@ const WaterReflection = preload("res://scripts/water_reflection.gd")
 const Footprints = preload("res://scripts/footprints.gd")
 const NightLife = preload("res://scripts/night_life.gd")
 const SeasonsFX = preload("res://scripts/seasons_fx.gd")
+const QualityManager = preload("res://scripts/quality_manager.gd")
 
 var world: FarmWorld
 var orbit: OrbitCamera
@@ -27,6 +28,9 @@ var farm_life: FarmLife
 var water_reflection: WaterReflection
 var footprints: Footprints
 var night_life: NightLife
+var quality_manager: QualityManager
+var mist: FogVolume
+var quality := 0
 var high_end_rendering := true
 var day_cycle: DayCycle
 var sun: DirectionalLight3D
@@ -162,6 +166,14 @@ func _ready() -> void:
 	ui.season_changed.connect(_on_season_changed)
 	ui.auto_toggled.connect(_on_auto_toggled)
 	ui.reset_requested.connect(_on_reset_requested)
+	ui.quality_changed.connect(_on_quality_changed)
+
+	quality = 1 if not high_end_rendering else 0
+	quality_manager = QualityManager.new()
+	quality_manager.setup(env, sun, world, water_reflection, weather_fx, seasons_fx,
+		get_viewport(), mist)
+	quality_manager.apply(quality)
+	ui.set_quality(quality)
 
 	day_cycle = DayCycle.new()
 	day_cycle.setup(sun, fill, env, sky_material, world)
@@ -243,10 +255,17 @@ func _ready() -> void:
 		character._begin_journey("gather")
 		orbit.max_zoom = 12.0
 		orbit.set_view(Vector3(-2.2, 1.3, 3.4), 0.4, 0.95, 6.0)
+	if "--low" in cli:
+		_set_quality(2)
+	if "--medium" in cli:
+		_set_quality(1)
+	if "--high" in cli:
+		_set_quality(0)
 	var shot_index := cli.find("--shot")
 	if shot_index >= 0 and shot_index + 1 < cli.size():
 		_capture_screenshot(String(cli[shot_index + 1]))
 	orbit.v_offset = _desired_v_offset()
+	orbit.set_portrait_scale(_desired_portrait_scale())
 	ui.set_time_value(hour)
 	ui.set_wind_value(wind)
 
@@ -256,7 +275,25 @@ func _desired_v_offset() -> float:
 	var viewport_size := get_viewport().get_visible_rect().size
 	if viewport_size.x >= viewport_size.y:
 		return 0.0
-	return -16.0 if ui.is_panel_open() else -4.0
+	return -22.0 if ui.is_panel_open() else -4.0
+
+func _desired_portrait_scale() -> float:
+	if ui == null:
+		return 1.0
+	var viewport_size := get_viewport().get_visible_rect().size
+	if viewport_size.x >= viewport_size.y:
+		return 1.0
+	return 1.38 if ui.is_panel_open() else 1.0
+
+func _update_view_framing(delta: float) -> void:
+	if orbit == null or ui == null:
+		return
+	var wanted_v_offset := _desired_v_offset()
+	if absf(orbit.v_offset - wanted_v_offset) > 0.01:
+		orbit.v_offset = lerpf(orbit.v_offset, wanted_v_offset, 1.0 - exp(-delta * 7.0))
+	var wanted_scale := _desired_portrait_scale()
+	if absf(orbit.portrait_scale - wanted_scale) > 0.0005:
+		orbit.set_portrait_scale(lerpf(orbit.portrait_scale, wanted_scale, 1.0 - exp(-delta * 7.0)))
 
 func _capture_screenshot(path: String) -> void:
 	# Development helper: save the current window at its real resolution.
@@ -338,13 +375,14 @@ func _add_volumetric_mist() -> void:
 	fog.name = "ForestMist"
 	fog.size = Vector3(36, 12, 36)
 	fog.position = Vector3(0, 4, 0)
-	var mist := FogMaterial.new()
-	mist.density = 0.12
-	mist.albedo = Color(0.58, 0.68, 0.70)
-	mist.emission = Color(0.01, 0.015, 0.02)
-	mist.height_falloff = 0.38
-	mist.edge_fade = 0.15
-	fog.material = mist
+	var mist_material := FogMaterial.new()
+	mist_material.density = 0.12
+	mist_material.albedo = Color(0.58, 0.68, 0.70)
+	mist_material.emission = Color(0.01, 0.015, 0.02)
+	mist_material.height_falloff = 0.38
+	mist_material.edge_fade = 0.15
+	fog.material = mist_material
+	mist = fog
 	add_child(fog)
 
 func _setup_lights() -> void:
@@ -384,9 +422,7 @@ func _process(delta: float) -> void:
 		world.set_wind(wind)
 		_wind_applied = wind
 
-	var wanted_v_offset := _desired_v_offset()
-	if orbit != null and absf(orbit.v_offset - wanted_v_offset) > 0.01:
-		orbit.v_offset = lerpf(orbit.v_offset, wanted_v_offset, 1.0 - exp(-delta * 7.0))
+	_update_view_framing(delta)
 
 	if farm_life != null:
 		farm_life.hour = hour
@@ -450,6 +486,8 @@ func _apply_time(force: bool) -> void:
 		return
 	_last_apply_hour = hour
 	day_cycle.apply(hour, weather, season)
+	if quality == 2:
+		env.glow_enabled = false
 
 func _on_time_changed(value: float) -> void:
 	hour = value
@@ -481,6 +519,16 @@ func _on_auto_toggled(enabled: bool) -> void:
 
 func _on_reset_requested() -> void:
 	orbit.reset_view()
+
+func _set_quality(index: int) -> void:
+	quality = clampi(index, 0, 2)
+	if quality_manager != null:
+		quality_manager.apply(quality)
+	if ui != null:
+		ui.set_quality(quality)
+
+func _on_quality_changed(index: int) -> void:
+	_set_quality(index)
 
 ## Port of the trample pass in src/main.js: each walker presses the turf and
 ## leaves a short trail that springs back, packed into 16 shader slots.
