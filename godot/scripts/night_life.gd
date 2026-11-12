@@ -20,6 +20,10 @@ var time := 0.0
 
 var star_dome: MeshInstance3D
 var star_material: ShaderMaterial
+var moon: MeshInstance3D
+var moon_material: StandardMaterial3D
+var moon_halo: MeshInstance3D
+var moon_halo_material: StandardMaterial3D
 var moth_instance: MultiMeshInstance3D
 var moth_material: StandardMaterial3D
 var moth_states: Array = []
@@ -51,6 +55,7 @@ var person_silhouette: MeshInstance3D
 func setup() -> void:
 	rng.seed = 88411
 	_build_stars()
+	_build_moon()
 	_build_moths()
 	_build_fireflies()
 	_build_lamp_halos()
@@ -145,6 +150,40 @@ func _build_stars() -> void:
 	star_dome.gi_mode = GeometryInstance3D.GI_MODE_DISABLED
 	star_dome.visible = false
 	add_child(star_dome)
+
+func _build_moon() -> void:
+	var sphere := SphereMesh.new()
+	sphere.radius = 2.6
+	sphere.height = 5.2
+	sphere.radial_segments = 24
+	sphere.rings = 12
+	moon_material = StandardMaterial3D.new()
+	moon_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	moon_material.albedo_color = Color(0.93, 0.96, 1.0)
+	moon_material.emission_enabled = true
+	moon_material.emission = Color(0.85, 0.92, 1.0)
+	moon_material.emission_energy_multiplier = 4.0
+	moon = MeshInstance3D.new()
+	moon.name = "Moon"
+	moon.mesh = sphere
+	moon.material_override = moon_material
+	moon.position = Vector3(-78.0, 96.0, -64.0)
+	moon.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	moon.gi_mode = GeometryInstance3D.GI_MODE_DISABLED
+	moon.visible = false
+	add_child(moon)
+
+	moon_halo_material = _billboard_material(_glow_texture(), Color(0.78, 0.88, 1.0, 0.0))
+	moon_halo = MeshInstance3D.new()
+	moon_halo.name = "MoonHalo"
+	moon_halo.mesh = _quad()
+	moon_halo.material_override = moon_halo_material
+	moon_halo.position = moon.position
+	moon_halo.scale = Vector3.ONE * 15.0
+	moon_halo.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	moon_halo.gi_mode = GeometryInstance3D.GI_MODE_DISABLED
+	moon_halo.visible = false
+	add_child(moon_halo)
 
 func _build_moths() -> void:
 	moth_material = _billboard_material(_glow_texture(), Color(1.0, 0.96, 0.90, 0.0))
@@ -263,9 +302,17 @@ func _update_stars(night: float, golden: float, clear: float, orbit_yaw: float) 
 	var amount := clampf(night * night * clear * clear * (1.0 - golden), 0.0, 1.0)
 	star_dome.visible = amount > 0.004
 	if not star_dome.visible:
+		moon.visible = false
+		moon_halo.visible = false
 		return
 	star_material.set_shader_parameter("amount", amount)
 	star_dome.rotation.y = -orbit_yaw * 0.9 + 0.15
+	moon.visible = amount > 0.02
+	moon_halo.visible = moon.visible
+	moon_material.emission_energy_multiplier = 1.2 + 2.8 * amount
+	var halo_tint := moon_halo_material.albedo_color
+	halo_tint.a = amount * 0.50
+	moon_halo_material.albedo_color = halo_tint
 
 func _update_lamps(delta: float, night: float) -> void:
 	var total := 0.0
