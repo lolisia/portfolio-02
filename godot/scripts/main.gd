@@ -548,15 +548,28 @@ func _process(delta: float) -> void:
 
 	if post != null:
 		var t := daylight
-		var tint := Color(1, 1, 1)
-		if t["golden"] > 0.01:
-			tint = tint.lerp(Color(1.03, 1.0, 0.94), 0.25 * float(t["golden"]))
-		if t["night"] > 0.01:
-			tint = tint.lerp(Color(0.88, 0.94, 1.0), 0.25 * float(t["night"]))
-		var sat: float = 1.03 + 0.10 * float(t["golden"]) - 0.06 * overcast
-		var con: float = 1.01 + 0.03 * overcast
-		var vig: float = 0.08 + 0.08 * float(t["night"])
-		post.set_grade(tint, sat, con, vig)
+		var golden := float(t["golden"])
+		var night := float(t["night"])
+		var dawn := bool(t["dawn"])
+		var night_cast := 0.35 * night * (1.0 - golden)
+		var gold_shadow := Vector3(-0.12, -0.08, 0.14) if dawn else Vector3(-0.10, -0.15, 0.12)
+		var shadow := Vector3.ONE + gold_shadow * golden + Vector3(-0.12, -0.06, 0.16) * night_cast
+		var gold_highlight := Vector3(0.10, 0.02, -0.06) if dawn else Vector3(0.17, -0.01, -0.17)
+		var highlight := Vector3.ONE + gold_highlight * golden + Vector3(-0.04, 0.0, 0.06) * night_cast
+		var day := 1.0 - 0.6 * night
+		var foggy := 1.0 if weather == 3 else 0.0
+		var mood_tint := Vector3(
+			1.0 - 0.035 * rain_fx - 0.03 * snow_depth * day - 0.02 * storm_fx,
+			1.0 - 0.005 * snow_depth * day,
+			1.0 + 0.03 * rain_fx + 0.04 * snow_depth * day + 0.02 * storm_fx)
+		var mood_sat := 1.0 - 0.15 * rain_fx - 0.10 * foggy - 0.14 * storm_fx - 0.04 * snow_depth
+		var mood_contrast := 1.0 + 0.05 * rain_fx - 0.07 * foggy - 0.05 * storm_fx
+		var sat := (1.02 + 0.16 * golden) * mood_sat
+		var vig := 0.20 + 0.10 * night
+		post.set_grade(Color(mood_tint.x, mood_tint.y, mood_tint.z), sat, mood_contrast, vig,
+			shadow, highlight)
+		var mood_bloom := (1.0 + 1.1 * foggy + 0.5 * wet + 0.2 * storm_fx) * (1.0 - 0.5 * snow_depth)
+		env.glow_intensity = (0.14 + 0.42 * night) * mood_bloom
 		if sun != null and orbit != null:
 			var sun_dir := sun.global_transform.basis.z.normalized()
 			var facing := sun_dir.dot(-orbit.global_transform.basis.z)

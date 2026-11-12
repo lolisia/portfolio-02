@@ -6,6 +6,8 @@ uniform vec4 panel_rect = vec4(0.5, 0.93, 0.25, 0.03);
 uniform float panel_radius = 0.018;
 uniform float lens_strength = 0.010;
 uniform vec3 tint = vec3(1.0);
+uniform vec3 shadow_tint = vec3(1.0);
+uniform vec3 highlight_tint = vec3(1.0);
 uniform float saturation = 1.02;
 uniform float contrast = 1.01;
 uniform float vignette = 0.10;
@@ -72,6 +74,10 @@ void fragment() {
 		color += sun_color * glow * sun_strength * sky_mask;
 	}
 	float lum = dot(color, vec3(0.2126, 0.7152, 0.0722));
+	// Split-tone: warm the highlights and cool the shadows around golden hour
+	// and night, matching the original composite grade.
+	color *= mix(shadow_tint, highlight_tint, smoothstep(0.02, 0.45, lum));
+	lum = dot(color, vec3(0.2126, 0.7152, 0.0722));
 	color = mix(vec3(lum), color, saturation);
 	color = (color - 0.5) * contrast + 0.5;
 	color *= tint;

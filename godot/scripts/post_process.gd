@@ -49,8 +49,11 @@ func _update_panel(force: bool) -> void:
 		half.x / maxf(viewport_size.x, 1.0),
 		half.y / maxf(viewport_size.y, 1.0)))
 
-func set_grade(tint_value: Color, saturation_value: float, contrast_value: float, vignette_value: float) -> void:
+func set_grade(tint_value: Color, saturation_value: float, contrast_value: float, vignette_value: float,
+		shadow_value := Vector3.ONE, highlight_value := Vector3.ONE) -> void:
 	material.set_shader_parameter("tint", tint_value)
+	material.set_shader_parameter("shadow_tint", shadow_value)
+	material.set_shader_parameter("highlight_tint", highlight_value)
 	material.set_shader_parameter("saturation", saturation_value)
 	material.set_shader_parameter("contrast", contrast_value)
 	material.set_shader_parameter("vignette", vignette_value)
