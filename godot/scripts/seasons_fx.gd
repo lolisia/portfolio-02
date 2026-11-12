@@ -13,6 +13,10 @@ var leaf_material: StandardMaterial3D
 var petal_level := 0.0
 var leaf_level := 0.0
 var quality_scale := 1.0
+var ground_petals: MultiMeshInstance3D
+var ground_leaves: MultiMeshInstance3D
+var ground_petal_material: StandardMaterial3D
+var ground_leaf_material: StandardMaterial3D
 var petal_process: ParticleProcessMaterial
 var leaf_process: ParticleProcessMaterial
 
@@ -27,6 +31,12 @@ func setup() -> void:
 	leaves.emitting = false
 	petals.amount_ratio = 0.0
 	leaves.amount_ratio = 0.0
+	ground_petals = _make_ground_layer("SpringGround", petal_tex, Color(1.0, 0.72, 0.80), 160, 0.075)
+	ground_leaves = _make_ground_layer("AutumnGround", leaf_tex, Color(0.90, 0.48, 0.20), 190, 0.095)
+	ground_petal_material = ground_petals.material_override as StandardMaterial3D
+	ground_leaf_material = ground_leaves.material_override as StandardMaterial3D
+	ground_petals.visible = false
+	ground_leaves.visible = false
 
 func _make_system(label: String, amount: int, size: float, texture: Texture2D,
 		tint: Color) -> GPUParticles3D:
@@ -78,6 +88,46 @@ func _make_system(label: String, amount: int, size: float, texture: Texture2D,
 	add_child(particles)
 	return particles
 
+func _make_ground_layer(label: String, texture: Texture2D, tint: Color,
+		count: int, size: float) -> MultiMeshInstance3D:
+	var plane := PlaneMesh.new()
+	plane.size = Vector2.ONE
+	plane.orientation = PlaneMesh.FACE_Y
+	var material := StandardMaterial3D.new()
+	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	material.albedo_texture = texture
+	material.albedo_color = Color(tint.r, tint.g, tint.b, 0.0)
+	material.cull_mode = BaseMaterial3D.CULL_DISABLED
+	var multimesh := MultiMesh.new()
+	multimesh.transform_format = MultiMesh.TRANSFORM_3D
+	multimesh.mesh = plane
+	multimesh.instance_count = count
+	for i in range(count):
+		var placed := false
+		for attempt in range(18):
+			var x := randf_range(-13.5, 13.5)
+			var z := randf_range(-13.5, 13.5)
+			if not world.clear(x, z):
+				continue
+			var s := size * (0.7 + randf() * 0.6)
+			var basis := Basis(Vector3.UP, randf() * TAU).scaled(Vector3(s, 1.0, s))
+			multimesh.set_instance_transform(i, Transform3D(basis,
+				Vector3(x, world.height(x, z) + 0.016, z)))
+			placed = true
+			break
+		if not placed:
+			multimesh.set_instance_transform(i, Transform3D(Basis.from_scale(Vector3.ZERO), Vector3(0, -80, 0)))
+	var instance := MultiMeshInstance3D.new()
+	instance.name = label
+	instance.multimesh = multimesh
+	instance.material_override = material
+	instance.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	instance.gi_mode = GeometryInstance3D.GI_MODE_DISABLED
+	instance.custom_aabb = AABB(Vector3(-15, -3, -15), Vector3(30, 30, 30))
+	add_child(instance)
+	return instance
+
 func _petal_texture(leaf: bool) -> ImageTexture:
 	var image := Image.create(32, 32, false, Image.FORMAT_RGBA8)
 	var tint := Color(1.0, 0.82, 0.88) if not leaf else Color(0.94, 0.62, 0.30)
@@ -111,6 +161,16 @@ func update(delta: float, season: int, wind: float) -> void:
 	leaves.emitting = leaf_level > 0.01
 	petals.amount_ratio = clampf(petal_level * quality_scale, 0.0, 1.0)
 	leaves.amount_ratio = clampf(leaf_level * quality_scale, 0.0, 1.0)
+	if ground_petal_material != null:
+		var petal_tint := ground_petal_material.albedo_color
+		petal_tint.a = petal_level * 0.9
+		ground_petal_material.albedo_color = petal_tint
+		ground_petals.visible = petal_level > 0.02
+	if ground_leaf_material != null:
+		var leaf_tint := ground_leaf_material.albedo_color
+		leaf_tint.a = leaf_level * 0.9
+		ground_leaf_material.albedo_color = leaf_tint
+		ground_leaves.visible = leaf_level > 0.02
 	var drift := wind * 0.055
 	if petal_process != null:
 		petal_process.gravity = Vector3(drift * 0.8, -0.52, drift * 0.35)

@@ -454,6 +454,7 @@ func _process(delta: float) -> void:
 	snow_fx = lerpf(snow_fx, 1.0 if weather >= 4 else 0.0, 1.0 - exp(-delta * 1.4))
 	storm_fx = lerpf(storm_fx, 1.0 if weather == 5 else 0.0, 1.0 - exp(-delta * 1.4))
 	if weather_fx != null:
+		weather_fx.wind = wind
 		weather_fx.set_intensity(rain_fx, snow_fx, storm_fx, delta)
 	if seasons_fx != null:
 		seasons_fx.update(delta, season, wind)

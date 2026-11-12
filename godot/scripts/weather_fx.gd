@@ -8,7 +8,10 @@ class_name WeatherFX
 var rain: GPUParticles3D
 var snow: GPUParticles3D
 var spray: GPUParticles3D
+var rain_process: ParticleProcessMaterial
+var snow_process: ParticleProcessMaterial
 var world: FarmWorld
+var wind := 3.0
 var rain_level := 0.0
 var snow_level := 0.0
 var storm_level := 0.0
@@ -29,6 +32,8 @@ func _ready() -> void:
 	snow.emitting = false
 	rain.amount_ratio = 0.0
 	snow.amount_ratio = 0.0
+	rain_process = rain.process_material as ParticleProcessMaterial
+	snow_process = snow.process_material as ParticleProcessMaterial
 	_build_spray()
 	_build_ripples()
 
@@ -211,6 +216,10 @@ func set_intensity(rain_amount: float, snow_amount: float, storm_amount: float, 
 	snow.emitting = snow_level > 0.01
 	rain.amount_ratio = rain_level * quality_scale
 	snow.amount_ratio = snow_level * (0.35 + 0.65 * storm_level) * quality_scale
+	if rain_process != null:
+		rain_process.gravity = Vector3(wind * 0.16 + storm_level * 2.5, -9.8, wind * 0.05)
+	if snow_process != null:
+		snow_process.gravity = Vector3(wind * 0.08 + storm_level * 1.8, -0.8, wind * 0.03)
 	if spray != null:
 		spray.amount_ratio = quality_scale
 	if delta > 0.0:
