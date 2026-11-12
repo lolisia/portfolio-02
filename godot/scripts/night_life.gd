@@ -6,8 +6,8 @@ class_name NightLife
 ## per-lamp flicker/halos, and the cottage window / TV light.
 
 const MOTHS_PER_LAMP := 16
-const FIREFLY_COUNT := 70
-const STAR_COUNT := 6000
+const FIREFLY_COUNT := 90
+const STAR_COUNT := 8000
 const TV_PALETTE := [
 	Color(0.48, 0.64, 1.00), Color(0.87, 0.91, 1.00), Color(0.62, 0.90, 0.75),
 	Color(1.00, 0.85, 0.66), Color(1.00, 0.56, 0.47), Color(0.72, 0.65, 1.00),
@@ -224,7 +224,7 @@ func _build_fireflies() -> void:
 		var x := rng.randf_range(-14.0, 14.0)
 		var z := rng.randf_range(-14.0, 14.0)
 		var y := world.height(x, z) + 0.35 + rng.randf() * 2.3
-		var s := 0.12 + rng.randf() * 0.08
+		var s := 0.17 + rng.randf() * 0.12
 		multimesh.set_instance_transform(i,
 			Transform3D(Basis.from_scale(Vector3.ONE * s), Vector3(x, y, z)))
 	firefly_instance = MultiMeshInstance3D.new()
@@ -248,7 +248,7 @@ func _build_lamp_halos() -> void:
 		halo.mesh = _quad()
 		halo.material_override = material
 		halo.position = position
-		halo.scale = Vector3.ONE * 2.4
+		halo.scale = Vector3.ONE * 3.2
 		halo.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		halo.gi_mode = GeometryInstance3D.GI_MODE_DISABLED
 		halo.visible = false
@@ -345,7 +345,7 @@ func _update_lamps(delta: float, night: float) -> void:
 		halo.visible = night > 0.01
 		var material: StandardMaterial3D = lamp["material"]
 		var tint := material.albedo_color
-		tint.a = night * 0.78 * level
+		tint.a = night * 0.85 * level
 		material.albedo_color = tint
 		total += level
 		count += 1
