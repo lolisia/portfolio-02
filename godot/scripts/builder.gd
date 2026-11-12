@@ -59,6 +59,14 @@ func finish() -> void:
 		var mesh: Mesh = _mesh_for(kind_name)
 		if mesh == null:
 			continue
+		# Ground cover is randomly ordered so the Low quality instance budget is
+		# spread over the whole island instead of emptying one corner.
+		if kind_name.begins_with("turf") or kind_name.begins_with("grass"):
+			for i in range(items.size() - 1, 0, -1):
+				var j := rng.randi_range(0, i)
+				var swap = items[i]
+				items[i] = items[j]
+				items[j] = swap
 		var material: Material = _material_for(kind_name)
 		var mm := MultiMesh.new()
 		mm.transform_format = MultiMesh.TRANSFORM_3D
