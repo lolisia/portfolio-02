@@ -367,7 +367,7 @@ func _setup_environment() -> void:
 	env.ambient_light_energy = 0.48
 	env.reflected_light_source = Environment.REFLECTION_SOURCE_SKY
 	env.tonemap_mode = Environment.TONE_MAPPER_ACES
-	env.tonemap_exposure = 0.98
+	env.tonemap_exposure = 1.14
 	env.glow_enabled = true
 	env.glow_intensity = 0.16
 	env.glow_bloom = 0.04
@@ -524,17 +524,24 @@ func _process(delta: float) -> void:
 	if high_end_rendering and mist_material != null:
 		var golden := float(daylight["golden"])
 		var night := float(daylight["night"])
+		var compositor_fog := atmosphere_effect != null and atmosphere_effect.active and atmosphere_effect.working
 		var mist_target := 0.10 + 0.10 * golden + 0.04 * night + 0.06 * overcast
 		if season == 3:
 			mist_target += 0.02
+		# The compositor raymarch already carries the volumetric haze; keep the
+		# FogVolume only as a light complement so the two do not double up.
+		if compositor_fog:
+			mist_target *= 0.22
 		mist_material.density = lerpf(mist_material.density, mist_target, 1.0 - exp(-delta * 0.7))
-		env.volumetric_fog_density = 0.009 + 0.008 * night + 0.006 * overcast + 0.005 * golden
+		env.volumetric_fog_density = (0.009 + 0.008 * night + 0.006 * overcast + 0.005 * golden) \
+			* (0.30 if compositor_fog else 1.0)
 		if low_mist_material != null:
 			var low_target := clampf(golden * 1.3 + overcast * 0.45 + (1.0 if weather == 3 else 0.0)
 				+ (0.15 if season == 3 else 0.0), 0.0, 1.0) * (1.0 - night * 0.45)
 			low_mist_material.density = lerpf(low_mist_material.density,
 				lerpf(0.015, 0.20, low_target), 1.0 - exp(-delta * 0.7))
-			low_mist.visible = quality < 2 and low_target > 0.04
+			low_mist.visible = quality < 2 and low_target > 0.04 and not compositor_fog
+	_update_atmosphere(daylight)
 	if night_life != null:
 		night_life.update(delta, float(daylight["night"]), float(daylight["golden"]),
 			1.0 - minf(1.0, overcast * 1.1), weather, season, wind, orbit.yaw)
@@ -574,6 +581,53 @@ func _process(delta: float) -> void:
 				if atmosphere_effect != null:
 					atmosphere_effect.sun_uv = Vector2(-10.0, -10.0)
 					atmosphere_effect.sun_strength = 0.0
+
+func _update_atmosphere(daylight: Dictionary) -> void:
+	if atmosphere_effect == null or orbit == null:
+		return
+	var coverage: float = [0.0, 1.0, 2.0, 1.0, 1.0, 2.0][clampi(weather, 0, 5)]
+	var density_scale: float = [1.0, 1.0, 1.0, 3.8, 1.4, 2.4][clampi(weather, 0, 5)]
+	var from_index := int(daylight["from"])
+	var to_index := int(daylight["to"])
+	var blend := float(daylight["f"])
+	var base_density := Daylight.value_at(Daylight.FOG_DENSITY, from_index, to_index, blend)
+	atmosphere_effect.fog_density = base_density * (1.0 + 0.38 * coverage) * density_scale
+	var scatter := Daylight.color_at(Daylight.FOG_SCATTER, from_index, to_index, blend)
+	atmosphere_effect.fog_scatter = Color(scatter.r * 0.55, scatter.g * 0.55, scatter.b * 0.55)
+	var golden := float(daylight["golden"])
+	var night := float(daylight["night"])
+	atmosphere_effect.mist_low = (1.0 if bool(daylight["dawn"]) else 0.3) \
+		* golden * (1.0 - 0.5 * minf(1.0, coverage))
+	atmosphere_effect.golden = golden
+	atmosphere_effect.lamp_power = night
+	atmosphere_effect.cloud_amount = lerpf(0.63, 0.84, coverage) if coverage < 1.0 \
+		else lerpf(0.84, 0.94, coverage - 1.0)
+
+	if sun != null:
+		atmosphere_effect.sun_energy = sun.light_energy
+		atmosphere_effect.sun_direction = sun.global_transform.basis.z.normalized()
+
+	var xform := orbit.global_transform
+	var basis := xform.basis
+	atmosphere_effect.cam_right = basis.x.normalized()
+	atmosphere_effect.cam_up = basis.y.normalized()
+	atmosphere_effect.cam_forward = -basis.z.normalized()
+	atmosphere_effect.cam_position = xform.origin
+	atmosphere_effect.cam_ortho = orbit.projection == Camera3D.PROJECTION_ORTHOGONAL
+	atmosphere_effect.cam_half_height = orbit.size * 0.5
+	atmosphere_effect.cam_tan_half = tan(deg_to_rad(orbit.fov) * 0.5)
+	var viewport_size := get_viewport().get_visible_rect().size
+	atmosphere_effect.cam_aspect = viewport_size.x / maxf(viewport_size.y, 1.0)
+	atmosphere_effect.cam_near = orbit.near
+	atmosphere_effect.cam_far = orbit.far
+
+	var lamp_data: Array = []
+	if world != null:
+		for entry in world.lamps:
+			var light: OmniLight3D = entry.light
+			lamp_data.append(Vector4(light.global_position.x, light.global_position.y,
+				light.global_position.z, clampf(light.light_energy / 3.6, 0.0, 1.0)))
+	atmosphere_effect.lamps = lamp_data
 
 func _apply_time(force: bool) -> void:
 	if not force and absf(hour - _last_apply_hour) < 0.0005:

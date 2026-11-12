@@ -23,6 +23,7 @@ const SKY_HORIZON = [Color("ffdcaa"), Color("dbedf1"), Color("ffae94"), Color("3
 const SKY_LAND = [Color("697153"), Color("737962"), Color("766552"), Color("161e21"), Color("766552")]
 const BACKDROP = [Color("acbfca"), Color("93b9d4"), Color("d8aaa6"), Color("17263f"), Color("d48b6c")]
 const FOG_SCATTER = [Color("657577"), Color("768183"), Color("957a8c"), Color("192d45"), Color("8d5a44")]
+const FOG_DENSITY = [0.033, 0.016, 0.045, 0.032, 0.03]
 
 static func smooth01(n: float) -> float:
 	n = clampf(n, 0.0, 1.0)
@@ -39,6 +40,11 @@ static func slot(list: Array, index: int) -> Color:
 
 static func color_at(list: Array, from_index: int, to_index: int, f: float) -> Color:
 	return slot(list, from_index).lerp(slot(list, to_index), f)
+
+static func value_at(list: Array, from_index: int, to_index: int, f: float) -> float:
+	var a: float = list[from_index] if from_index < list.size() else list[2]
+	var b: float = list[to_index] if to_index < list.size() else list[2]
+	return lerpf(a, b, f)
 
 static func evaluate(hour: float) -> Dictionary:
 	hour = fposmod(hour, 24.0)

@@ -88,7 +88,7 @@ func apply(hour: float, weather: int = 0, season: int = 1) -> void:
 	env.glow_bloom = 0.04 + 0.10 * night
 	env.glow_hdr_threshold = lerp(1.05, 0.35, night)
 	env.tonemap_mode = Environment.TONE_MAPPER_ACES
-	env.tonemap_exposure = 0.98
+	env.tonemap_exposure = 1.14
 	env.adjustment_enabled = true
 	env.adjustment_saturation = 1.06 + 0.16 * golden - 0.12 * overcast
 	env.adjustment_contrast = 1.02 + 0.04 * overcast

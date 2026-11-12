@@ -1,8 +1,9 @@
 #[compute]
 #version 450
 
-// Full-resolution composite: add the half-resolution shafts to a copy of the
-// scene and write the result into the HDR scene color storage image.
+// Full-resolution composite: the half-resolution atmosphere texture holds
+// rgb = in-scattered fog/shaft light and a = transmittance. Apply it to a copy
+// of the HDR scene color and write the result back into the scene color image.
 
 layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
 
@@ -18,6 +19,6 @@ void main() {
 	}
 	vec2 uv = (vec2(pixel) + 0.5) / vec2(size);
 	vec3 color = texture(scene_color, uv).rgb;
-	vec3 shaft = texture(shaft_texture, uv).rgb;
-	imageStore(color_output, pixel, vec4(color + shaft, 1.0));
+	vec4 atmosphere = texture(shaft_texture, uv);
+	imageStore(color_output, pixel, vec4(color * atmosphere.a + atmosphere.rgb, 1.0));
 }

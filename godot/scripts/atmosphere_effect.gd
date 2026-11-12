@@ -15,6 +15,29 @@ var depth_sign := -1.0
 var gain := 2.5
 var active := true
 
+# Camera frame, captured on the main thread each frame.
+var cam_right := Vector3.RIGHT
+var cam_up := Vector3.UP
+var cam_forward := Vector3.FORWARD
+var cam_position := Vector3.ZERO
+var cam_tan_half := 0.7
+var cam_half_height := 8.0
+var cam_aspect := 1.78
+var cam_near := 0.1
+var cam_far := 220.0
+var cam_ortho := true
+
+# Fog/sun inputs, mirrored from the day cycle and weather blend.
+var fog_density := 0.02
+var fog_scatter := Color(0.35, 0.42, 0.43)
+var mist_low := 0.0
+var lamp_power := 0.0
+var golden := 0.0
+var sun_energy := 1.0
+var cloud_amount := 0.7
+var sun_direction := Vector3.UP
+var lamps: Array = []
+
 var rd: RenderingDevice
 var initialized := false
 var working := false
@@ -77,7 +100,7 @@ func _initialize_compute() -> void:
 	sampler_state.repeat_u = RenderingDevice.SAMPLER_REPEAT_MODE_CLAMP_TO_EDGE
 	sampler_state.repeat_v = RenderingDevice.SAMPLER_REPEAT_MODE_CLAMP_TO_EDGE
 	sampler = rd.sampler_create(sampler_state)
-	params_buffer = rd.uniform_buffer_create(64, PackedByteArray())
+	params_buffer = rd.uniform_buffer_create(240, PackedByteArray())
 	initialized = true
 	working = true
 
@@ -98,11 +121,11 @@ func _render_callback(_callback_type: int, render_data: RenderData) -> void:
 			return
 
 	var params := PackedFloat32Array()
-	params.resize(16)
+	params.resize(60)
 	params[0] = sun_uv.x
 	params[1] = sun_uv.y
 	params[2] = 0.0
-	params[3] = 0.0
+	params[3] = depth_sign
 	params[4] = sun_color.r
 	params[5] = sun_color.g
 	params[6] = sun_color.b
@@ -110,12 +133,43 @@ func _render_callback(_callback_type: int, render_data: RenderData) -> void:
 	params[8] = float(size.x)
 	params[9] = float(size.y)
 	params[10] = float(Time.get_ticks_msec()) * 0.001
-	params[11] = depth_sign
-	params[12] = 0.0
-	params[13] = 0.0
-	params[14] = 0.0
-	params[15] = 0.0
-	rd.buffer_update(params_buffer, 0, 64, params.to_byte_array())
+	params[11] = cloud_amount
+	params[12] = fog_scatter.r
+	params[13] = fog_scatter.g
+	params[14] = fog_scatter.b
+	params[15] = fog_density
+	params[16] = cam_right.x
+	params[17] = cam_right.y
+	params[18] = cam_right.z
+	params[19] = cam_half_height if cam_ortho else cam_tan_half
+	params[20] = cam_up.x
+	params[21] = cam_up.y
+	params[22] = cam_up.z
+	params[23] = cam_aspect
+	params[24] = cam_forward.x
+	params[25] = cam_forward.y
+	params[26] = cam_forward.z
+	params[27] = cam_near
+	params[28] = cam_position.x
+	params[29] = cam_position.y
+	params[30] = cam_position.z
+	params[31] = cam_far
+	params[32] = mist_low
+	params[33] = lamp_power
+	params[34] = golden
+	params[35] = sun_energy
+	params[36] = sun_direction.x
+	params[37] = sun_direction.y
+	params[38] = sun_direction.z
+	params[39] = 1.0 if cam_ortho else 0.0
+	for i in range(5):
+		var lamp_data: Vector4 = lamps[i] if i < lamps.size() else Vector4.ZERO
+		var base := 40 + i * 4
+		params[base] = lamp_data.x
+		params[base + 1] = lamp_data.y
+		params[base + 2] = lamp_data.z
+		params[base + 3] = lamp_data.w
+	rd.buffer_update(params_buffer, 0, 240, params.to_byte_array())
 
 	var shaft_list := rd.compute_list_begin()
 	rd.compute_list_bind_compute_pipeline(shaft_list, shaft_pipeline)
