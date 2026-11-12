@@ -219,3 +219,12 @@ func set_intensity(rain_amount: float, snow_amount: float, storm_amount: float, 
 func set_weather(weather: int) -> void:
 	set_intensity(1.0 if weather == 2 else 0.0, 1.0 if weather >= 4 else 0.0,
 		1.0 if weather == 5 else 0.0)
+
+func splash(x: float, z: float) -> void:
+	if world == null or ripple_mesh == null:
+		return
+	var index := ripple_cursor
+	ripple_cursor = (ripple_cursor + 1) % RIPPLE_CAPACITY
+	var item := {"x": x, "z": z, "life": 0.0, "scale": randf_range(0.18, 0.30)}
+	ripple_items[index] = item
+	_place_ripple(index, item)

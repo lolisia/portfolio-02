@@ -6,6 +6,7 @@ class_name FarmLife
 
 var world: FarmWorld
 var footprints: Footprints
+var weather_fx: WeatherFX
 var chickens: Array = []
 var vane_root: Node3D
 var vane_arrow: Node3D
@@ -37,6 +38,7 @@ var materials: Dictionary = {}
 
 const WIND_HEADING := 1.22
 const COOP_CENTER := Vector2(2.25, -0.35)
+const COOP_DOOR := Vector2(2.25, -0.95)
 
 func build() -> void:
 	sphere = SphereMesh.new()
@@ -329,7 +331,7 @@ func _chicken(chick: bool, index: int) -> Dictionary:
 		"group": group, "head": head, "legs": legs, "chick": chick, "index": index,
 		"x": 0.0, "z": 0.0, "target": Vector2.ZERO, "wait": 0.0,
 		"gait": randf() * 4.0, "speed": (0.31 if chick else 0.27) + randf() * 0.12,
-		"state": "foraging", "stride": -1, "flee": 0.0,
+		"state": "foraging", "stride": -1, "flee": 0.0, "inside": false,
 	}
 
 func _pick_target(c: Dictionary) -> Vector2:
@@ -432,6 +434,8 @@ func _update_fish(delta: float) -> void:
 				float(jumper["x"]) + sin(heading) * 1.4,
 				float(jumper["z"]) + cos(heading) * 1.4):
 			jumper["leap"] = 0.0
+			if weather_fx != null:
+				weather_fx.splash(float(jumper["x"]), float(jumper["z"]))
 		next_leap = 4.0 + randf() * 8.0
 	for f in fish_school:
 		var fish_group: Node3D = f.group
@@ -451,6 +455,8 @@ func _update_fish(delta: float) -> void:
 			if float(f["leap"]) >= 1.0:
 				f["leap"] = -1.0
 				fish_group.rotation.x = 0.0
+				if weather_fx != null:
+					weather_fx.splash(float(f.x), float(f.z))
 				f.target = _pick_fish_target(f)
 			continue
 		var flat := Vector2(f.target.x - f.x, f.target.y - f.z)
@@ -534,9 +540,44 @@ func _process(delta: float) -> void:
 
 	for c in chickens:
 		var group: Node3D = c["group"]
-		group.visible = outside
 		if not outside:
+			if bool(c["inside"]):
+				group.visible = false
+				continue
+			# Walk to the coop door, then slip inside and hide.
+			var door := COOP_DOOR + Vector2((float(c["index"]) - 2.5) * 0.06, 0.10)
+			var to_door := door - Vector2(float(c["x"]), float(c["z"]))
+			if to_door.length() > 0.09:
+				var dir := to_door.normalized()
+				var step := minf(0.45 * delta, to_door.length())
+				c["x"] = float(c["x"]) + dir.x * step
+				c["z"] = float(c["z"]) + dir.y * step
+				c["gait"] = float(c["gait"]) + step / (0.045 if c["chick"] else 0.085)
+				group.visible = true
+				group.position = Vector3(float(c["x"]), world.height(float(c["x"]), float(c["z"])), float(c["z"]))
+				group.rotation.y = lerp_angle(group.rotation.y, atan2(dir.x, dir.y), 1.0 - exp(-delta * 5.0))
+				group.rotation.z = sin(float(c["gait"])) * 0.017
+				var head3: Node3D = c["head"]
+				head3.rotation.x = lerp(head3.rotation.x, 0.08, 1.0 - exp(-delta * 5.0))
+				var legs2: Array = c["legs"]
+				for i in range(legs2.size()):
+					var leg2: MeshInstance3D = legs2[i]
+					leg2.rotation.x = sin(float(c["gait"]) + float(i) * PI) * 0.28
+			else:
+				c["inside"] = true
+				group.visible = false
 			continue
+
+		if bool(c["inside"]):
+			c["inside"] = false
+			c["x"] = COOP_DOOR.x + (float(c["index"]) - 2.5) * 0.06
+			c["z"] = COOP_DOOR.y + 0.22
+			group.visible = true
+			group.position = Vector3(float(c["x"]), world.height(float(c["x"]), float(c["z"])), float(c["z"]))
+			group.rotation.z = 0.0
+			c["wait"] = 0.4
+		else:
+			group.visible = true
 		c["flee"] = maxf(0.0, float(c["flee"]) - delta)
 		var threat := Vector2(1e9, 1e9)
 		if character != null:

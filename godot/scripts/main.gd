@@ -30,6 +30,7 @@ var footprints: Footprints
 var night_life: NightLife
 var quality_manager: QualityManager
 var mist: FogVolume
+var mist_material: FogMaterial
 var quality := 0
 var high_end_rendering := true
 var day_cycle: DayCycle
@@ -96,6 +97,7 @@ func _ready() -> void:
 	farm_life.name = "FarmLife"
 	farm_life.world = world
 	farm_life.character = character
+	farm_life.weather_fx = weather_fx
 	add_child(farm_life)
 	farm_life.build()
 
@@ -240,6 +242,10 @@ func _ready() -> void:
 		hour = 18.6
 		hour_target = 18.6
 		_apply_time(true)
+	if "--dawn" in cli:
+		hour = 6.4
+		hour_target = 6.4
+		_apply_time(true)
 	if "--gather" in cli:
 		character._begin_journey("gather")
 	if "--fish" in cli:
@@ -377,7 +383,7 @@ func _add_volumetric_mist() -> void:
 	fog.name = "ForestMist"
 	fog.size = Vector3(36, 12, 36)
 	fog.position = Vector3(0, 4, 0)
-	var mist_material := FogMaterial.new()
+	mist_material = FogMaterial.new()
 	mist_material.density = 0.12
 	mist_material.albedo = Color(0.58, 0.68, 0.70)
 	mist_material.emission = Color(0.01, 0.015, 0.02)
@@ -467,6 +473,14 @@ func _process(delta: float) -> void:
 	var daylight := Daylight.evaluate(hour)
 	var coverage: float = [0.0, 1.0, 2.0, 1.0, 1.0, 2.0][clampi(weather, 0, 5)]
 	var overcast: float = clampf(coverage * 0.42, 0.0, 0.88)
+	if high_end_rendering and mist_material != null:
+		var golden := float(daylight["golden"])
+		var night := float(daylight["night"])
+		var mist_target := 0.10 + 0.10 * golden + 0.04 * night + 0.06 * overcast
+		if season == 3:
+			mist_target += 0.02
+		mist_material.density = lerpf(mist_material.density, mist_target, 1.0 - exp(-delta * 0.7))
+		env.volumetric_fog_density = 0.009 + 0.008 * night + 0.006 * overcast + 0.005 * golden
 	if night_life != null:
 		night_life.update(delta, float(daylight["night"]), float(daylight["golden"]),
 			1.0 - minf(1.0, overcast * 1.1), weather, season, wind, orbit.yaw)

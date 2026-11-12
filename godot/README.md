@@ -9,13 +9,19 @@ Godot 4.7 프로젝트. 원본 Three.js 디오라마(`../src`)를 PC/모바일 �
 & 'D:\Godot\Godot_v4.7.2-stable_mono_win64\Godot_v4.7.2-stable_mono_win64_console.exe' --path .
 ```
 
+```powershell
+# 헤드리스 스모크 테스트
+& 'D:\Godot\Godot_v4.7.2-stable_mono_win64\Godot_v4.7.2-stable_mono_win64_console.exe' `
+  --headless --path . --script 'res://tools/smoke_test.gd'
+```
+
 또는 Godot 에디터에서 `godot/project.godot`을 열고 F6/F5.
 
 - 데스크톱: Forward+
 - 모바일: Mobile (`project.godot`의 `renderer/rendering_method.mobile`)
 - 조작: 좌클릭 드래그 회전, 휠 확대/축소, 터치 한 손가락 회전, 두 손가락 핀치 확대/축소
 - 개발용 프리셋: `-- --house`, `-- --pond`, `-- --pondside`, `-- --char`, `-- --char2`, `-- --charclose`, `-- --panel`, `-- --fishtest`, `-- --door`, `-- --front`, `-- --garden`
-- 날씨/계절 프리뷰: `-- --winter`, `-- --snow`, `-- --rain`, `-- --spring`, `-- --autumn`, `-- --night`, `-- --dusk`
+- 날씨/계절 프리뷰: `-- --winter`, `-- --snow`, `-- --rain`, `-- --spring`, `-- --autumn`, `-- --night`, `-- --dusk`, `-- --dawn`
 - 태스크 프리뷰: `-- --gather`, `-- --fish`, `-- --salute`, `-- --fishnear`, `-- --gathernear`, `-- --snowtest`
 - 품질 프리뷰: `-- --high`, `-- --medium`, `-- --low`
 - 스크린샷: `-- --shot C:/path.png` (현재 창 해상도, 개발용)
