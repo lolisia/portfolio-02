@@ -16,6 +16,7 @@ const Footprints = preload("res://scripts/footprints.gd")
 const NightLife = preload("res://scripts/night_life.gd")
 const SeasonsFX = preload("res://scripts/seasons_fx.gd")
 const QualityManager = preload("res://scripts/quality_manager.gd")
+const AtmosphereEffect = preload("res://scripts/atmosphere_effect.gd")
 
 var world: FarmWorld
 var orbit: OrbitCamera
@@ -29,6 +30,7 @@ var water_reflection: WaterReflection
 var footprints: Footprints
 var night_life: NightLife
 var quality_manager: QualityManager
+var atmosphere_effect: AtmosphereEffect
 var mist: FogVolume
 var mist_material: FogMaterial
 var low_mist: FogVolume
@@ -133,6 +135,12 @@ func _ready() -> void:
 		water_reflection.name = "WaterReflection"
 		add_child(water_reflection)
 		water_reflection.setup(world.water, orbit, world.water.position.y)
+		atmosphere_effect = null
+		if DisplayServer.get_name() != "headless":
+			atmosphere_effect = AtmosphereEffect.new()
+			var compositor := Compositor.new()
+			compositor.compositor_effects = [atmosphere_effect]
+			orbit.compositor = compositor
 		_add_volumetric_mist()
 
 	var cli: Array = []
@@ -283,6 +291,10 @@ func _ready() -> void:
 	orbit.set_portrait_scale(_desired_portrait_scale())
 	ui.set_time_value(hour)
 	ui.set_wind_value(wind)
+
+func _exit_tree() -> void:
+	if atmosphere_effect != null:
+		atmosphere_effect.shutdown()
 
 func _desired_v_offset() -> float:
 	if ui == null:
@@ -546,12 +558,22 @@ func _process(delta: float) -> void:
 				var screen := orbit.unproject_position(orbit.global_position + sun_dir * 160.0)
 				var strength := clampf((0.22 + float(t["golden"]) * 1.1) * facing
 					* (1.0 - float(t["night"])), 0.0, 1.2)
-				post.set_sun(Vector2(screen.x / maxf(vp.x, 1.0), screen.y / maxf(vp.y, 1.0)),
-					strength, sun.light_color)
-				post.set_shafts(strength * (1.0 if quality == 0 else (0.6 if quality == 1 else 0.0)))
+				var sun_screen := Vector2(screen.x / maxf(vp.x, 1.0), screen.y / maxf(vp.y, 1.0))
+				post.set_sun(sun_screen, strength, sun.light_color)
+				if atmosphere_effect != null:
+					atmosphere_effect.sun_uv = sun_screen
+					atmosphere_effect.sun_strength = strength
+					atmosphere_effect.sun_color = sun.light_color
+					atmosphere_effect.depth_sign = -1.0
+					atmosphere_effect.active = quality < 2
+				var canvas_shafts := strength * (1.0 if quality == 0 else (0.6 if quality == 1 else 0.0))
+				post.set_shafts(0.0 if atmosphere_effect != null and atmosphere_effect.working and atmosphere_effect.active else canvas_shafts)
 			else:
 				post.set_sun(Vector2(-10.0, -10.0), 0.0, Color.WHITE)
 				post.set_shafts(0.0)
+				if atmosphere_effect != null:
+					atmosphere_effect.sun_uv = Vector2(-10.0, -10.0)
+					atmosphere_effect.sun_strength = 0.0
 
 func _apply_time(force: bool) -> void:
 	if not force and absf(hour - _last_apply_hour) < 0.0005:
@@ -598,6 +620,8 @@ func _set_quality(index: int) -> void:
 	adaptive_scale = 1.0
 	if quality_manager != null:
 		quality_manager.apply(quality)
+	if atmosphere_effect != null:
+		atmosphere_effect.active = quality < 2
 	_apply_render_scale()
 	if ui != null:
 		ui.set_quality(quality)

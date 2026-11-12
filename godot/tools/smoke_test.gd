@@ -46,6 +46,10 @@ func _initialize() -> void:
 		failures.append("season particles missing")
 	if main.get("quality_manager") == null:
 		failures.append("quality manager missing")
+	if not FileAccess.file_exists("res://shaders/atmosphere_shafts.glsl"):
+		failures.append("atmosphere shaft shader missing")
+	if not FileAccess.file_exists("res://shaders/atmosphere_composite.glsl"):
+		failures.append("atmosphere composite shader missing")
 	var post = main.get("post")
 	if post == null or post.material == null or post.material.shader == null:
 		failures.append("post-process shader missing")
@@ -68,7 +72,7 @@ func _initialize() -> void:
 			failures.append("rain roof collisions missing")
 
 	if failures.is_empty():
-		print("SMOKE PASS: world, tasks, garden, footprints, night, seasons, quality, shafts, rain collisions")
+		print("SMOKE PASS: world, tasks, garden, footprints, night, seasons, quality, shafts, rain collisions, compositor shaders")
 		quit(0)
 	else:
 		for failure in failures:

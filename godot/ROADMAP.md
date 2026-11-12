@@ -169,6 +169,7 @@ Godot의 사용자 인자는 `--` 뒤에 전달합니다.
 | `scripts/weather_fx.gd` | 비/눈 강도 크로스페이드, 물보라/수면 파문, 폭포 spray |
 | `scripts/seasons_fx.gd` | 봄 벚꽃잎, 가을 낙엽 |
 | `scripts/night_life.gd` | 별, 나방/반딧불, 램프 플리커/후광, 실내 창문/TV |
+| `scripts/atmosphere_effect.gd` | Forward+ 하프레스 depth-mask 광선 CompositorEffect |
 | `scripts/quality_manager.gd` | 높음/보통/낮음 렌더 예산 |
 | `scripts/post_process.gd` | 패널 렌즈/그레이드 |
 | `scripts/water_reflection.gd` | Forward+ 평면 반사 SubViewport |
@@ -179,6 +180,8 @@ Godot의 사용자 인자는 `--` 뒤에 전달합니다.
 | `shaders/foliage.gdshader` | 바람/눈/겨울 낙엽, 풀 눌림 |
 | `shaders/footprint.gdshader` | 발자국 알파/수명 |
 | `shaders/stars.gdshader` | 별 dome additive |
+| `shaders/atmosphere_shafts.glsl` | 하프레스 depth-mask 광선 compute |
+| `shaders/atmosphere_composite.glsl` | 광선 full-res 합성 compute |
 | `shaders/water.gdshader` | 물결/반사/색, 겨울 결빙 |
 | `shaders/waterfall.gdshader` | 폭포 |
 | `shaders/post_process.gdshader` | 화면 후처리 |
@@ -227,19 +230,23 @@ Godot의 사용자 인자는 `--` 뒤에 전달합니다.
 - Godot `FogVolume` + Environmental volumetric fog 사용.
 - `main.gd`가 golden/night/overcast/season에 따라 FogVolume density와 volumetric fog density를 보간.
 - 저지대 연못 안개(`LowMist` FogVolume), 태양 디스크, 화면공간 태양 글레어 추가.
-- 화면공간 광선 샤프트(`post_process.gdshader`): 태양 방향으로 11탭 bright-pass를 적분해 전경 실루엣이 만든 어두운 틈을 광선으로 표현.
-- 원본의 커스텀 레이마칭 안개(구름 노이즈, 램프 산란)와는 다름.
+- **Forward+ `CompositorEffect` 하프레스 광선 패스** (`atmosphere_effect.gd` + `atmosphere_shafts.glsl`/`atmosphere_composite.glsl`):
+  - 640×360 compute에서 scene color/depth를 읽어 12탭 광선 적분
+  - depth 버퍼(리버스 Z)로 전경 실루엣을 occluder 마스크
+  - full-res compute로 합성 후 HDR scene color에 copy-back
+  - Mobile/Low는 기존 canvas bright-pass 광선으로 폴백
+- 원본의 커스텀 레이마칭 안개(구름 노이즈, 램프 산란)와 sun shadow map 직접 샘플링은 아직 아님.
 - 태양 그림자 기반 빛줄기는 내장 볼류메트릭에 의존.
 - 밤 별 dome은 `night_life.gd`로 구현.
 
 **할 일**
-1. Forward+ `CompositorEffect`로 half-res fog/light-shaft pass 구현 검토.
-   - 현재는 화면공간 bright-pass 광선으로 근사.
+1. Forward+ `CompositorEffect` half-res fog/light pass에 **sun shadow map** 직접 샘플링 추가.
+   - 현재는 depth 버퍼의 전경 occluder 마스크로 근사.
    - depth texture + sun shadow map 접근 제약 확인.
 2. 새벽/밤/비/눈에 따른 안개 밀도·색·산란 튜닝.
 3. 램프 5개의 볼류메트릭 산란(Spot/Omni light) 확인.
 4. ~~밤하늘 별~~ — `night_life.gd` 별 dome + `stars.gdshader`로 구현.
-5. 모바일은 depth fog로 폴백.
+5. 모바일은 depth fog/canvas 광선 폴백.
 
 **파일**
 - `scripts/main.gd`
@@ -432,10 +439,12 @@ Godot의 사용자 인자는 `--` 뒤에 전달합니다.
   - `surface/terrain/foliage` 셰이더에 `0.44` 수면 컷이 하드코딩되어 있음 → 수면 높이 변경 시 함께 수정.
   - SubViewport 반사 UV는 상하 뒤집힘 보정(`mirror_uv.y = 1 - y`)이 필요. 수정 완료.
   - SubViewport가 매 프레임 렌더링됨 → 필요 시 격프레임/해상도 조정.
-- **안개**
+- **안개/광선**
   - `FogVolume`과 Environment volumetric fog는 Forward+ 전용.
-  - Mobile은 depth fog 폴백.
-  - 커스텀 레이마칭/광선 샤프트는 아직 없음.
+  - `AtmosphereEffect`는 Forward+ + RGBA16F scene color + single-sample resolved depth가 필요.
+  - 현재 광선은 depth 버퍼의 전경 occluder 마스크를 사용하며, 실제 sun shadow map 샘플링은 아님.
+  - full-res composite를 HDR color에 copy-back하므로 해상도/대역폭 비용이 있음.
+  - Mobile/Low는 canvas bright-pass 광선 또는 비활성 폴백.
 - **눈**
   - 지형 융기는 CPU 메시가 아니라 `terrain.gdshader` 정점 변위. `snow_surface()` 분석식과 반드시 함께 수정.
   - 겨울에 식물 95% discard; 일부만 남음.
