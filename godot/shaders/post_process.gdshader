@@ -9,6 +9,9 @@ uniform vec3 tint = vec3(1.0);
 uniform float saturation = 1.02;
 uniform float contrast = 1.01;
 uniform float vignette = 0.10;
+uniform vec2 sun_uv = vec2(-1.0, -1.0);
+uniform float sun_strength = 0.0;
+uniform vec3 sun_color = vec3(1.0, 0.85, 0.62);
 
 void fragment() {
 	vec2 uv = SCREEN_UV;
@@ -36,6 +39,14 @@ void fragment() {
 			}
 		}
 		color = mix(color, blurred / max(total, 0.0001), inside * 0.78);
+	}
+	float center_lum = dot(color, vec3(0.2126, 0.7152, 0.0722));
+	if (sun_strength > 0.001 && sun_uv.x > -0.5 && sun_uv.y > -0.5) {
+		vec2 delta = (uv - sun_uv) * vec2(viewport_size.x / max(viewport_size.y, 1.0), 1.0);
+		float dist = length(delta);
+		float sky_mask = smoothstep(0.42, 0.82, center_lum);
+		float glow = exp(-dist * 5.5) * 0.32 + exp(-dist * 24.0) * 0.75;
+		color += sun_color * glow * sun_strength * sky_mask;
 	}
 	float lum = dot(color, vec3(0.2126, 0.7152, 0.0722));
 	color = mix(vec3(lum), color, saturation);

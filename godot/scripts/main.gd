@@ -31,6 +31,8 @@ var night_life: NightLife
 var quality_manager: QualityManager
 var mist: FogVolume
 var mist_material: FogMaterial
+var low_mist: FogVolume
+var low_mist_material: FogMaterial
 var quality := 0
 var high_end_rendering := true
 var day_cycle: DayCycle
@@ -396,6 +398,20 @@ func _add_volumetric_mist() -> void:
 	mist = fog
 	add_child(fog)
 
+	low_mist = FogVolume.new()
+	low_mist.name = "LowMist"
+	low_mist.size = Vector3(22, 2.4, 16)
+	low_mist.position = Vector3(6.5, 1.35, 5.4)
+	low_mist_material = FogMaterial.new()
+	low_mist_material.density = 0.02
+	low_mist_material.albedo = Color(0.62, 0.70, 0.72)
+	low_mist_material.emission = Color(0.008, 0.012, 0.014)
+	low_mist_material.height_falloff = 0.7
+	low_mist_material.edge_fade = 0.3
+	low_mist.material = low_mist_material
+	low_mist.visible = false
+	add_child(low_mist)
+
 func _setup_lights() -> void:
 	sun = DirectionalLight3D.new()
 	sun.name = "Sun"
@@ -499,6 +515,12 @@ func _process(delta: float) -> void:
 			mist_target += 0.02
 		mist_material.density = lerpf(mist_material.density, mist_target, 1.0 - exp(-delta * 0.7))
 		env.volumetric_fog_density = 0.009 + 0.008 * night + 0.006 * overcast + 0.005 * golden
+		if low_mist_material != null:
+			var low_target := clampf(golden * 1.3 + overcast * 0.45 + (1.0 if weather == 3 else 0.0)
+				+ (0.15 if season == 3 else 0.0), 0.0, 1.0) * (1.0 - night * 0.45)
+			low_mist_material.density = lerpf(low_mist_material.density,
+				lerpf(0.015, 0.20, low_target), 1.0 - exp(-delta * 0.7))
+			low_mist.visible = quality < 2 and low_target > 0.04
 	if night_life != null:
 		night_life.update(delta, float(daylight["night"]), float(daylight["golden"]),
 			1.0 - minf(1.0, overcast * 1.1), weather, season, wind, orbit.yaw)
@@ -514,6 +536,18 @@ func _process(delta: float) -> void:
 		var con: float = 1.01 + 0.03 * overcast
 		var vig: float = 0.08 + 0.08 * float(t["night"])
 		post.set_grade(tint, sat, con, vig)
+		if sun != null and orbit != null:
+			var sun_dir := sun.global_transform.basis.z.normalized()
+			var facing := sun_dir.dot(-orbit.global_transform.basis.z)
+			if facing > 0.05:
+				var vp := get_viewport().get_visible_rect().size
+				var screen := orbit.unproject_position(orbit.global_position + sun_dir * 160.0)
+				var strength := clampf((0.22 + float(t["golden"]) * 1.1) * facing
+					* (1.0 - float(t["night"])), 0.0, 1.2)
+				post.set_sun(Vector2(screen.x / maxf(vp.x, 1.0), screen.y / maxf(vp.y, 1.0)),
+					strength, sun.light_color)
+			else:
+				post.set_sun(Vector2(-1.0, -1.0), 0.0, Color.WHITE)
 
 func _apply_time(force: bool) -> void:
 	if not force and absf(hour - _last_apply_hour) < 0.0005:

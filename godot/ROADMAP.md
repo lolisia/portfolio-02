@@ -225,6 +225,7 @@ Godot의 사용자 인자는 `--` 뒤에 전달합니다.
 **현재 상태**
 - Godot `FogVolume` + Environmental volumetric fog 사용.
 - `main.gd`가 golden/night/overcast/season에 따라 FogVolume density와 volumetric fog density를 보간.
+- 저지대 연못 안개(`LowMist` FogVolume)와 화면공간 태양 글레어를 추가.
 - 원본의 커스텀 레이마칭 안개(구름 노이즈, 램프 산란, 새벽 저지대 안개)와는 다름.
 - 태양 그림자 기반 빛줄기는 내장 볼류메트릭에 의존.
 - 밤 별 dome은 `night_life.gd`로 구현.

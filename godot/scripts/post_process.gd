@@ -54,3 +54,8 @@ func set_grade(tint_value: Color, saturation_value: float, contrast_value: float
 	material.set_shader_parameter("saturation", saturation_value)
 	material.set_shader_parameter("contrast", contrast_value)
 	material.set_shader_parameter("vignette", vignette_value)
+
+func set_sun(uv: Vector2, strength: float, color: Color) -> void:
+	material.set_shader_parameter("sun_uv", uv)
+	material.set_shader_parameter("sun_strength", strength)
+	material.set_shader_parameter("sun_color", Vector3(color.r, color.g, color.b))
