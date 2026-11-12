@@ -110,7 +110,7 @@ func _soft_texture() -> ImageTexture:
 func _build_spray() -> void:
 	spray = GPUParticles3D.new()
 	spray.name = "WaterfallSpray"
-	spray.amount = 70
+	spray.amount = 120
 	spray.lifetime = 2.4
 	spray.preprocess = 2.4
 	spray.local_coords = false
@@ -118,7 +118,7 @@ func _build_spray() -> void:
 	spray.position = Vector3(15.05, 0.18, 6.1)
 
 	var quad := QuadMesh.new()
-	quad.size = Vector2(0.26, 0.26)
+	quad.size = Vector2(0.34, 0.34)
 	spray.draw_pass_1 = quad
 
 	var material := StandardMaterial3D.new()
@@ -129,7 +129,7 @@ func _build_spray() -> void:
 	material.billboard_keep_scale = true
 	material.cull_mode = BaseMaterial3D.CULL_DISABLED
 	material.albedo_texture = _soft_texture()
-	material.albedo_color = Color(0.78, 0.88, 0.96, 0.18)
+	material.albedo_color = Color(0.82, 0.91, 0.98, 0.26)
 	quad.material = material
 
 	var process := ParticleProcessMaterial.new()

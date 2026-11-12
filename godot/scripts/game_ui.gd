@@ -80,8 +80,8 @@ func _ready() -> void:
 	panel.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	panel.mouse_filter = Control.MOUSE_FILTER_STOP
 	panel_style = StyleBoxFlat.new()
-	panel_style.bg_color = Color(0.055, 0.095, 0.115, 0.52)
-	panel_style.border_color = Color(1, 1, 1, 0.38)
+	panel_style.bg_color = Color(0.085, 0.125, 0.075, 0.60)
+	panel_style.border_color = Color(1, 1, 1, 0.24)
 	panel_style.set_border_width_all(1)
 	panel_style.set_corner_radius_all(16)
 	panel_style.content_margin_left = 20

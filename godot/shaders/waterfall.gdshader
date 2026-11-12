@@ -25,13 +25,18 @@ float fbm(vec2 p) {
 }
 
 void fragment() {
-	float edge = smoothstep(0.0, 0.10, UV.x) * (1.0 - smoothstep(0.90, 1.0, UV.x));
+	float edge = smoothstep(0.0, 0.12, UV.x) * (1.0 - smoothstep(0.88, 1.0, UV.x));
 	vec2 q = vec2(UV.x * 7.0, UV.y * 2.6 - TIME * 1.15);
 	float body = fbm(q);
 	float streak = fbm(vec2(UV.x * 30.0, UV.y * 4.5 - TIME * 2.1));
-	float foam = smoothstep(0.46, 0.88, body * 0.55 + streak * 0.55);
-	float bottom = smoothstep(0.0, 0.18, UV.y);
-	vec3 water = mix(vec3(0.08, 0.26, 0.30), vec3(0.82, 0.93, 0.94), foam);
+	// The reference cascade is white water: more foam, and it churns thicker
+	// toward the plunge pool at the bottom of the sheet.
+	float churn = smoothstep(0.55, 0.0, UV.y);
+	float foam = smoothstep(0.38, 0.80, body * 0.55 + streak * 0.55 + churn * 0.16);
+	float top_fade = smoothstep(1.0, 0.94, UV.y);
+	float bottom_fade = smoothstep(0.0, 0.035, UV.y);
+	vec3 water = mix(vec3(0.09, 0.28, 0.32), vec3(0.93, 0.98, 0.99), foam);
+	water += vec3(0.05, 0.07, 0.075) * churn;
 	ALBEDO = water;
-	ALPHA = edge * bottom * (0.30 + 0.62 * foam);
+	ALPHA = edge * top_fade * bottom_fade * (0.38 + 0.60 * foam);
 }

@@ -169,7 +169,7 @@ Godot의 사용자 인자는 `--` 뒤에 전달합니다.
 | `scripts/weather_fx.gd` | 비/눈 강도 크로스페이드, 물보라/수면 파문, 폭포 spray |
 | `scripts/seasons_fx.gd` | 봄 벚꽃잎, 가을 낙엽 |
 | `scripts/night_life.gd` | 별, 나방/반딧불, 램프 플리커/후광, 실내 창문/TV |
-| `scripts/atmosphere_effect.gd` | Forward+ 하프레스 depth-mask 광선 CompositorEffect |
+| `scripts/atmosphere_effect.gd` | Forward+ 하프레스 레이마칭 안개·광선 CompositorEffect |
 | `scripts/quality_manager.gd` | 높음/보통/낮음 렌더 예산 |
 | `scripts/post_process.gd` | 패널 렌즈/그레이드 |
 | `scripts/water_reflection.gd` | Forward+ 평면 반사 SubViewport |
@@ -180,8 +180,8 @@ Godot의 사용자 인자는 `--` 뒤에 전달합니다.
 | `shaders/foliage.gdshader` | 바람/눈/겨울 낙엽, 풀 눌림 |
 | `shaders/footprint.gdshader` | 발자국 알파/수명 |
 | `shaders/stars.gdshader` | 별 dome additive |
-| `shaders/atmosphere_shafts.glsl` | 하프레스 depth-mask 광선 compute |
-| `shaders/atmosphere_composite.glsl` | 광선 full-res 합성 compute |
+| `shaders/atmosphere_shafts.glsl` | 하프레스 안개·광선 레이마칭 compute |
+| `shaders/atmosphere_composite.glsl` | 안개/광선 full-res 합성 compute |
 | `shaders/water.gdshader` | 물결/반사/색, 겨울 결빙 |
 | `shaders/waterfall.gdshader` | 폭포 |
 | `shaders/post_process.gdshader` | 화면 후처리 |
@@ -230,21 +230,22 @@ Godot의 사용자 인자는 `--` 뒤에 전달합니다.
 - Godot `FogVolume` + Environmental volumetric fog 사용.
 - `main.gd`가 golden/night/overcast/season에 따라 FogVolume density와 volumetric fog density를 보간.
 - 저지대 연못 안개(`LowMist` FogVolume), 태양 디스크, 화면공간 태양 글레어 추가.
-- **Forward+ `CompositorEffect` 하프레스 광선 패스** (`atmosphere_effect.gd` + `atmosphere_shafts.glsl`/`atmosphere_composite.glsl`):
-  - 640×360 compute에서 scene color/depth를 읽어 12탭 광선 적분
+- **Forward+ `CompositorEffect` 하프레스 안개·광선 패스** (`atmosphere_effect.gd` + `atmosphere_shafts.glsl`/`atmosphere_composite.glsl`):
+  - 640×360 compute에서 scene color/depth를 읽어 12탭 화면공간 태양 가시성 근사
   - depth 버퍼(리버스 Z)로 전경 실루엣을 occluder 마스크
-  - full-res compute로 합성 후 HDR scene color에 copy-back
-  - Mobile/Low는 기존 canvas bright-pass 광선으로 폴백
-- 원본의 커스텀 레이마칭 안개(구름 노이즈, 램프 산란)와 sun shadow map 직접 샘플링은 아직 아님.
-- 태양 그림자 기반 빛줄기는 내장 볼류메트릭에 의존.
-- 밤 별 dome은 `night_life.gd`로 구현.
+  - 24스텝 레이마칭: 높이 감쇠, 흐르는 노이즈 안개 은행, 새벽 저지대 미스트, 태양 전방 산란, 램프 5개 산란
+  - 출력 rgb=산란광, a=투과율; full-res composite에서 `scene * a + rgb`로 HDR scene color에 copy-back
+  - Mobile/Low는 기존 canvas bright-pass 광선 + FogVolume 폴백
+- CompositorEffect가 동작하면 FogVolume density를 22%, Environment volumetric fog를 30%로 줄여 이중 안개를 방지.
+- 원본의 sun shadow map 직접 샘플링은 아직 아님(화면공간 depth-mask 근사).
+- 밤 별 dome/달은 `night_life.gd`로 구현.
 
 **할 일**
-1. Forward+ `CompositorEffect` half-res fog/light pass에 **sun shadow map** 직접 샘플링 추가.
-   - 현재는 depth 버퍼의 전경 occluder 마스크로 근사.
-   - depth texture + sun shadow map 접근 제약 확인.
-2. 새벽/밤/비/눈에 따른 안개 밀도·색·산란 튜닝.
-3. 램프 5개의 볼류메트릭 산란(Spot/Omni light) 확인.
+1. Forward+ `CompositorEffect` half-res fog pass에 **sun shadow map** 직접 샘플링 추가.
+   - 현재는 depth 버퍼의 전경 occluder 마스크를 태양 가시성 프록시로 사용.
+   - CompositorEffect API에서 shadow map 직접 접근이 불가해 별도 shadow depth SubViewport 등 대안 검토 필요.
+2. 새벽/밤/비/눈에 따른 안개 밀도·색·산란 미세 튜닝.
+3. ~~램프 5개의 볼류메트릭 산란~~ — 컴포지트 안개에서 구현.
 4. ~~밤하늘 별~~ — `night_life.gd` 별 dome + `stars.gdshader`로 구현.
 5. 모바일은 depth fog/canvas 광선 폴백.
 
@@ -420,7 +421,7 @@ Godot의 사용자 인자는 `--` 뒤에 전달합니다.
 - Windows Desktop export preset 준비 (`export_presets.cfg`), 앱 버전 0.1.0.
 - 이 환경에는 export 템플릿과 Android SDK가 없어 실제 패키징은 실패:
   `export_templates/4.7.2.stable.mono/windows_release_x86_64.exe` 없음.
-- 1280×720 High `--house` movie GPU: 약 2.66ms/frame (RTX 3080, 반사 2프레임 갱신/288p).
+- 1280×720 High `--house` `--bench 600`: 약 3.0ms/frame (RTX 3080, 반사 2프레임 갱신/288p + 레이마칭 안개/광선 포함).
 - 360×640 Mobile 렌더러 UI/패널 캡처 및 `--shot` 확인.
 
 **남은 일**
@@ -442,9 +443,10 @@ Godot의 사용자 인자는 `--` 뒤에 전달합니다.
 - **안개/광선**
   - `FogVolume`과 Environment volumetric fog는 Forward+ 전용.
   - `AtmosphereEffect`는 Forward+ + RGBA16F scene color + single-sample resolved depth가 필요.
-  - 현재 광선은 depth 버퍼의 전경 occluder 마스크를 사용하며, 실제 sun shadow map 샘플링은 아님.
-  - full-res composite를 HDR color에 copy-back하므로 해상도/대역폭 비용이 있음.
-  - Mobile/Low는 canvas bright-pass 광선 또는 비활성 폴백.
+  - 하프레스 24스텝 레이마칭이 색/깊이를 읽고, full-res composite는 투과율을 적용해 HDR color에 copy-back.
+  - 실제 sun shadow map 샘플링이 아니라 화면공간 depth-mask + 밝기 프록시를 태양 가시성으로 사용.
+  - CompositorEffect 동작 시 FogVolume을 22%, volumetric fog를 30%로 줄여 이중 안개를 방지.
+  - Mobile/Low는 FogVolume + canvas bright-pass 광선 폴백.
 - **눈**
   - 지형 융기는 CPU 메시가 아니라 `terrain.gdshader` 정점 변위. `snow_surface()` 분석식과 반드시 함께 수정.
   - 겨울에 식물 95% discard; 일부만 남음.
@@ -475,16 +477,16 @@ Godot의 사용자 인자는 `--` 뒤에 전달합니다.
   - Unity-chan은 PNG 변환본 사용.
   - 원본 `public/`은 참고용; Godot 프로젝트에 복사된 에셋을 수정해야 함.
 - **개발 프리셋**
-  - `--house`, `--pond`, `--door`, `--fishtest`, `--fishnear`, `--gathernear` 등은 개발용.
+  - `--house`, `--pond`, `--door`, `--fishtest`, `--fishnear`, `--gathernear`, `--falls`, `--bench` 등은 개발용.
   - 최종 빌드에서 제거하거나 유지 여부 결정.
 
 ---
 
 ## 5. 다음 세션 이어서 할 일 (추천 순서)
 
-1. **빛줄기/안개 튜닝** (P1)
-   - `--house` 아침/저녁, `--winter`, `--rain`에서 FogVolume/조명 확인
-   - 커스텀 CompositorEffect는 리스크가 크므로 먼저 내장 볼류메트릭으로 목표치 확인
+1. **Sun shadow map 샘플링** (P1 후속)
+   - CompositorEffect API에서 직접 접근 불가 → 별도 shadow depth SubViewport 등 대안 검토
+   - 현재는 화면공간 depth-mask 근사로 아침 숲 빛줄기/램프 안개 구현 완료
 2. **모바일 품질/프로파일링** (P6)
    - High/Medium/Low 실기기 검증, 해상도 스케일/그림자/파티클 예산
    - safe area, 적응형 해상도

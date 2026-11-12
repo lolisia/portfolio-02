@@ -70,6 +70,9 @@ var adaptive_scale := 1.0
 var _base_render_scale := 1.0
 var _fps_smooth := 60.0
 var _fps_check := 0.0
+var _bench_target := 0
+var _bench_frames := 0
+var _bench_elapsed := 0.0
 
 func _ready() -> void:
 	_apply_content_scale()
@@ -169,6 +172,8 @@ func _ready() -> void:
 		orbit.set_view(Vector3(-1.0, 1.2, -0.4), 0.1, 0.42, 4.0)
 	if "--garden" in cli:
 		orbit.set_view(Vector3(-1.1, 1.6, -7.3), 0.2, 0.95, 4.2)
+	if "--falls" in cli:
+		orbit.set_view(Vector3(16.2, 0.7, 6.1), 1.62, 0.34, 2.4)
 
 	ui = GameUI.new()
 	ui.name = "GameUI"
@@ -287,6 +292,10 @@ func _ready() -> void:
 	var shot_index := cli.find("--shot")
 	if shot_index >= 0 and shot_index + 1 < cli.size():
 		_capture_screenshot(String(cli[shot_index + 1]))
+	var bench_index := cli.find("--bench")
+	if bench_index >= 0:
+		_bench_target = int(cli[bench_index + 1]) if bench_index + 1 < cli.size() else 600
+		DisplayServer.window_set_vsync_mode(DisplayServer.VSYNC_DISABLED)
 	orbit.v_offset = _desired_v_offset()
 	orbit.set_portrait_scale(_desired_portrait_scale())
 	ui.set_time_value(hour)
@@ -448,6 +457,16 @@ func _setup_lights() -> void:
 	add_child(fill)
 
 func _process(delta: float) -> void:
+	if _bench_target > 0:
+		_bench_frames += 1
+		if _bench_frames > 30:
+			_bench_elapsed += delta
+		if _bench_frames >= _bench_target + 30:
+			var avg := _bench_elapsed / float(maxi(_bench_target, 1))
+			print("BENCH avg_ms=", snappedf(avg * 1000.0, 0.01),
+				" fps=", snappedf(1.0 / maxf(avg, 0.0001), 0.1))
+			get_tree().quit()
+			return
 	if auto_time:
 		auto_elapsed += delta
 		hour = fposmod(auto_start + auto_elapsed * 24.0 / 120.0, 24.0)
