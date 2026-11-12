@@ -405,15 +405,16 @@ Godot의 사용자 인자는 `--` 뒤에 전달합니다.
 **현재 상태**
 - `tools/smoke_test.gd`: 월드/지형/물/자연 메시/꽃 에셋/눈 표면/A* 경로/발자국/야간/계절/품질 매니저 존재를 검사. 실패 시 exit 1.
 - `--shot <path>`로 해상도별 UI/씬 캡처.
-- 실제 export 템플릿과 Android SDK가 이 환경에 없어 패키징은 미검증.
+- Windows Desktop export preset 준비 (`export_presets.cfg`), 앱 버전 0.1.0.
+- 이 환경에는 export 템플릿과 Android SDK가 없어 실제 패키징은 실패:
+  `export_templates/4.7.2.stable.mono/windows_release_x86_64.exe` 없음.
 
 **남은 일**
-1. Windows/Linux/macOS/Android/iOS export preset 정리.
-2. 아이콘/스플래시/앱 이름/버전.
-3. Android 서명, iOS는 Mac/Xcode 필요.
-4. 태스크 상태 전환/셰이더 파라미터 스모크 확장.
-5. 성능 기준 문서화.
-6. README/ROADMAP 최신화.
+1. Windows/Linux/macOS/Android/iOS export template 설치 및 preset 확장.
+2. Android 서명, iOS는 Mac/Xcode 필요.
+3. 태스크 상태 전환/셰이더 파라미터 스모크 확장.
+4. 성능 기준 문서화.
+5. README/ROADMAP 최신화.
 
 ---
 

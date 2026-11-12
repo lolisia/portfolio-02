@@ -58,7 +58,7 @@ Godot 4.7 프로젝트. 원본 Three.js 디오라마(`../src`)를 PC/모바일 �
 - 물 반사 디테일 및 폭포 foam 마감
 - Unity-chan 실내 방/가구/사람 실루엣, 농가 주변 계단/먼 꽃정원 디테일
 - 모바일 실기기 프로파일링(중급 Android), 적응형 해상도, safe area
-- export 템플릿/Android SDK가 이 환경에 없어 패키징 미검증
+- export 템플릿/Android SDK가 이 환경에 없어 패키징 미검증 (Windows preset은 준비됨, `export_presets.cfg`)
 
 ## 다음 작업
 
