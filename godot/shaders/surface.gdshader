@@ -65,6 +65,16 @@ void fragment() {
 		float speck = fbm3(v_world * 19.0);
 		float vein = pow(1.0 - abs(fbm3(v_world * 2.2) - 0.5) * 2.0, 14.0);
 		albedo *= 0.78 + 0.28 * n + 0.16 * speck + 0.10 * vein;
+		// The diorama's outer cliff reads as layered rock: broad sediment
+		// bands, fine bedding lines and occasional vertical cracks.
+		float cliff = 1.0 - smoothstep(2.8, 3.4, v_world.y);
+		float warp = fbm3(vec3(v_world.x * 0.8, v_world.y * 1.8, v_world.z * 0.8));
+		float strata = sin(v_world.y * 5.5 + warp * 3.2) * 0.5 + 0.5;
+		float bedding = smoothstep(0.70, 0.96,
+			sin(v_world.y * 26.0 + warp * 7.0) * 0.5 + 0.5);
+		float crack = pow(1.0 - abs(fbm3(v_world * vec3(1.6, 5.0, 1.6)) - 0.5) * 2.0, 18.0);
+		albedo *= mix(1.0, 0.86 + 0.20 * strata - 0.10 * bedding, cliff);
+		albedo *= 1.0 - 0.22 * crack * cliff;
 		roughness = 0.92;
 	} else if (surface_kind == 2) {
 		float tile = fbm3(v_world * 7.0);

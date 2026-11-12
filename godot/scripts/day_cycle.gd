@@ -41,10 +41,15 @@ func apply(hour: float, weather: int = 0, season: int = 1) -> void:
 	fill.light_color = Color(0.58, 0.73, 0.95)
 	fill.light_energy = (0.16 + 0.10 * (1.0 - night)) * (1.0 - overcast * 0.5)
 
-	var top_color: Color = Daylight.color_at(Daylight.SKY_TOP, t["from"], t["to"], t["f"]).lerp(
-		Color(0.55, 0.62, 0.67), overcast * 0.55)
-	var horizon_color: Color = Daylight.color_at(Daylight.SKY_HORIZON, t["from"], t["to"], t["f"]).lerp(
-		Color(0.68, 0.72, 0.75), overcast * 0.55)
+	var backdrop: Color = Daylight.color_at(Daylight.BACKDROP, t["from"], t["to"], t["f"])
+	var clear := 1.0 - minf(1.0, overcast * 1.1)
+	var dimming := 1.0 - overcast * 0.11
+	var top_color: Color = backdrop.lerp(
+		Daylight.color_at(Daylight.SKY_BACK_TOP, t["from"], t["to"], t["f"]), 0.60 * clear)
+	var horizon_color: Color = backdrop.lerp(
+		Daylight.color_at(Daylight.SKY_BACK_BOTTOM, t["from"], t["to"], t["f"]), 0.55 * clear)
+	top_color *= dimming
+	horizon_color *= dimming
 	var ground_color: Color = Daylight.color_at(Daylight.SKY_LAND, t["from"], t["to"], t["f"]).lerp(
 		Color(0.22, 0.25, 0.25), overcast * 0.5)
 	var fog_color: Color = Daylight.color_at(Daylight.FOG_SCATTER, t["from"], t["to"], t["f"])
@@ -67,8 +72,12 @@ func apply(hour: float, weather: int = 0, season: int = 1) -> void:
 	sun.light_energy = sun_energy
 	sky_material.sky_top_color = top_color
 	sky_material.sky_horizon_color = horizon_color
-	sky_material.ground_bottom_color = ground_color
+	# Below the diorama the world falls away into a dark void rather than a
+	# bright green hemisphere; the sky gradient stays at the horizon.
+	sky_material.ground_bottom_color = ground_color.darkened(0.78).lerp(
+		Color(0.02, 0.035, 0.045), 0.40)
 	sky_material.ground_horizon_color = horizon_color
+	sky_material.ground_curve = 0.18
 	sky_material.sky_energy_multiplier = 1.0
 	sky_material.ground_energy_multiplier = 1.0
 	sky_material.sun_angle_max = 9.0

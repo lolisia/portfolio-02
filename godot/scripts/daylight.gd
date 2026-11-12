@@ -22,6 +22,8 @@ const SKY_TOP = [Color("578db7"), Color("518ac3"), Color("7677a8"), Color("131f3
 const SKY_HORIZON = [Color("ffdcaa"), Color("dbedf1"), Color("ffae94"), Color("34445b"), Color("ff7f3c")]
 const SKY_LAND = [Color("697153"), Color("737962"), Color("766552"), Color("161e21"), Color("766552")]
 const BACKDROP = [Color("acbfca"), Color("93b9d4"), Color("d8aaa6"), Color("17263f"), Color("d48b6c")]
+const SKY_BACK_TOP = [Color("8fb3cc"), Color("7fa9cf"), Color("8f8bc0"), Color("0b1428"), Color("5f5498")]
+const SKY_BACK_BOTTOM = [Color("d7dfd0"), Color("c6dae3"), Color("f6c4a4"), Color("223150"), Color("f4a066")]
 const FOG_SCATTER = [Color("657577"), Color("768183"), Color("957a8c"), Color("192d45"), Color("8d5a44")]
 const FOG_DENSITY = [0.033, 0.016, 0.045, 0.032, 0.03]
 

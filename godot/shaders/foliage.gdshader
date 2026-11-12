@@ -12,6 +12,7 @@ uniform vec4 trample[16];
 
 varying vec3 v_color;
 varying vec3 v_origin;
+varying vec3 v_world;
 varying vec3 v_world_normal;
 
 float hash(vec2 p) {
@@ -42,6 +43,7 @@ void vertex() {
 	float sway = INSTANCE_CUSTOM.a;
 	vec3 origin = MODEL_MATRIX[3].xyz;
 	v_origin = origin;
+	v_world = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
 	v_world_normal = normalize((MODEL_NORMAL_MATRIX * NORMAL));
 	float phase = dot(origin.xz, vec2(0.39, 0.23));
 	float gust = sin(TIME * 1.37 - phase) + 0.42 * sin(TIME * 2.31 - phase * 0.71);
@@ -93,6 +95,11 @@ void fragment() {
 		discard;
 	}
 	vec3 albedo = base_color.rgb * v_color * season_tint;
+	// Leafy dapple: world-space noise breaks the flat canopy blobs into
+	// lighter and darker leaf clusters, like the reference's foliage.
+	float leaf = fbm(v_world.xz * 7.0 + vec2(v_world.y * 2.7));
+	float fine = fbm(v_world.xz * 21.0 + vec2(v_world.y * 6.0));
+	albedo *= 0.82 + 0.28 * leaf + 0.08 * fine;
 	float up = clamp(v_world_normal.y, 0.0, 1.0);
 	float snow_noise = fbm(v_origin.xz * 2.6);
 	float snow_mask = smoothstep(0.04, 0.46, snow_depth * 1.2 - snow_noise * 0.35)

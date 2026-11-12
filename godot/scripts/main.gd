@@ -356,9 +356,9 @@ func _setup_environment() -> void:
 	sky_material.sky_horizon_color = Color(0.68, 0.76, 0.80)
 	sky_material.sky_curve = 0.15
 	sky_material.sky_energy_multiplier = 1.0
-	sky_material.ground_bottom_color = Color(0.30, 0.35, 0.27)
+	sky_material.ground_bottom_color = Color(0.055, 0.075, 0.068)
 	sky_material.ground_horizon_color = Color(0.68, 0.76, 0.80)
-	sky_material.ground_curve = 0.05
+	sky_material.ground_curve = 0.18
 	sky_material.ground_energy_multiplier = 1.0
 	sky_material.sun_angle_max = 9.0
 	sky_material.sun_curve = 0.12
