@@ -264,9 +264,25 @@ func _apply_responsive_layout() -> void:
 	var viewport_size := get_viewport().get_visible_rect().size
 	var compact := viewport_size.x < 560.0
 	var margin := 8.0 if compact else 14.0
-	bottom_box.offset_left = margin
-	bottom_box.offset_right = -margin
+	var safe_left := 0.0
+	var safe_top := 0.0
+	var safe_right := 0.0
+	var safe_bottom := 0.0
+	if DisplayServer.get_name() in ["android", "ios"]:
+		var safe := DisplayServer.get_display_safe_area()
+		var window_size := DisplayServer.window_get_size()
+		var sx := viewport_size.x / maxf(float(window_size.x), 1.0)
+		var sy := viewport_size.y / maxf(float(window_size.y), 1.0)
+		safe_left = float(safe.position.x) * sx
+		safe_top = float(safe.position.y) * sy
+		safe_right = float(window_size.x - safe.end.x) * sx
+		safe_bottom = float(window_size.y - safe.end.y) * sy
+	bottom_box.offset_left = margin + safe_left
+	bottom_box.offset_right = -margin - safe_right
 	bottom_box.offset_top = -minf(640.0, maxf(viewport_size.y - 16.0, 160.0))
+	bottom_box.offset_bottom = -16.0 - safe_bottom
+	credit_label.offset_left = 12.0 + safe_left
+	credit_label.offset_top = 8.0 + safe_top
 	panel_control.custom_minimum_size = Vector2(minf(650.0, maxf(viewport_size.x - margin * 2.0, 220.0)), 0.0)
 	panel_style.content_margin_left = 14.0 if compact else 20.0
 	panel_style.content_margin_right = 14.0 if compact else 20.0
