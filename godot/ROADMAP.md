@@ -408,6 +408,8 @@ Godot의 사용자 인자는 `--` 뒤에 전달합니다.
 - Windows Desktop export preset 준비 (`export_presets.cfg`), 앱 버전 0.1.0.
 - 이 환경에는 export 템플릿과 Android SDK가 없어 실제 패키징은 실패:
   `export_templates/4.7.2.stable.mono/windows_release_x86_64.exe` 없음.
+- 1280×720 High `--house` movie GPU: 약 2.66ms/frame (RTX 3080, 반사 2프레임 갱신/288p).
+- 360×640 Mobile 렌더러 UI/패널 캡처 및 `--shot` 확인.
 
 **남은 일**
 1. Windows/Linux/macOS/Android/iOS export template 설치 및 preset 확장.
