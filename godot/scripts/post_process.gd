@@ -59,3 +59,6 @@ func set_sun(uv: Vector2, strength: float, color: Color) -> void:
 	material.set_shader_parameter("sun_uv", uv)
 	material.set_shader_parameter("sun_strength", strength)
 	material.set_shader_parameter("sun_color", Vector3(color.r, color.g, color.b))
+
+func set_shafts(strength: float) -> void:
+	material.set_shader_parameter("shaft_strength", strength)

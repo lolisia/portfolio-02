@@ -251,6 +251,8 @@ func _ready() -> void:
 		hour = 6.4
 		hour_target = 6.4
 		_apply_time(true)
+	if "--sunrise" in cli:
+		orbit.set_view(Vector3(0.0, 1.0, 0.0), 1.57, 0.35, 1.0)
 	if "--gather" in cli:
 		character._begin_journey("gather")
 	if "--fish" in cli:
@@ -546,8 +548,10 @@ func _process(delta: float) -> void:
 					* (1.0 - float(t["night"])), 0.0, 1.2)
 				post.set_sun(Vector2(screen.x / maxf(vp.x, 1.0), screen.y / maxf(vp.y, 1.0)),
 					strength, sun.light_color)
+				post.set_shafts(strength * (1.0 if quality == 0 else (0.6 if quality == 1 else 0.0)))
 			else:
-				post.set_sun(Vector2(-1.0, -1.0), 0.0, Color.WHITE)
+				post.set_sun(Vector2(-10.0, -10.0), 0.0, Color.WHITE)
+				post.set_shafts(0.0)
 
 func _apply_time(force: bool) -> void:
 	if not force and absf(hour - _last_apply_hour) < 0.0005:

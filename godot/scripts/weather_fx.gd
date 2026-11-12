@@ -21,7 +21,8 @@ var ripple_mesh: MultiMesh
 var ripple_items: Array = []
 var ripple_cursor := 0
 var ripple_accum := 0.0
-const RIPPLE_CAPACITY := 120
+var ground_accum := 0.0
+const RIPPLE_CAPACITY := 160
 
 func _ready() -> void:
 	rain = _make_particles("Rain", 1100, 1.15, 5.0, 9.0, Color(0.55, 0.66, 0.78, 0.30), Vector2(0.028, 0.52))
@@ -34,6 +35,13 @@ func _ready() -> void:
 	snow.amount_ratio = 0.0
 	rain_process = rain.process_material as ParticleProcessMaterial
 	snow_process = snow.process_material as ParticleProcessMaterial
+	rain.collision_base_size = 0.10
+	snow.collision_base_size = 0.08
+	if rain_process != null:
+		rain_process.collision_mode = ParticleProcessMaterial.COLLISION_HIDE_ON_CONTACT
+	if snow_process != null:
+		snow_process.collision_mode = ParticleProcessMaterial.COLLISION_HIDE_ON_CONTACT
+	_build_roof_collisions()
 	_build_spray()
 	_build_ripples()
 
@@ -75,6 +83,19 @@ func _make_particles(label: String, amount: int, lifetime: float, vmin: float, v
 
 	add_child(particles)
 	return particles
+
+func _build_roof_collisions() -> void:
+	# Boxes hide rain/snow when it reaches the cottage, coop and shed roofs.
+	var boxes := [
+		[Vector3(-1.0, 3.25, -2.5), Vector3(6.4, 3.6, 6.4)],
+		[Vector3(2.25, 3.3, -1.92), Vector3(3.8, 3.2, 3.8)],
+		[Vector3(4.45, 3.3, -1.90), Vector3(3.2, 3.0, 3.2)],
+	]
+	for entry in boxes:
+		var box := GPUParticlesCollisionBox3D.new()
+		box.size = entry[1]
+		box.position = entry[0]
+		add_child(box)
 
 func _soft_texture() -> ImageTexture:
 	var image := Image.create(64, 64, false, Image.FORMAT_RGBA8)
@@ -163,17 +184,19 @@ func _build_ripples() -> void:
 	ripples.material_override = material
 	ripples.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	ripples.gi_mode = GeometryInstance3D.GI_MODE_DISABLED
-	ripples.custom_aabb = AABB(Vector3(5.0, 0.0, 2.0), Vector3(10.0, 2.0, 8.0))
+	ripples.custom_aabb = AABB(Vector3(-15.0, -2.0, -15.0), Vector3(30.0, 8.0, 30.0))
 	add_child(ripples)
 	ripple_items.resize(RIPPLE_CAPACITY)
 
 func _place_ripple(index: int, item: Dictionary) -> void:
 	var scale_value: float = float(item["scale"]) * (1.0 + float(item["life"]) * 0.9)
 	var basis := Basis.from_scale(Vector3(scale_value, 1.0, scale_value))
+	var ground := bool(item.get("ground", false))
+	var y := world.height(float(item["x"]), float(item["z"])) + 0.02 if ground else world.water.position.y + 0.018
 	ripple_mesh.set_instance_transform(index,
-		Transform3D(basis, Vector3(float(item["x"]), world.water.position.y + 0.018, float(item["z"]))))
+		Transform3D(basis, Vector3(float(item["x"]), y, float(item["z"]))))
 	ripple_mesh.set_instance_custom_data(index,
-		Color(1.0, 1.0, 1.0, (1.0 - float(item["life"])) * 0.8))
+		Color(1.0, 1.0, 1.0, (1.0 - float(item["life"])) * (0.5 if ground else 0.8)))
 
 func _update_ripples(delta: float) -> void:
 	if world == null:
@@ -191,6 +214,23 @@ func _update_ripples(delta: float) -> void:
 			var index := ripple_cursor
 			ripple_cursor = (ripple_cursor + 1) % RIPPLE_CAPACITY
 			var item := {"x": x, "z": z, "life": 0.0, "scale": randf_range(0.10, 0.22)}
+			ripple_items[index] = item
+			_place_ripple(index, item)
+			break
+	ground_accum += delta * (4.0 + 16.0 * rain_level) * quality_scale
+	while ground_accum >= 1.0:
+		ground_accum -= 1.0
+		if rain_level <= 0.02:
+			continue
+		for attempt in range(8):
+			var x := randf_range(-13.0, 13.0)
+			var z := randf_range(-13.0, 13.0)
+			var ground_y := world.height(x, z)
+			if ground_y < world.water.position.y + 0.03:
+				continue
+			var index := ripple_cursor
+			ripple_cursor = (ripple_cursor + 1) % RIPPLE_CAPACITY
+			var item := {"x": x, "z": z, "life": 0.0, "scale": randf_range(0.05, 0.12), "ground": true}
 			ripple_items[index] = item
 			_place_ripple(index, item)
 			break

@@ -21,7 +21,7 @@ Godot 4.7 프로젝트. 원본 Three.js 디오라마(`../src`)를 PC/모바일 �
 - 모바일: Mobile (`project.godot`의 `renderer/rendering_method.mobile`)
 - 조작: 좌클릭 드래그 회전, 휠 확대/축소, 터치 한 손가락 회전, 두 손가락 핀치 확대/축소
 - 개발용 프리셋: `-- --house`, `-- --pond`, `-- --pondside`, `-- --char`, `-- --char2`, `-- --charclose`, `-- --panel`, `-- --fishtest`, `-- --door`, `-- --front`, `-- --garden`
-- 날씨/계절 프리뷰: `-- --winter`, `-- --snow`, `-- --rain`, `-- --spring`, `-- --autumn`, `-- --night`, `-- --dusk`, `-- --dawn`
+- 날씨/계절 프리뷰: `-- --winter`, `-- --snow`, `-- --rain`, `-- --spring`, `-- --autumn`, `-- --night`, `-- --dusk`, `-- --dawn`, `-- --sunrise`
 - 태스크 프리뷰: `-- --gather`, `-- --fish`, `-- --salute`, `-- --fishnear`, `-- --gathernear`, `-- --snowtest`
 - 품질 프리뷰: `-- --high`, `-- --medium`, `-- --low`
 - 스크린샷: `-- --shot C:/path.png` (현재 창 해상도, 개발용)
@@ -44,6 +44,7 @@ Godot 4.7 프로젝트. 원본 Three.js 디오라마(`../src`)를 PC/모바일 �
 - 표면 셰이더: 나무결·석재·기와·흙 디테일, 젖은 표면, 눈 덮임
 - 봄 벚꽃잎/가을 낙엽 파티클과 지면 레이어, 계절 foliage tint, 겨울 연못 결빙/균열, 폭포 spray·비 파문
 - 밤 별 dome, 램프별 플리커/후광, 램프 주변 나방, 여름밤 반딧불
+- 화면공간 광선 샤프트/태양 글레어/저지대 미스트, 비 지붕 충돌·수면/지면 파문
 - 농가 창문/TV 컬러 플리커, 사람이 지날 때 창문 광량 감소
 - 겨울 지면 융기(셰이더)와 눈 위 부츠/닭 발자국, 눈이 쌓이면 서서히 메워짐
 - 캐릭터/닭이 지나간 자리의 풀 눌림과 회복 트레일(16슬롯 트램플 셰이더)
@@ -54,7 +55,7 @@ Godot 4.7 프로젝트. 원본 Three.js 디오라마(`../src`)를 PC/모바일 �
 
 ## 아직 남은 작업
 
-- 커스텀 HDR 레이마칭 안개·광선 샤프트 (현재는 Godot 볼류메트릭 미스트/태양 디스크로 근사)
+- 커스텀 HDR 레이마칭 안개·그림자 마스크 광선 (현재는 화면공간 bright-pass 광선 + FogVolume 근사)
 - 물 반사 디테일 및 폭포 foam 마감
 - Unity-chan 실내 방/가구/사람 실루엣, 농가 주변 계단/먼 꽃정원 디테일
 - 모바일 실기기 프로파일링(중급 Android), 적응형 해상도, safe area

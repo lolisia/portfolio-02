@@ -53,6 +53,7 @@ Godot의 사용자 인자는 `--` 뒤에 전달합니다.
 ... -- --night          # 밤 22:00, 별/나방/램프/창문 확인
 ... -- --dusk           # 해질녘 18:36
 ... -- --dawn           # 새벽 6:24
+... -- --sunrise        # 새벽 + 서쪽을 바라보는 낮은 카메라
 ... -- --front          # 농가 정면 낮은 각도
 ... -- --garden         # 농가 뒤 꽃정원
 ... -- --high           # 품질 높음
@@ -225,15 +226,16 @@ Godot의 사용자 인자는 `--` 뒤에 전달합니다.
 **현재 상태**
 - Godot `FogVolume` + Environmental volumetric fog 사용.
 - `main.gd`가 golden/night/overcast/season에 따라 FogVolume density와 volumetric fog density를 보간.
-- 저지대 연못 안개(`LowMist` FogVolume)와 화면공간 태양 글레어를 추가.
-- 원본의 커스텀 레이마칭 안개(구름 노이즈, 램프 산란, 새벽 저지대 안개)와는 다름.
+- 저지대 연못 안개(`LowMist` FogVolume), 태양 디스크, 화면공간 태양 글레어 추가.
+- 화면공간 광선 샤프트(`post_process.gdshader`): 태양 방향으로 11탭 bright-pass를 적분해 전경 실루엣이 만든 어두운 틈을 광선으로 표현.
+- 원본의 커스텀 레이마칭 안개(구름 노이즈, 램프 산란)와는 다름.
 - 태양 그림자 기반 빛줄기는 내장 볼류메트릭에 의존.
 - 밤 별 dome은 `night_life.gd`로 구현.
 
 **할 일**
 1. Forward+ `CompositorEffect`로 half-res fog/light-shaft pass 구현 검토.
+   - 현재는 화면공간 bright-pass 광선으로 근사.
    - depth texture + sun shadow map 접근 제약 확인.
-   - 불가능하면 screen-space light shafts + FogVolume 조합.
 2. 새벽/밤/비/눈에 따른 안개 밀도·색·산란 튜닝.
 3. 램프 5개의 볼류메트릭 산란(Spot/Omni light) 확인.
 4. ~~밤하늘 별~~ — `night_life.gd` 별 dome + `stars.gdshader`로 구현.
@@ -283,10 +285,12 @@ Godot의 사용자 인자는 `--` 뒤에 전달합니다.
 - 겨울 연못 결빙 셰이더(균열/서리) + 물고기 숨김 + 폭포 spray.
 - 계절 foliage tint (봄 연둣빛, 가을 주황, 겨울 청회색).
 - 비/눈이 그치면 입자 수가 서서히 줄어드는 것 확인.
+- 비 수면 파문 링 + 지면 물보라 링, 지붕 충돌 박스로 비/눈이 실내로 들어가지 않음.
 
 **남은 일**
 1. 폭포 foam/vapor 디테일.
 2. 바람/눈보라 파티클의 세밀한 방향/속도 튜닝.
+3. 비가 나무 캐노피를 통과하지 않도록 충돌 확장(선택).
 
 **파일**
 - `scripts/weather_fx.gd`
@@ -439,6 +443,10 @@ Godot의 사용자 인자는 `--` 뒤에 전달합니다.
 - **물/겨울**
   - 연못 결빙은 `water.gdshader`의 `freeze` uniform; `main.gd`의 `water_freeze`와 함께 조정.
   - 비 파문은 연못 수면에만 생성(지면 물보라는 아직 없음).
+- **비/눈**
+  - 지붕 충돌은 `GPUParticlesCollisionBox3D` 3개(농가/닭장/헛간)로 근사; 나무 캐노피/지형 충돌은 없음.
+  - 지면 물보라는 수면과 같은 링 데칼을 지면에 배치한 근사.
+  - 폭포 foam/vapor는 spray 파티클 + 셰이더로 근사.
 - **야간**
   - 별은 화면공간 합성이 아니라 145 반경 dome이므로 fog/depth에 영향받음.
   - 실내 사람 실루엣은 창문 광량 변조로 근사; 유리 셰이더 실루엣은 아직 없음.
