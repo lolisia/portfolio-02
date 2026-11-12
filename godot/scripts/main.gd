@@ -332,8 +332,8 @@ func _setup_environment() -> void:
 	sky_material.ground_horizon_color = Color(0.68, 0.76, 0.80)
 	sky_material.ground_curve = 0.05
 	sky_material.ground_energy_multiplier = 1.0
-	sky_material.sun_angle_max = 0.0
-	sky_material.sun_curve = 0.1
+	sky_material.sun_angle_max = 9.0
+	sky_material.sun_curve = 0.12
 
 	var sky := Sky.new()
 	sky.sky_material = sky_material

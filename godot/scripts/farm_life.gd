@@ -23,6 +23,7 @@ var bird_timer := 5.0
 var bird_from := Vector3.ZERO
 var bird_to := Vector3.ZERO
 var bird_t := 0.0
+var bird_phase := 0.0
 var bird_duration := 2.0
 var bird_perches: Array = []
 var rotor_speed := 0.0
@@ -478,7 +479,8 @@ func _update_bird(delta: float) -> void:
 		return
 	if bird_state == "perched":
 		bird_timer -= delta
-		bird.rotation.x = sin(time * 0.7) * 0.03
+		bird.rotation.x = 0.05 * pow(maxf(0.0, sin(time * 0.7)), 8.0)
+		bird.rotation.z = sin(time * 2.4) * 0.033
 		for i in range(bird_wings.size()):
 			var wing: Node3D = bird_wings[i]
 			wing.rotation.z = lerp(wing.rotation.z, float(-1 if i == 0 else 1) * 0.12, 1.0 - exp(-delta * 5.0))
@@ -489,9 +491,21 @@ func _update_bird(delta: float) -> void:
 				next = bird_perches[(randi() + 1) % bird_perches.size()]
 			bird_to = next
 			bird_t = 0.0
+			bird_phase = 0.28
 			bird_duration = clampf(bird_from.distance_to(bird_to) * 0.28, 1.6, 4.2)
+			bird_state = "takeoff"
+	elif bird_state == "takeoff":
+		bird_phase = maxf(0.0, bird_phase - delta)
+		var lift := 1.0 - bird_phase / 0.28
+		bird.position = bird_from + Vector3(0.0, -0.03 * sin(lift * PI), 0.0)
+		bird.rotation.x = 0.25 * sin(lift * PI)
+		for i in range(bird_wings.size()):
+			var wing_takeoff: Node3D = bird_wings[i]
+			wing_takeoff.rotation.z = lerp(wing_takeoff.rotation.z,
+				float(-1 if i == 0 else 1) * 0.45, 1.0 - exp(-delta * 18.0))
+		if bird_phase <= 0.001:
 			bird_state = "flying"
-	else:
+	elif bird_state == "flying":
 		bird_t = minf(1.0, bird_t + delta / bird_duration)
 		var pos := bird_from.lerp(bird_to, bird_t)
 		pos.y += sin(bird_t * PI) * (0.5 + bird_from.distance_to(bird_to) * 0.16)
@@ -503,6 +517,22 @@ func _update_bird(delta: float) -> void:
 			var wing2: Node3D = bird_wings[i]
 			wing2.rotation.z = float(-1 if i == 0 else 1) * (0.45 + sin(time * 18.0) * 0.55)
 		if bird_t >= 1.0:
+			bird.position = bird_to
+			bird_state = "landing"
+			bird_phase = 0.7
+	else:
+		# Landing flare: rock forward, then fold the wings and settle.
+		bird_phase = maxf(0.0, bird_phase - delta)
+		var age := 0.7 - bird_phase
+		var settle := clampf(age / 0.7, 0.0, 1.0)
+		bird.position = bird_to + Vector3(0.0,
+			-0.035 * sin(PI * minf(1.0, age / 0.35)) * (1.0 - settle), 0.0)
+		bird.rotation.x = -0.75 * exp(-age * 7.0) * cos(age * 11.0) + 0.12 * sin(PI * settle) * (1.0 - settle)
+		for i in range(bird_wings.size()):
+			var wing_land: Node3D = bird_wings[i]
+			var folded := lerpf(0.45, 0.12, smoothstep(0.0, 0.7, age))
+			wing_land.rotation.z = float(-1 if i == 0 else 1) * folded
+		if bird_phase <= 0.001:
 			bird.position = bird_to
 			bird_state = "perched"
 			bird.rotation.x = 0.0

@@ -71,7 +71,8 @@ func apply(hour: float, weather: int = 0, season: int = 1) -> void:
 	sky_material.ground_horizon_color = horizon_color
 	sky_material.sky_energy_multiplier = 1.0
 	sky_material.ground_energy_multiplier = 1.0
-	sky_material.sun_angle_max = 0.0
+	sky_material.sun_angle_max = 9.0
+	sky_material.sun_curve = 0.12
 
 	env.ambient_light_sky_contribution = 0.58
 	env.ambient_light_energy = 0.48

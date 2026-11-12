@@ -291,9 +291,17 @@ func _build_perimeter() -> void:
 		var z1: float = segment[1]
 		var length := z1 - z0
 		b.part("stone", 15.08, mid, (z0 + z1) * 0.5, 0.32, h, length, "#4b5354")
+	# A brown earth lip catches the light and separates the diorama top from the rock.
+	b.part("soil", 0.0, 2.94, 15.09, 30.6, 0.36, 0.34, "#6b4a30")
+	b.part("soil", 0.0, 2.94, -15.09, 30.6, 0.36, 0.34, "#66462d")
+	b.part("soil", -15.09, 2.94, 0.0, 0.34, 0.36, 30.6, "#66462d")
+	for segment in [[-15.0, outlet_back], [outlet_front, 15.0]]:
+		var z0: float = segment[0]
+		var z1: float = segment[1]
+		b.part("soil", 15.09, 2.94, (z0 + z1) * 0.5, 0.34, 0.36, z1 - z0, "#6b4a30")
 	for i in range(6):
 		var yy := FLOOR_Y + (i + 0.5) * h / 6.0
-		var col: String = ["#474f54", "#4d5559", "#545d60", "#586165", "#667070", "#737771"][i]
+		var col: String = ["#4b5457", "#596162", "#68716d", "#777d75", "#85887b", "#929283"][i]
 		b.part("stone", 0.0, yy, 15.10, 30.62, h / 6.0 + 0.012, 0.34, col)
 		b.part("stone", 0.0, yy, -15.10, 30.62, h / 6.0 + 0.012, 0.34, col)
 		b.part("stone", -15.10, yy, 0.0, 0.34, h / 6.0 + 0.012, 30.62, col)
