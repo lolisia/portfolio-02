@@ -12,7 +12,9 @@ var water: MeshInstance3D
 var material: ShaderMaterial
 var water_y := 0.44
 var ready_for_render := false
-var resolution_height := 360
+var resolution_height := 288
+var update_interval := 2
+var frame_counter := 0
 
 func setup(p_water: MeshInstance3D, p_camera: Camera3D, p_water_y: float) -> void:
 	water = p_water
@@ -25,8 +27,8 @@ func setup(p_water: MeshInstance3D, p_camera: Camera3D, p_water_y: float) -> voi
 
 	viewport = SubViewport.new()
 	viewport.name = "PondReflection"
-	viewport.size = Vector2i(640, 360)
-	viewport.render_target_update_mode = SubViewport.UPDATE_ALWAYS
+	viewport.size = Vector2i(512, 288)
+	viewport.render_target_update_mode = SubViewport.UPDATE_ONCE
 	viewport.canvas_cull_mask = 0
 	add_child(viewport)
 
@@ -41,11 +43,16 @@ func setup(p_water: MeshInstance3D, p_camera: Camera3D, p_water_y: float) -> voi
 	camera.current = true
 	material.set_shader_parameter("reflection_tex", viewport.get_texture())
 	material.set_shader_parameter("reflection_strength", 1.0)
+	frame_counter = 1
 	ready_for_render = true
 
 func _process(_delta: float) -> void:
 	if not ready_for_render or main_camera == null or camera == null:
 		return
+	frame_counter += 1
+	if update_interval > 1 and frame_counter % update_interval != 0:
+		return
+	viewport.render_target_update_mode = SubViewport.UPDATE_ONCE
 	camera.size = main_camera.size
 	camera.near = main_camera.near
 	camera.far = main_camera.far
@@ -80,7 +87,9 @@ func set_quality(level: int) -> void:
 		viewport.render_target_update_mode = SubViewport.UPDATE_DISABLED
 		material.set_shader_parameter("reflection_strength", 0.0)
 	else:
-		resolution_height = 360 if level == 0 else 256
+		resolution_height = 288 if level == 0 else 224
+		update_interval = 2
+		frame_counter = 0
 		ready_for_render = true
-		viewport.render_target_update_mode = SubViewport.UPDATE_ALWAYS
+		viewport.render_target_update_mode = SubViewport.UPDATE_ONCE
 		material.set_shader_parameter("reflection_strength", 1.0)
