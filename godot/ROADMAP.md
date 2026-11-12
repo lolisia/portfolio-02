@@ -53,6 +53,7 @@ Godot의 사용자 인자는 `--` 뒤에 전달합니다.
 ... -- --night          # 밤 22:00, 별/나방/램프/창문 확인
 ... -- --dusk           # 해질녘 18:36
 ... -- --front          # 농가 정면 낮은 각도
+... -- --garden         # 농가 뒤 꽃정원
 ... -- --high           # 품질 높음
 ... -- --medium         # 품질 보통 (모바일 기본)
 ... -- --low            # 품질 낮음
@@ -83,6 +84,7 @@ Godot의 사용자 인자는 `--` 뒤에 전달합니다.
 
 - 30×30 타일 높이 지형, 테라스, 연못, 경계 암반, 폭포 출구
 - 농가/헛간/닭장, 정원 침대, 앞마당 채소밭 2개, 돌길
+- 꽃정원: 절차적 튤립·라벤더·해바라기·폭스글러브·장미 메시
 - `nature.glb` 기반 나무·풀·꽃·작물 `MultiMesh` 인스턴싱
 - 표면 셰이더
   - 나무결, 석재, 기와, 흙, 철
@@ -154,6 +156,7 @@ Godot의 사용자 인자는 `--` 뒤에 전달합니다.
 | `scripts/unity_chan.gd` | 캐릭터 임포트, 태스크 AI, 낚시 장비 |
 | `scripts/farm_paths.gd` | 0.6 타일 워킹 그래프, A* 경로 |
 | `scripts/motion_preview.gd` | 지평선/풍속계/날씨 UI 카드 |
+| `scripts/garden_assets.gd` | 절차적 꽃 메시(튤립/라벤더/해바라기/폭스글러브/장미) |
 | `scripts/farm_life.gd` | 닭, 풍향계/수탉, 연기, 물고기 점프, 새 |
 | `scripts/weather_fx.gd` | 비/눈 강도 크로스페이드, 물보라/수면 파문, 폭포 spray |
 | `scripts/seasons_fx.gd` | 봄 벚꽃잎, 가을 낙엽 |
@@ -300,21 +303,22 @@ Godot의 사용자 인자는 `--` 뒤에 전달합니다.
 - 풍향계: 청동 수탉 실루엣/허브 디테일 추가.
 - 실내: 창문/TV 컬러 플리커, 사람이 지나갈 때 창문 광량 감소.
 - 반딧불/나방: 밤/계절/날씨 조건부.
-- 농가 주변 디테일/꽃정원은 아직 부분.
+- 꽃정원: 절차적 꽃 메시로 튤립·라벤더·해바라기·폭스글러브·장미 구현.
+- 농가 주변 계단/울타리/먼 꽃정원 디테일은 아직 부분.
 
 **남은 일**
 1. 닭장 출입 사이클과 문/램프 연출.
 2. 새의 착륙 flare/체류 시간, 가지 흔들림 동기화.
 3. 물고기 점프 물보라.
 4. 실내 사람 실루엣(유리 셰이더)과 TV 색 번짐 강화.
-5. 원본 `garden.js`의 꽃(튤립·라벤더·해바라기·폭스글러브·장미) 이식.
-6. 농가 주변 계단/울타리/먼 꽃정원 디테일.
+5. 농가 주변 계단/울타리/먼 꽃정원 디테일.
 
 **파일**
 - `scripts/farm_life.gd`
 - `scripts/world.gd`
 - `scripts/unity_chan.gd`
 - `scripts/night_life.gd`
+- `scripts/garden_assets.gd`
 - `shaders/water.gdshader`
 
 **완료 기준**
@@ -453,7 +457,7 @@ Godot의 사용자 인자는 `--` 뒤에 전달합니다.
    - High/Medium/Low 실기기 검증, 해상도 스케일/그림자/파티클 예산
    - safe area, 적응형 해상도
 3. **농장/야생 남은 디테일** (P4)
-   - 닭장 출입, 새 착륙 flare, 물고기 점프 물보라, 꽃정원
+   - 닭장 출입, 새 착륙 flare, 물고기 점프 물보라, 농가 주변 디테일
 4. **계절/날씨 남은 디테일** (P3)
    - 낙엽/벚꽃잎 지면 적재, 눈보라 바람 연동, 폭포 foam
 5. **실내 공간** (P5 후속)
@@ -491,7 +495,7 @@ Godot의 사용자 인자는 `--` 뒤에 전달합니다.
 | `src/interior.js` | `night_life.gd` (window/TV light) | 부분 (사람 실루엣 없음) |
 | `src/panel.js`, `motion.js` | `game_ui.gd`, `motion_preview.gd` | 반응형 + 모션 프리뷰 완료 |
 | `src/daylight.js` | `daylight.gd` | 이식 |
-| `src/garden.js` | `world.gd::_build_garden_beds` | 꽃정원 대신 작물밭으로 대체 |
+| `src/garden.js` | `scripts/garden_assets.gd` | 완료 (절차적 로우폴리) |
 | `src/farm-paths.js` | `scripts/farm_paths.gd` | 완료 |
 | `src/colliders.js` | `world.gd` 장애물 목록 | 간략화 |
 

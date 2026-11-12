@@ -151,6 +151,8 @@ func _ready() -> void:
 		orbit.set_view(Vector3(-0.8, 1.0, -0.6), 0.25, 1.35, 4.2)
 	if "--front" in cli:
 		orbit.set_view(Vector3(-1.0, 1.2, -0.4), 0.1, 0.42, 4.0)
+	if "--garden" in cli:
+		orbit.set_view(Vector3(-1.1, 1.6, -7.3), 0.2, 0.95, 4.2)
 
 	ui = GameUI.new()
 	ui.name = "GameUI"

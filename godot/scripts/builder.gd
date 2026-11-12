@@ -15,7 +15,7 @@ const PLANT_KINDS := [
 	"oakALeaves", "oakBLeaves", "pineANeedles",
 	"bushALeaves", "bushBLeaves", "grass0", "grass1", "grass2",
 	"turf0", "turf1", "turf2", "reed", "carrot", "flowerStem",
-	"flowerHead", "cabbage", "sunflowerStem", "sunflowerBloom",
+	"flowerHead", "cabbage", "sunflowerStem", "sunflowerBloom", "sunflowerDisc",
 	"lavenderStem", "lavenderBloom", "tulipStem", "tulipBloom",
 	"foxgloveStem", "foxgloveBloom", "roseBloom",
 ]

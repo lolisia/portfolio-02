@@ -5,6 +5,7 @@ class_name FarmWorld
 ## cottage, coop, shed, garden, paths, vegetation and lanterns.
 
 const NatureAssets = preload("res://scripts/nature_assets.gd")
+const GardenAssets = preload("res://scripts/garden_assets.gd")
 const DioramaBuilder = preload("res://scripts/builder.gd")
 const WATER_SHADER = preload("res://shaders/water.gdshader")
 
@@ -71,6 +72,10 @@ const SEASON_TINTS := [
 
 func build() -> void:
 	meshes = NatureAssets.load_meshes()
+	var garden_meshes: Dictionary = GardenAssets.build()
+	for key in garden_meshes:
+		if not meshes.has(key):
+			meshes[key] = garden_meshes[key]
 	b = DioramaBuilder.new(self, meshes, 41573)
 	_flight_setup()
 	_build_terrain()
@@ -662,17 +667,65 @@ func _build_garden_beds() -> void:
 				bw + 0.12, soil + 0.05 - low + 0.2, 0.06, b.pick(TIMBER))
 			b.part("wood", x0 + s * (bw * 0.5 + 0.03), (soil + 0.05 + low - 0.2) * 0.5, z0,
 				0.06, soil + 0.05 - low + 0.2, bd, b.pick(TIMBER))
-		for row in range(5):
-			for col in range(3):
-				var x := x0 + (col - 1) * 0.36 + (b.randf() - 0.5) * 0.04
-				var z := z0 + (row - 2) * 0.3 + (b.randf() - 0.5) * 0.04
-				var s := 0.8 + b.randf() * 0.35
-				if row % 2 == 0:
-					b.part("cabbage", x, soil - 0.01, z, s, s, s,
-						b.pick(["#93b65a", "#a3c063", "#86a84f"]), 0.0, b.randf() * TAU, 0.0, 0.2)
-				else:
-					b.part("carrot", x, soil - 0.01, z, s, s, s,
-						b.pick(["#6f9a3e", "#7ea946"]), 0.0, b.randf() * TAU, 0.0, 0.3)
+		# Flower garden: sunflowers at the back, foxgloves/tulips/lavender in front.
+		var spacing: float = [0.36, 0.20, 0.17, 0.24][cell]
+		var cols := maxi(1, int(round(bw / spacing)))
+		var rows := maxi(1, int(round(bd / spacing)))
+		for row in range(rows):
+			for col in range(cols):
+				var x := x0 + ((float(col) + 0.5) / float(cols) - 0.5) * (bw - 0.18)
+				var z := z0 + ((float(row) + 0.5) / float(rows) - 0.5) * (bd - 0.16)
+				var s := 0.9 + b.randf() * 0.3
+				match cell:
+					0:
+						s = 0.9 + b.randf() * 0.2
+						var a0 := 0.6 + (b.randf() - 0.5) * 0.5
+						b.part("sunflowerStem", x, soil - 0.01, z, s, s, s, "#6f9142", 0.0, a0, 0.0, 0.12)
+						b.part("sunflowerBloom", x, soil - 0.01, z, s, s, s,
+							b.pick(["#ffffff", "#fff3d8", "#ffe2b0"]), 0.0, a0, 0.0, 0.12)
+						b.part("sunflowerDisc", x, soil - 0.01, z, s, s, s,
+							"#4f3114", 0.0, a0, 0.0, 0.12)
+					1:
+						s = 1.0 + b.randf() * 0.4
+						var a1 := b.randf() * TAU
+						b.part("foxgloveStem", x, soil - 0.01, z, s, s, s, "#6b8c45", 0.0, a1, 0.0, 0.22)
+						b.part("foxgloveBloom", x, soil - 0.01, z, s, s, s,
+							b.pick(["#c76aa4", "#e7a6cf", "#f2eef2", "#a676c8", "#d9809a"]), 0.0, a1, 0.0, 0.22)
+					2:
+						s = 0.9 + b.randf() * 0.25
+						var a2 := b.randf() * TAU
+						b.part("tulipStem", x, soil - 0.01, z, s, s, s, "#73964a", 0.0, a2, 0.0, 0.22)
+						b.part("tulipBloom", x, soil - 0.01, z, s, s, s,
+							b.pick(["#e0362f", "#f2c430", "#f08bb0", "#f7f1e6", "#f07a2a", "#b0367a"]), 0.0, a2, 0.0, 0.22)
+					_:
+						s = 0.85 + b.randf() * 0.4
+						var a3 := b.randf() * TAU
+						if b.randf() < 0.7:
+							b.part("lavenderStem", x, soil - 0.01, z, s, s, s, "#7d9468", 0.0, a3, 0.0, 0.30)
+							b.part("lavenderBloom", x, soil - 0.01, z, s, s, s,
+								b.pick(["#8a6cc4", "#9b7fd1", "#7a5fb5"]), 0.0, a3, 0.0, 0.30)
+						else:
+							for i in range(3):
+								var fx := x + (b.randf() - 0.5) * 0.14
+								var fz := z + (b.randf() - 0.5) * 0.14
+								var fs := 0.55 + b.randf() * 0.3
+								b.part("flowerStem", fx, soil - 0.01, fz, fs, fs, fs, "#6f8f45", 0.0, b.randf() * TAU, 0.0, 0.22)
+								b.part("flowerHead", fx, soil - 0.01, fz, fs, fs, fs,
+									b.pick(["#f4f1e4", "#f2d25a"]), 0.0, b.randf() * TAU, 0.0, 0.22)
+		# Rose bushes at the four corners.
+		for rsx in [-1.0, 1.0]:
+			for rsz in [-1.0, 1.0]:
+				var rx: float = x0 + float(rsx) * (bw * 0.5 + gap * 0.5 + 0.42)
+				var rz: float = z0 + float(rsz) * (bd * 0.5 + gap * 0.5 - 0.1)
+				var ry := height(rx, rz) - 0.02
+				b.part("bushALeaves", rx, ry, rz, 0.62, 0.55, 0.62,
+					b.pick(["#4f6e33", "#5a7a3a"]), 0.0, b.randf() * TAU, 0.0, 0.0)
+				for i in range(9):
+					var a4 := b.randf() * TAU
+					var u := 0.12 + b.randf() * 0.16
+					b.part("roseBloom", rx + cos(a4) * u, ry + 0.22 + b.randf() * 0.14,
+						rz + sin(a4) * u, 1.2, 1.2, 1.2,
+						b.pick(["#c8243a", "#e85a78", "#f3b3c0", "#a51d2e"]), 0.0, b.randf() * TAU, 0.0, 0.05)
 		obstacles.append([x0, z0, 0.8])
 	# Gravel cross.
 	for i in range(8):

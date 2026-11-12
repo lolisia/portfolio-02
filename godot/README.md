@@ -14,7 +14,7 @@ Godot 4.7 프로젝트. 원본 Three.js 디오라마(`../src`)를 PC/모바일 �
 - 데스크톱: Forward+
 - 모바일: Mobile (`project.godot`의 `renderer/rendering_method.mobile`)
 - 조작: 좌클릭 드래그 회전, 휠 확대/축소, 터치 한 손가락 회전, 두 손가락 핀치 확대/축소
-- 개발용 프리셋: `-- --house`, `-- --pond`, `-- --pondside`, `-- --char`, `-- --char2`, `-- --charclose`, `-- --panel`, `-- --fishtest`, `-- --door`, `-- --front`
+- 개발용 프리셋: `-- --house`, `-- --pond`, `-- --pondside`, `-- --char`, `-- --char2`, `-- --charclose`, `-- --panel`, `-- --fishtest`, `-- --door`, `-- --front`, `-- --garden`
 - 날씨/계절 프리뷰: `-- --winter`, `-- --snow`, `-- --rain`, `-- --spring`, `-- --autumn`, `-- --night`, `-- --dusk`
 - 태스크 프리뷰: `-- --gather`, `-- --fish`, `-- --salute`, `-- --fishnear`, `-- --gathernear`, `-- --snowtest`
 - 품질 프리뷰: `-- --high`, `-- --medium`, `-- --low`
@@ -23,12 +23,12 @@ Godot 4.7 프로젝트. 원본 Three.js 디오라마(`../src`)를 PC/모바일 �
 ## 현재 이식된 범위
 
 - 30×30 타일 지형(높이 함수·테라스·연못·경계 암반), 암반 절벽과 폭포 출구
-- 농가/헛간/닭장(간략화한 모듈 빌더), 정원 침대, 돌길, 램프 5개
-- `nature.glb` 기반 나무·풀·꽃·작물 인스턴싱(바람 셰이더)
-- Unity-chan GLB 임포트(90본, 10개 클립), Standing/Walking 전환, 경유지 걷기, 깜빡임, 크기/접지 보정
-- Unity-chan 태스크 AI: 앞마당 채소밭 `Gathering`, 연못가 `FishingBegin/Loop/Stop`(낚싯대·낚싯줄·찌), `Salute`, `KneelDown`, 경례 시 문 여닫기
-- 닭 2마리 + 병아리 4마리(배회·쪼기·낮/날씨에 따른 은신), 지붕 풍향계/풍속계, 굴뚝 연기
-- 연못 물고기 10마리, 나무/램프/지붕을 옮겨 앉는 새
+- 농가/헛간/닭장(간략화한 모듈 빌더), 정원 침대, 꽃정원(튤립·라벤더·해바라기·폭스글러브·장미), 돌길, 램프 5개
+- `nature.glb` 기반 나무·풀·꽃·작물 인스턴싱(바람 셰이더) + 절차적 꽃 메시
+- Unity-chan GLB 임포트(90본, 10개 클립), Standing/Walking 전환, A* 경로 걷기, 깜빡임, 크기/접지 보정
+- Unity-chan 태스크 AI: 앞마당 채소밭 `Gathering`, 연못가 `FishingBegin/Loop/Stop`(낚싯대·낚싯줄·찌), `Salute`, `KneelDown`, 경례 시 문 여닫기 후 실내 4.5초 방문
+- 닭 2마리 + 병아리 4마리(배회·쪼기·도망·낮/날씨에 따른 은신), 지붕 풍향계/수탉/풍속계, 굴뚝 연기
+- 연못 물고기 10마리(수면 점프), 나무/램프/지붕을 옮겨 앉는 새
 - 시각/바람 슬라이더, 날씨/계절 선택, 자동 시간, 패널 접기, 리셋
 - 모션 프리뷰 카드: 지평선(시각), 풍속계(바람), 날씨 아이콘
 - 반응형 UI: 실제 창 크기 기준 content scale, 360px 폭/세로 모드 대응, 터치 타깃, 패널 열림 시 카메라 프레이밍 보정
