@@ -62,6 +62,10 @@ var _water_freeze_applied := -1.0
 var _presses: Dictionary = {}
 var _trail: Array = []
 var _trail_clock := 0.0
+var adaptive_scale := 1.0
+var _base_render_scale := 1.0
+var _fps_smooth := 60.0
+var _fps_check := 0.0
 
 func _ready() -> void:
 	_apply_content_scale()
@@ -176,8 +180,7 @@ func _ready() -> void:
 	quality_manager = QualityManager.new()
 	quality_manager.setup(env, sun, world, water_reflection, weather_fx, seasons_fx,
 		get_viewport(), mist)
-	quality_manager.apply(quality)
-	ui.set_quality(quality)
+	_set_quality(quality)
 
 	day_cycle = DayCycle.new()
 	day_cycle.setup(sun, fill, env, sky_material, world)
@@ -431,6 +434,20 @@ func _process(delta: float) -> void:
 		_wind_applied = wind
 
 	_update_view_framing(delta)
+	if OS.has_feature("mobile"):
+		_fps_smooth = lerpf(_fps_smooth, Engine.get_frames_per_second(), 1.0 - exp(-delta * 0.3))
+		_fps_check += delta
+		if _fps_check > 2.0:
+			_fps_check = 0.0
+			var changed := false
+			if _fps_smooth < 45.0 and adaptive_scale > 0.65:
+				adaptive_scale = maxf(0.65, adaptive_scale - 0.05)
+				changed = true
+			elif _fps_smooth > 57.0 and adaptive_scale < 1.0:
+				adaptive_scale = minf(1.0, adaptive_scale + 0.03)
+				changed = true
+			if changed:
+				_apply_render_scale()
 
 	if farm_life != null:
 		farm_life.hour = hour
@@ -539,10 +556,18 @@ func _on_reset_requested() -> void:
 
 func _set_quality(index: int) -> void:
 	quality = clampi(index, 0, 2)
+	_base_render_scale = [1.0, 0.85, 0.72][quality]
+	adaptive_scale = 1.0
 	if quality_manager != null:
 		quality_manager.apply(quality)
+	_apply_render_scale()
 	if ui != null:
 		ui.set_quality(quality)
+
+func _apply_render_scale() -> void:
+	var viewport := get_viewport()
+	if viewport != null:
+		viewport.scaling_3d_scale = clampf(_base_render_scale * adaptive_scale, 0.55, 1.0)
 
 func _on_quality_changed(index: int) -> void:
 	_set_quality(index)
