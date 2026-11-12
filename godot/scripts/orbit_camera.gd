@@ -8,7 +8,7 @@ extends Camera3D
 @export var max_pitch := 1.18
 @export var min_zoom := 0.70
 @export var max_zoom := 3.30
-@export var base_span := 34.5
+@export var base_span := 31.5
 @export var rotate_speed := 0.005
 @export var zoom_step := 1.12
 
