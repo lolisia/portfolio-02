@@ -87,6 +87,7 @@ func build() -> void:
 	_build_coop(2.25, -1.92, 0.025)
 	_build_shed(4.45, -1.90, -0.035)
 	_build_garden_beds()
+	_build_fences()
 	_build_vegetable_beds()
 	_build_paths()
 	_build_path_mask()
@@ -765,6 +766,55 @@ func _build_vegetable_beds() -> void:
 		)
 		obstacles.append([x, z, 0.78])
 		veg_beds.append(Vector2(x, z))
+
+func _build_fences() -> void:
+	var hx := -1.0
+	var hz := -2.5
+	var w: float = COTTAGE.W
+	var d: float = COTTAGE.D
+	var porch_z := hz + d * 0.5 + float(COTTAGE.P)
+	var runs := [
+		[Vector2(hx - w * 0.5 - 0.1, porch_z - 0.03),
+			Vector2(hx - w * 0.5 - 0.6, porch_z - 0.03),
+			Vector2(hx - w * 0.5 - 0.6, hz - d * 0.5 + 0.05),
+			Vector2(hx - w * 0.5 - 0.08, hz - d * 0.5 + 0.05)],
+		[Vector2(hx + w * 0.5 + 0.1, porch_z - 0.03),
+			Vector2(hx + w * 0.5 + 0.42, porch_z - 0.03),
+			Vector2(hx + w * 0.5 + 0.42, porch_z - 0.9)],
+		[Vector2(hx + w * 0.5 + 0.42, porch_z - 1.7),
+			Vector2(hx + w * 0.5 + 0.42, hz - d * 0.5 + 0.05),
+			Vector2(hx + w * 0.5 + 0.08, hz - d * 0.5 + 0.05)],
+	]
+	for points in runs:
+		_fence_run(points)
+
+func _fence_run(points: Array) -> void:
+	var posts: Array[Vector2] = []
+	for i in range(1, points.size()):
+		var a: Vector2 = points[i - 1]
+		var b: Vector2 = points[i]
+		var length := a.distance_to(b)
+		var count := maxi(1, int(round(length / 0.85)))
+		for k in range(1 if i > 1 else 0, count + 1):
+			posts.append(a.lerp(b, float(k) / float(count)))
+	for i in range(posts.size()):
+		var p: Vector2 = posts[i]
+		var py := height(p.x, p.y)
+		b.part("wood", p.x, py + 0.31, p.y, 0.1, 0.74, 0.1,
+			b.pick(["#6b4b33", "#5e4230", "#735139"]), 0.0, b.randf() * 0.3)
+		b.part("wood", p.x, py + 0.70, p.y, 0.13, 0.04, 0.13, "#4f3725", 0.0, b.randf() * 0.3)
+		obstacles.append([p.x, p.y, 0.22])
+		if i == 0:
+			continue
+		var prev: Vector2 = posts[i - 1]
+		var prev_y := height(prev.x, prev.y)
+		var length := p.distance_to(prev)
+		var angle := atan2(p.x - prev.x, p.y - prev.y)
+		b.place((p.x + prev.x) * 0.5, (py + prev_y) * 0.5, (p.y + prev.y) * 0.5, 1.0, angle, func() -> void:
+			for rail_y in [0.26, 0.55]:
+				b.part("wood", 0.0, rail_y, 0.0, 0.045, 0.075, length + 0.06,
+					b.pick(["#8f6644", "#9b7049", "#86603f"]), -atan2(py - prev_y, length))
+		)
 
 func _path(ax: float, az: float, bx: float, bz: float) -> void:
 	var length := sqrt((bx - ax) * (bx - ax) + (bz - az) * (bz - az))
