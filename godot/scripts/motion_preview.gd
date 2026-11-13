@@ -30,7 +30,8 @@ var _style: StyleBoxFlat
 
 func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
-	custom_minimum_size = Vector2(110, 58)
+	if custom_minimum_size == Vector2.ZERO:
+		custom_minimum_size = Vector2(110, 58)
 	_style = StyleBoxFlat.new()
 	_style.bg_color = Color(1, 1, 1, 0.045)
 	_style.set_corner_radius_all(8)

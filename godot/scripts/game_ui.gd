@@ -11,45 +11,54 @@ signal quality_changed(index: int)
 signal reduced_motion_changed(enabled: bool)
 
 const MotionPreviewScript = preload("res://scripts/motion_preview.gd")
+const WEATHER_NAMES := ["맑음", "흐림", "비", "안개", "눈", "눈보라"]
+const SEASON_NAMES := ["봄", "여름", "가을", "겨울"]
 
 var time_slider: HSlider
 var wind_slider: HSlider
 var time_value: Label
 var wind_value: Label
 var auto_check: CheckBox
-var motion_check: CheckBox
-var weather_option: OptionButton
-var season_option: OptionButton
-var quality_option: OptionButton
+var auto_hint: Label
 var horizon_preview: MotionPreviewScript
 var wind_preview: MotionPreviewScript
 var weather_preview: MotionPreviewScript
 var panel_control: PanelContainer
 var body_control: VBoxContainer
 var toggle_button: Button
-var _syncing := false
-var ui_theme: Theme
-var panel_style: StyleBoxFlat
+var toggle_action: Label
 var bottom_box: VBoxContainer
 var credit_label: LinkButton
-var weather_label: Label
-var season_label: Label
-var option_box: BoxContainer
 var reset_button: Button
-var reset_spacer: Control
-var auto_label_full := "시간 자동 진행 (120초 / 하루)"
-var auto_label_compact := "시간 자동 진행"
+var ui_theme: Theme
+var panel_style: StyleBoxFlat
+var weather_chips: Array[Button] = []
+var season_chips: Array[Button] = []
+var rows: Array[HBoxContainer] = []
+var previews: Array[Control] = []
+var reduced_motion := false
+var quality_index := 0
+var weather_index := 0
+var season_index := 1
+var _syncing := false
+var _bold_font: FontVariation
 
 func _ready() -> void:
 	ui_theme = Theme.new()
 	var font := SystemFont.new()
 	font.font_names = PackedStringArray(["Malgun Gothic", "Noto Sans KR", "Apple SD Gothic Neo", "Segoe UI", "sans-serif"])
 	ui_theme.default_font = font
-	ui_theme.default_font_size = 14
-	ui_theme.set_color("font_color", "Label", Color(1, 1, 1, 0.94))
-	ui_theme.set_color("font_color", "Button", Color(1, 1, 1, 0.94))
-	ui_theme.set_color("font_color", "CheckBox", Color(1, 1, 1, 0.9))
-	ui_theme.set_color("font_color", "OptionButton", Color(1, 1, 1, 0.94))
+	ui_theme.default_font_size = 12
+	_bold_font = FontVariation.new()
+	_bold_font.base_font = font
+	_bold_font.variation_embolden = 0.55
+	var shadow := Color(0.06, 0.11, 0.15, 0.60)
+	for type_name in ["Label", "Button", "CheckBox"]:
+		ui_theme.set_color("font_color", type_name, Color(1, 1, 1, 0.94))
+		ui_theme.set_color("font_shadow_color", type_name, shadow)
+		ui_theme.set_constant("shadow_offset_x", type_name, 0)
+		ui_theme.set_constant("shadow_offset_y", type_name, 1)
+		ui_theme.set_constant("shadow_outline_size", type_name, 3)
 
 	var root := Control.new()
 	root.name = "Root"
@@ -61,10 +70,23 @@ func _ready() -> void:
 	credit_label = LinkButton.new()
 	credit_label.text = "SD Unity-chan © Unity Technologies Japan/UCL"
 	credit_label.uri = "https://unity-chan.com/contents/license_en/"
-	credit_label.add_theme_font_size_override("font_size", 10)
-	credit_label.set_anchors_and_offsets_preset(Control.PRESET_TOP_LEFT)
-	credit_label.offset_left = 12
-	credit_label.offset_top = 8
+	credit_label.add_theme_font_size_override("font_size", 11)
+	credit_label.add_theme_color_override("font_color", Color(0.17, 0.23, 0.27, 1.0))
+	credit_label.add_theme_color_override("font_hover_color", Color(0.10, 0.15, 0.18, 1.0))
+	var credit_style := StyleBoxFlat.new()
+	credit_style.bg_color = Color(1, 1, 1, 0.66)
+	credit_style.set_corner_radius_all(6)
+	credit_style.content_margin_left = 8
+	credit_style.content_margin_right = 8
+	credit_style.content_margin_top = 3
+	credit_style.content_margin_bottom = 3
+	credit_label.add_theme_stylebox_override("normal", credit_style)
+	credit_label.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_LEFT)
+	credit_label.offset_left = 12.0
+	credit_label.offset_right = 300.0
+	credit_label.offset_top = -28.0
+	credit_label.offset_bottom = -8.0
+	credit_label.grow_vertical = Control.GROW_DIRECTION_BEGIN
 	root.add_child(credit_label)
 
 	bottom_box = VBoxContainer.new()
@@ -72,7 +94,7 @@ func _ready() -> void:
 	bottom_box.offset_left = 14
 	bottom_box.offset_right = -14
 	bottom_box.offset_top = -640
-	bottom_box.offset_bottom = -16
+	bottom_box.offset_bottom = -18
 	bottom_box.alignment = BoxContainer.ALIGNMENT_END
 	bottom_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	root.add_child(bottom_box)
@@ -82,190 +104,308 @@ func _ready() -> void:
 	panel.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	panel.mouse_filter = Control.MOUSE_FILTER_STOP
 	panel_style = StyleBoxFlat.new()
-	panel_style.bg_color = Color(0.085, 0.125, 0.075, 0.60)
-	panel_style.border_color = Color(1, 1, 1, 0.24)
+	panel_style.bg_color = Color(0, 0, 0, 0)
+	panel_style.border_color = Color(1, 1, 1, 0.45)
 	panel_style.set_border_width_all(1)
 	panel_style.set_corner_radius_all(16)
-	panel_style.content_margin_left = 20
-	panel_style.content_margin_right = 20
-	panel_style.content_margin_top = 10
-	panel_style.content_margin_bottom = 12
+	panel_style.content_margin_left = 22
+	panel_style.content_margin_right = 22
+	panel_style.content_margin_top = 0
+	panel_style.content_margin_bottom = 14
 	panel.add_theme_stylebox_override("panel", panel_style)
 	panel_control = panel
 	bottom_box.add_child(panel)
 
 	var outer := VBoxContainer.new()
-	outer.add_theme_constant_override("separation", 4)
+	outer.add_theme_constant_override("separation", 0)
 	panel.add_child(outer)
 
-	var toggle := Button.new()
-	toggle.text = "환경 설정  ▾"
-	toggle.flat = true
-	toggle.alignment = HORIZONTAL_ALIGNMENT_LEFT
-	toggle.add_theme_font_size_override("font_size", 14)
-	outer.add_child(toggle)
-	toggle_button = toggle
-
-	var body := VBoxContainer.new()
-	body.add_theme_constant_override("separation", 8)
-	body.visible = false
-	outer.add_child(body)
-	body_control = body
-	toggle.pressed.connect(func() -> void:
-		set_panel_open(not body.visible)
+	toggle_button = Button.new()
+	toggle_button.text = "환경 설정"
+	toggle_button.flat = true
+	toggle_button.alignment = HORIZONTAL_ALIGNMENT_LEFT
+	toggle_button.custom_minimum_size = Vector2(0, 42)
+	toggle_button.add_theme_font_size_override("font_size", 12)
+	toggle_button.add_theme_font_override("font", _bold_font)
+	toggle_button.pressed.connect(func() -> void:
+		set_panel_open(not body_control.visible)
 	)
+	outer.add_child(toggle_button)
+	toggle_action = Label.new()
+	toggle_action.text = "펼치기  ▾"
+	toggle_action.add_theme_font_size_override("font_size", 11)
+	toggle_action.add_theme_color_override("font_color", Color(1, 1, 1, 0.65))
+	toggle_action.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	toggle_action.set_anchors_and_offsets_preset(Control.PRESET_CENTER_RIGHT)
+	toggle_action.offset_left = -110
+	toggle_action.offset_right = -22
+	toggle_button.add_child(toggle_action)
 
-	# Time row.
-	var time_row := HBoxContainer.new()
-	time_row.add_theme_constant_override("separation", 12)
-	body.add_child(time_row)
-	var time_label := Label.new()
-	time_label.text = "시각"
-	time_label.custom_minimum_size = Vector2(48, 0)
-	time_row.add_child(time_label)
-	time_slider = HSlider.new()
-	time_slider.min_value = 0.0
-	time_slider.max_value = 24.0
-	time_slider.step = 1.0 / 60.0
-	time_slider.value = 8.5
-	time_slider.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	time_row.add_child(time_slider)
-	time_value = Label.new()
-	time_value.text = "08:30"
-	time_value.custom_minimum_size = Vector2(48, 0)
-	time_value.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-	time_row.add_child(time_value)
-	horizon_preview = MotionPreviewScript.new()
-	horizon_preview.mode = 0
-	horizon_preview.custom_minimum_size = Vector2(110, 58)
-	horizon_preview.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	time_row.add_child(horizon_preview)
+	body_control = VBoxContainer.new()
+	body_control.add_theme_constant_override("separation", 0)
+	body_control.visible = false
+	outer.add_child(body_control)
 
-	auto_check = CheckBox.new()
-	auto_check.text = "시간 자동 진행 (120초 / 하루)"
-	auto_check.button_pressed = false
-	body.add_child(auto_check)
+	_build_time_row()
+	_build_wind_row()
+	_build_weather_row()
+	_build_footer()
 
-	motion_check = CheckBox.new()
-	motion_check.text = "모션 감소 (미리보기 정지)"
-	motion_check.button_pressed = false
-	body.add_child(motion_check)
-
-	# Wind row.
-	var wind_row := HBoxContainer.new()
-	wind_row.add_theme_constant_override("separation", 12)
-	body.add_child(wind_row)
-	var wind_label := Label.new()
-	wind_label.text = "바람"
-	wind_label.custom_minimum_size = Vector2(48, 0)
-	wind_row.add_child(wind_label)
-	wind_slider = HSlider.new()
-	wind_slider.min_value = 0.0
-	wind_slider.max_value = 16.0
-	wind_slider.step = 0.5
-	wind_slider.value = 3.0
-	wind_slider.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	wind_row.add_child(wind_slider)
-	wind_value = Label.new()
-	wind_value.text = "3 m/s"
-	wind_value.custom_minimum_size = Vector2(58, 0)
-	wind_value.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-	wind_row.add_child(wind_value)
-	wind_preview = MotionPreviewScript.new()
-	wind_preview.mode = 1
-	wind_preview.custom_minimum_size = Vector2(110, 58)
-	wind_preview.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	wind_row.add_child(wind_preview)
-
-	# Weather / season rows: side by side on desktop, stacked on phones.
-	option_box = BoxContainer.new()
-	option_box.vertical = false
-	option_box.add_theme_constant_override("separation", 18)
-	body.add_child(option_box)
-
-	var weather_row := HBoxContainer.new()
-	weather_row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	weather_row.add_theme_constant_override("separation", 12)
-	option_box.add_child(weather_row)
-	weather_label = Label.new()
-	weather_label.text = "날씨"
-	weather_label.custom_minimum_size = Vector2(48, 0)
-	weather_row.add_child(weather_label)
-	weather_option = OptionButton.new()
-	for name in ["맑음", "흐림", "비", "안개", "눈", "눈보라"]:
-		weather_option.add_item(name)
-	weather_option.selected = 0
-	weather_option.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	weather_option.custom_minimum_size = Vector2(0, 34)
-	weather_row.add_child(weather_option)
-	weather_preview = MotionPreviewScript.new()
-	weather_preview.mode = 2
-	weather_preview.custom_minimum_size = Vector2(94, 54)
-	weather_preview.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	weather_row.add_child(weather_preview)
-
-	var season_row := HBoxContainer.new()
-	season_row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	season_row.add_theme_constant_override("separation", 12)
-	option_box.add_child(season_row)
-	season_label = Label.new()
-	season_label.text = "계절"
-	season_label.custom_minimum_size = Vector2(48, 0)
-	season_row.add_child(season_label)
-	season_option = OptionButton.new()
-	for name in ["봄", "여름", "가을", "겨울"]:
-		season_option.add_item(name)
-	season_option.selected = 1
-	season_option.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	season_option.custom_minimum_size = Vector2(0, 34)
-	season_row.add_child(season_option)
-
-	var quality_row := HBoxContainer.new()
-	quality_row.add_theme_constant_override("separation", 12)
-	body.add_child(quality_row)
-	var quality_label := Label.new()
-	quality_label.text = "품질"
-	quality_label.custom_minimum_size = Vector2(48, 0)
-	quality_row.add_child(quality_label)
-	quality_option = OptionButton.new()
-	for name in ["높음", "보통", "낮음"]:
-		quality_option.add_item(name)
-	quality_option.selected = 0
-	quality_option.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	quality_option.custom_minimum_size = Vector2(0, 34)
-	quality_row.add_child(quality_option)
-
-	# Footer.
-	var footer := HBoxContainer.new()
-	body.add_child(footer)
-	reset_spacer = Control.new()
-	reset_spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	footer.add_child(reset_spacer)
-	reset_button = Button.new()
-	reset_button.text = "처음 시점"
-	reset_button.custom_minimum_size = Vector2(0, 34)
-	reset_button.pressed.connect(func() -> void: reset_requested.emit())
-	footer.add_child(reset_button)
-
+	weather_index = 0
+	season_index = 1
+	_refresh_chips(weather_chips, weather_index)
+	_refresh_chips(season_chips, season_index)
 	time_slider.value_changed.connect(_on_time_changed)
 	wind_slider.value_changed.connect(_on_wind_changed)
 	auto_check.toggled.connect(func(on: bool) -> void: auto_toggled.emit(on))
-	motion_check.toggled.connect(func(on: bool) -> void: set_reduced_motion(on))
-	weather_option.item_selected.connect(func(index: int) -> void:
-		weather_preview.set_weather(index)
-		weather_changed.emit(index))
-	season_option.item_selected.connect(func(index: int) -> void: season_changed.emit(index))
-	quality_option.item_selected.connect(func(index: int) -> void: quality_changed.emit(index))
-
-	time_slider.custom_minimum_size = Vector2(0, 28)
-	wind_slider.custom_minimum_size = Vector2(0, 28)
-	auto_check.custom_minimum_size = Vector2(0, 30)
-	motion_check.custom_minimum_size = Vector2(0, 30)
 	get_viewport().size_changed.connect(_apply_responsive_layout)
 	_apply_responsive_layout()
 	horizon_preview.set_time(time_slider.value)
 	wind_preview.set_wind(wind_slider.value)
-	weather_preview.set_weather(weather_option.selected)
+	weather_preview.set_weather(weather_index)
+
+func _build_time_row() -> void:
+	var row := _start_row()
+	var left := VBoxContainer.new()
+	left.add_theme_constant_override("separation", 2)
+	left.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	left.size_flags_stretch_ratio = 1.2
+	row.add_child(left)
+	var caption := HBoxContainer.new()
+	left.add_child(caption)
+	var label := Label.new()
+	label.text = "시각"
+	label.add_theme_font_override("font", _bold_font)
+	caption.add_child(label)
+	var spacer := Control.new()
+	spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	caption.add_child(spacer)
+	time_value = Label.new()
+	time_value.text = "08:30"
+	time_value.add_theme_font_size_override("font_size", 12)
+	caption.add_child(time_value)
+	time_slider = _new_slider(0.0, 24.0, 1.0 / 60.0, 8.5)
+	left.add_child(time_slider)
+	auto_check = CheckBox.new()
+	auto_check.text = "시간 자동 진행"
+	auto_check.custom_minimum_size = Vector2(0, 22)
+	auto_check.add_theme_font_size_override("font_size", 11)
+	var auto_row := HBoxContainer.new()
+	auto_row.add_theme_constant_override("separation", 4)
+	auto_row.add_child(auto_check)
+	auto_hint = Label.new()
+	auto_hint.text = "120초 / 하루"
+	auto_hint.add_theme_font_size_override("font_size", 9)
+	auto_hint.add_theme_color_override("font_color", Color(1, 1, 1, 0.55))
+	auto_hint.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	auto_row.add_child(auto_hint)
+	left.add_child(auto_row)
+	horizon_preview = MotionPreviewScript.new()
+	horizon_preview.mode = 0
+	_add_preview(row, horizon_preview)
+
+func _build_wind_row() -> void:
+	var row := _start_row()
+	var left := VBoxContainer.new()
+	left.add_theme_constant_override("separation", 2)
+	left.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	left.size_flags_stretch_ratio = 1.2
+	row.add_child(left)
+	var caption := HBoxContainer.new()
+	left.add_child(caption)
+	var label := Label.new()
+	label.text = "바람"
+	label.add_theme_font_override("font", _bold_font)
+	caption.add_child(label)
+	var spacer := Control.new()
+	spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	caption.add_child(spacer)
+	wind_value = Label.new()
+	wind_value.text = "3 m/s"
+	wind_value.add_theme_font_size_override("font_size", 12)
+	caption.add_child(wind_value)
+	wind_slider = _new_slider(0.0, 16.0, 0.5, 3.0)
+	left.add_child(wind_slider)
+	wind_preview = MotionPreviewScript.new()
+	wind_preview.mode = 1
+	_add_preview(row, wind_preview)
+
+func _build_weather_row() -> void:
+	var row := _start_row()
+	var left := VBoxContainer.new()
+	left.add_theme_constant_override("separation", 4)
+	left.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	left.size_flags_stretch_ratio = 1.2
+	row.add_child(left)
+	var label := Label.new()
+	label.text = "날씨"
+	label.add_theme_font_override("font", _bold_font)
+	left.add_child(label)
+	var group := ButtonGroup.new()
+	group.allow_unpress = false
+	var flow := HFlowContainer.new()
+	flow.add_theme_constant_override("h_separation", 4)
+	flow.add_theme_constant_override("v_separation", 4)
+	left.add_child(flow)
+	for i in range(WEATHER_NAMES.size()):
+		var chip := _new_chip(WEATHER_NAMES[i], group)
+		chip.pressed.connect(func() -> void: _on_weather_chip(i))
+		flow.add_child(chip)
+		weather_chips.append(chip)
+	weather_preview = MotionPreviewScript.new()
+	weather_preview.mode = 2
+	_add_preview(row, weather_preview)
+
+func _build_footer() -> void:
+	var line := ColorRect.new()
+	line.color = Color(1, 1, 1, 0.16)
+	line.custom_minimum_size = Vector2(0, 1)
+	body_control.add_child(line)
+	var margin := MarginContainer.new()
+	margin.add_theme_constant_override("margin_top", 11)
+	body_control.add_child(margin)
+	var footer := HBoxContainer.new()
+	footer.add_theme_constant_override("separation", 10)
+	margin.add_child(footer)
+	var label := Label.new()
+	label.text = "계절"
+	label.add_theme_font_override("font", _bold_font)
+	label.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	footer.add_child(label)
+	var group := ButtonGroup.new()
+	group.allow_unpress = false
+	var flow := HFlowContainer.new()
+	flow.add_theme_constant_override("h_separation", 4)
+	flow.add_theme_constant_override("v_separation", 2)
+	flow.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	flow.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	flow.custom_minimum_size = Vector2(210, 0)
+	footer.add_child(flow)
+	for i in range(SEASON_NAMES.size()):
+		var chip := _new_chip(SEASON_NAMES[i], group)
+		chip.pressed.connect(func() -> void: _on_season_chip(i))
+		flow.add_child(chip)
+		season_chips.append(chip)
+	var spacer := Control.new()
+	spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	footer.add_child(spacer)
+	reset_button = Button.new()
+	reset_button.text = "처음 시점"
+	reset_button.custom_minimum_size = Vector2(0, 26)
+	reset_button.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	reset_button.add_theme_font_size_override("font_size", 10)
+	reset_button.add_theme_stylebox_override("normal", _border_style(Color(0, 0, 0, 0), Color(1, 1, 1, 0.28), 6, 5, 9))
+	reset_button.add_theme_stylebox_override("hover", _border_style(Color(1, 1, 1, 0.10), Color(1, 1, 1, 0.40), 6, 5, 9))
+	reset_button.pressed.connect(func() -> void: reset_requested.emit())
+	footer.add_child(reset_button)
+
+func _start_row() -> HBoxContainer:
+	var line := ColorRect.new()
+	line.color = Color(1, 1, 1, 0.16)
+	line.custom_minimum_size = Vector2(0, 1)
+	body_control.add_child(line)
+	var margin := MarginContainer.new()
+	margin.add_theme_constant_override("margin_top", 10)
+	margin.add_theme_constant_override("margin_bottom", 10)
+	body_control.add_child(margin)
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 28)
+	margin.add_child(row)
+	rows.append(row)
+	return row
+
+func _add_preview(row: HBoxContainer, preview: Control) -> void:
+	preview.custom_minimum_size = Vector2(230, 98)
+	preview.size_flags_horizontal = Control.SIZE_SHRINK_END
+	preview.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	row.add_child(preview)
+	previews.append(preview)
+
+func _new_slider(minimum: float, maximum: float, step: float, initial: float) -> HSlider:
+	var slider := HSlider.new()
+	slider.min_value = minimum
+	slider.max_value = maximum
+	slider.step = step
+	slider.value = initial
+	slider.custom_minimum_size = Vector2(0, 24)
+	slider.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	var track := StyleBoxLine.new()
+	track.color = Color(1, 1, 1, 0.20)
+	track.thickness = 2
+	var fill := StyleBoxLine.new()
+	fill.color = Color(1, 1, 1, 0.92)
+	fill.thickness = 2
+	slider.add_theme_stylebox_override("slider", track)
+	slider.add_theme_stylebox_override("grabber_area", fill)
+	slider.add_theme_stylebox_override("grabber_area_highlight", fill)
+	slider.add_theme_icon_override("grabber", _grabber_texture())
+	slider.add_theme_icon_override("grabber_highlight", _grabber_texture())
+	return slider
+
+func _grabber_texture() -> ImageTexture:
+	var image := Image.create(15, 15, false, Image.FORMAT_RGBA8)
+	for y in range(15):
+		for x in range(15):
+			var dx := float(x) - 7.0
+			var dy := float(y) - 7.0
+			var r := sqrt(dx * dx + dy * dy)
+			if r > 5.4:
+				image.set_pixel(x, y, Color(0, 0, 0, 0))
+			elif r > 3.3:
+				image.set_pixel(x, y, Color(1, 1, 1, 1))
+			else:
+				image.set_pixel(x, y, Color(1, 1, 1, 0.24))
+	return ImageTexture.create_from_image(image)
+
+func _border_style(bg: Color, border: Color, radius: int, pad_x: int, pad_y: int) -> StyleBoxFlat:
+	var style := StyleBoxFlat.new()
+	style.bg_color = bg
+	style.border_color = border
+	style.set_border_width_all(1)
+	style.set_corner_radius_all(radius)
+	style.content_margin_left = pad_x
+	style.content_margin_right = pad_x
+	style.content_margin_top = pad_y
+	style.content_margin_bottom = pad_y
+	return style
+
+func _new_chip(text: String, group: ButtonGroup) -> Button:
+	var chip := Button.new()
+	chip.text = text
+	chip.toggle_mode = true
+	chip.button_group = group
+	chip.focus_mode = Control.FOCUS_NONE
+	chip.custom_minimum_size = Vector2(0, 27)
+	chip.add_theme_font_size_override("font_size", 11)
+	chip.add_theme_stylebox_override("normal", _border_style(Color(0, 0, 0, 0), Color(0, 0, 0, 0), 6, 10, 3))
+	chip.add_theme_stylebox_override("hover", _border_style(Color(1, 1, 1, 0.09), Color(0, 0, 0, 0), 6, 10, 3))
+	chip.add_theme_stylebox_override("pressed", _border_style(Color(1, 1, 1, 0.12), Color(1, 1, 1, 0.65), 6, 10, 3))
+	chip.add_theme_stylebox_override("hover_pressed", _border_style(Color(1, 1, 1, 0.15), Color(1, 1, 1, 0.75), 6, 10, 3))
+	chip.add_theme_color_override("font_color", Color(1, 1, 1, 0.92))
+	chip.add_theme_color_override("font_hover_color", Color(1, 1, 1, 1))
+	chip.add_theme_color_override("font_pressed_color", Color(1, 1, 1, 1))
+	chip.add_theme_color_override("font_hover_pressed_color", Color(1, 1, 1, 1))
+	return chip
+
+func _refresh_chips(chips: Array[Button], selected: int) -> void:
+	for i in range(chips.size()):
+		var chip: Button = chips[i]
+		chip.set_pressed_no_signal(i == selected)
+		if i == selected:
+			chip.add_theme_font_override("font", _bold_font)
+		else:
+			chip.remove_theme_font_override("font")
+
+func _on_weather_chip(index: int) -> void:
+	weather_index = index
+	_refresh_chips(weather_chips, index)
+	weather_preview.set_weather(index)
+	weather_changed.emit(index)
+
+func _on_season_chip(index: int) -> void:
+	season_index = index
+	_refresh_chips(season_chips, index)
+	season_changed.emit(index)
 
 func _apply_responsive_layout() -> void:
 	if panel_control == null:
@@ -288,36 +428,45 @@ func _apply_responsive_layout() -> void:
 		safe_bottom = float(window_size.y - safe.end.y) * sy
 	bottom_box.offset_left = margin + safe_left
 	bottom_box.offset_right = -margin - safe_right
-	bottom_box.offset_top = -minf(640.0, maxf(viewport_size.y - 16.0, 160.0))
-	bottom_box.offset_bottom = -16.0 - safe_bottom
-	credit_label.offset_left = 12.0 + safe_left
-	credit_label.offset_top = 8.0 + safe_top
-	panel_control.custom_minimum_size = Vector2(minf(650.0, maxf(viewport_size.x - margin * 2.0, 220.0)), 0.0)
-	panel_style.content_margin_left = 14.0 if compact else 20.0
-	panel_style.content_margin_right = 14.0 if compact else 20.0
-	panel_style.set_corner_radius_all(12 if compact else 16)
-	ui_theme.default_font_size = 13 if compact else 14
-	auto_check.text = auto_label_compact if compact else auto_label_full
-	auto_check.tooltip_text = "120초에 하루가 지납니다"
-	option_box.vertical = compact
-	option_box.add_theme_constant_override("separation", 6 if compact else 18)
-	reset_spacer.visible = not compact
-	reset_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL if compact else Control.SIZE_SHRINK_END
-	var slider_height := 34.0 if compact else 28.0
-	time_slider.custom_minimum_size.y = slider_height
-	wind_slider.custom_minimum_size.y = slider_height
-	auto_check.custom_minimum_size.y = 34.0 if compact else 30.0
-	toggle_button.custom_minimum_size.y = 36.0 if compact else 30.0
-	weather_label.custom_minimum_size.x = 40.0 if compact else 48.0
-	season_label.custom_minimum_size.x = 40.0 if compact else 48.0
-	var preview_width := 86.0 if compact else 110.0
-	var preview_height := 50.0 if compact else 58.0
-	if horizon_preview != null:
-		horizon_preview.custom_minimum_size = Vector2(preview_width, preview_height)
-	if wind_preview != null:
-		wind_preview.custom_minimum_size = Vector2(preview_width, preview_height)
-	if weather_preview != null:
-		weather_preview.custom_minimum_size = Vector2(preview_width - 12.0, preview_height - 4.0)
+	bottom_box.offset_top = -minf(640.0, maxf(viewport_size.y - 16.0, 180.0))
+	bottom_box.offset_bottom = -18.0 - safe_bottom
+	panel_control.custom_minimum_size = Vector2(
+		minf(650.0, maxf(viewport_size.x - margin * 2.0, 240.0)), 0.0)
+	panel_style.content_margin_left = 14.0 if compact else 22.0
+	panel_style.content_margin_right = 14.0 if compact else 22.0
+	panel_style.content_margin_bottom = 10.0 if compact else 14.0
+	panel_style.set_corner_radius_all(14 if compact else 16)
+	ui_theme.default_font_size = 11 if compact else 12
+	toggle_button.custom_minimum_size.y = 38.0 if compact else 42.0
+	auto_hint.visible = not compact
+	var preview_size := Vector2(100, 43) if compact else Vector2(230, 98)
+	for preview in previews:
+		preview.custom_minimum_size = preview_size
+		preview.size_flags_horizontal = Control.SIZE_EXPAND_FILL if compact else Control.SIZE_SHRINK_END
+	for row in rows:
+		row.add_theme_constant_override("separation", 14 if compact else 28)
+	for chip in weather_chips + season_chips:
+		chip.add_theme_constant_override("h_separation", 0)
+		chip.add_theme_font_size_override("font_size", 10 if compact else 11)
+		chip.custom_minimum_size.y = 24.0 if compact else 27.0
+		chip.add_theme_stylebox_override("normal", _border_style(Color(0, 0, 0, 0), Color(0, 0, 0, 0), 6, 7 if compact else 10, 3))
+		chip.add_theme_stylebox_override("pressed", _border_style(Color(1, 1, 1, 0.12), Color(1, 1, 1, 0.65), 6, 7 if compact else 10, 3))
+	time_slider.custom_minimum_size.y = 24
+	wind_slider.custom_minimum_size.y = 24
+	if compact:
+		credit_label.set_anchors_and_offsets_preset(Control.PRESET_TOP_LEFT)
+		credit_label.offset_left = 10.0 + safe_left
+		credit_label.offset_top = 8.0 + safe_top
+		credit_label.offset_right = 300.0
+		credit_label.offset_bottom = 30.0
+		credit_label.grow_vertical = Control.GROW_DIRECTION_END
+	else:
+		credit_label.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_LEFT)
+		credit_label.offset_left = 12.0 + safe_left
+		credit_label.offset_right = 320.0
+		credit_label.offset_top = -28.0
+		credit_label.offset_bottom = -8.0
+		credit_label.grow_vertical = Control.GROW_DIRECTION_BEGIN
 
 func _on_time_changed(value: float) -> void:
 	time_value.text = format_hour(value)
@@ -351,22 +500,21 @@ func set_wind_value(value: float) -> void:
 
 func set_auto(enabled: bool) -> void:
 	_syncing = true
-	auto_check.button_pressed = enabled
+	auto_check.set_pressed_no_signal(enabled)
 	_syncing = false
 
 func is_auto() -> bool:
 	return auto_check.button_pressed
 
 func set_reduced_motion(enabled: bool) -> void:
-	if motion_check != null and motion_check.button_pressed != enabled:
-		motion_check.set_pressed_no_signal(enabled)
+	reduced_motion = enabled
 	for preview in [horizon_preview, wind_preview, weather_preview]:
 		if preview != null:
 			preview.reduced_motion = enabled
 	reduced_motion_changed.emit(enabled)
 
 func is_reduced_motion() -> bool:
-	return motion_check != null and motion_check.button_pressed
+	return reduced_motion
 
 func is_panel_open() -> bool:
 	return body_control != null and body_control.visible
@@ -378,24 +526,32 @@ func get_wind() -> float:
 	return wind_slider.value
 
 func set_weather(index: int) -> void:
-	weather_option.selected = index
+	weather_index = clampi(index, 0, WEATHER_NAMES.size() - 1)
+	_refresh_chips(weather_chips, weather_index)
 	if weather_preview != null:
-		weather_preview.set_weather(index)
+		weather_preview.set_weather(weather_index)
 
 func set_season(index: int) -> void:
-	season_option.selected = index
+	season_index = clampi(index, 0, SEASON_NAMES.size() - 1)
+	_refresh_chips(season_chips, season_index)
 
 func set_quality(index: int) -> void:
-	quality_option.selected = index
+	quality_index = index
 
 func get_quality() -> int:
-	return quality_option.selected
+	return quality_index
 
 func set_panel_open(open: bool) -> void:
 	if body_control == null:
 		return
 	body_control.visible = open
-	toggle_button.text = "환경 설정  ▴" if open else "환경 설정  ▾"
+	toggle_action.text = "접기  ▴" if open else "펼치기  ▾"
+	if open:
+		body_control.modulate.a = 0.0
+		var tween := create_tween()
+		tween.tween_property(body_control, "modulate:a", 1.0, 0.30)
+	else:
+		body_control.modulate.a = 1.0
 
 func get_panel_rect() -> Rect2:
 	if panel_control == null:
