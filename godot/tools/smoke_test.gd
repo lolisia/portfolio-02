@@ -40,6 +40,22 @@ func _initialize() -> void:
 		world.set_cloud_shadow(0.8, 12.0)
 		if absf(float(world.terrain_material.get_shader_parameter("cloud_amount")) - 0.8) > 0.01:
 			failures.append("terrain cloud shadow missing")
+		var wood_mmi := world.find_child("wood", true, false) as MultiMeshInstance3D
+		if wood_mmi == null or not (wood_mmi.material_override is ShaderMaterial):
+			failures.append("wood surface material missing")
+		else:
+			var wood_mat := wood_mmi.material_override as ShaderMaterial
+			if wood_mat.shader == null or not wood_mat.shader.code.contains("box_relief"):
+				failures.append("box UV surface shader missing")
+			var wood_mesh: Mesh = wood_mmi.multimesh.mesh
+			var flat_normals := {}
+			for surface in range(wood_mesh.get_surface_count()):
+				var arrays := wood_mesh.surface_get_arrays(surface)
+				var normals: PackedVector3Array = arrays[Mesh.ARRAY_NORMAL]
+				for normal in normals:
+					flat_normals[normal.snapped(Vector3.ONE * 0.01)] = true
+			if flat_normals.size() < 6:
+				failures.append("wood boxes are not flat shaded")
 		var flower_mmi := world.find_child("flowerHead", true, false) as MultiMeshInstance3D
 		if flower_mmi != null:
 			var window_z: float = world.cottage_origin.y + float(world.COTTAGE.D) * 0.5 + 0.11
