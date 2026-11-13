@@ -326,6 +326,30 @@ func _initialize() -> void:
 			failures.append("snow footprint fill tuning wrong")
 		footprints.snow_depth = 0.0
 		footprints.snowfall = 0.0
+	var orbit = main.get("orbit")
+	if orbit == null:
+		failures.append("orbit camera missing")
+	else:
+		orbit.set_view(Vector3(0.0, 1.0, 0.0), 0.4, 0.8, 2.0)
+		var zoom_before := float(orbit.zoom)
+		var target_before: Vector3 = orbit.target
+		var wheel := InputEventMouseButton.new()
+		wheel.button_index = MOUSE_BUTTON_WHEEL_UP
+		wheel.pressed = true
+		wheel.position = Vector2(48.0, 20.0)
+		orbit._unhandled_input(wheel)
+		if float(orbit.zoom) <= zoom_before:
+			failures.append("cursor wheel did not zoom")
+		if orbit.target.distance_to(target_before) < 0.0001:
+			failures.append("zoom did not follow the cursor")
+		var yaw_before := float(orbit.yaw)
+		orbit.set_view(Vector3(0.0, 1.0, 0.0), 0.4, 0.8, 2.0)
+		orbit.yaw_target = yaw_before + 0.5
+		orbit._process(0.05)
+		var yaw_after := float(orbit.yaw)
+		if yaw_after <= yaw_before + 0.001 or yaw_after >= yaw_before + 0.5:
+			failures.append("orbit damping did not ease")
+		orbit.reset_view()
 	if main.get("night_life") == null:
 		failures.append("night life missing")
 	if main.get("seasons_fx") == null:
