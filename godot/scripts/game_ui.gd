@@ -54,7 +54,7 @@ var _bold_font: FontVariation
 func _ready() -> void:
 	ui_theme = Theme.new()
 	var font := SystemFont.new()
-	font.font_names = PackedStringArray(["Malgun Gothic", "Noto Sans KR", "Apple SD Gothic Neo", "Segoe UI", "sans-serif"])
+	font.font_names = PackedStringArray(["Noto Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", "Segoe UI", "sans-serif"])
 	ui_theme.default_font = font
 	ui_theme.default_font_size = 12
 	_bold_font = FontVariation.new()
@@ -161,6 +161,7 @@ func _ready() -> void:
 	body_control.add_theme_constant_override("separation", 0)
 	body_control.visible = false
 	body_clip.add_child(body_control)
+	body_control.minimum_size_changed.connect(_refresh_body_height)
 	body_clip.resized.connect(_layout_body)
 
 	_build_time_row()
@@ -456,8 +457,8 @@ func _apply_responsive_layout() -> void:
 	if panel_control == null:
 		return
 	var viewport_size := get_viewport().get_visible_rect().size
-	var compact := viewport_size.x < 560.0
-	var margin := 8.0 if compact else 14.0
+	var compact := viewport_size.x <= 500.0
+	var margin := 14.0
 	var safe_left := 0.0
 	var safe_top := 0.0
 	var safe_right := 0.0
@@ -474,7 +475,7 @@ func _apply_responsive_layout() -> void:
 	bottom_box.offset_left = margin + safe_left
 	bottom_box.offset_right = -margin - safe_right
 	bottom_box.offset_top = -minf(640.0, maxf(viewport_size.y - 16.0, 180.0))
-	bottom_box.offset_bottom = -18.0 - safe_bottom
+	bottom_box.offset_bottom = (-12.0 if compact else -18.0) - safe_bottom
 	panel_control.custom_minimum_size = Vector2(
 		minf(650.0, maxf(viewport_size.x - margin * 2.0, 240.0)), 0.0)
 	panel_style.content_margin_left = 14.0 if compact else 22.0
@@ -484,7 +485,7 @@ func _apply_responsive_layout() -> void:
 	ui_theme.default_font_size = 11 if compact else 12
 	toggle_button.custom_minimum_size.y = 38.0 if compact else 42.0
 	auto_hint.visible = not compact
-	var preview_size := Vector2(100, 43) if compact else Vector2(230, 98)
+	var preview_size := Vector2(84, 38) if compact else Vector2(230, 98)
 	for preview in previews:
 		preview.custom_minimum_size = preview_size
 		preview.size_flags_horizontal = Control.SIZE_EXPAND_FILL if compact else Control.SIZE_SHRINK_END
@@ -638,7 +639,10 @@ func set_panel_open(open: bool, instant: bool = false) -> void:
 func _refresh_body_height() -> void:
 	if body_control == null or body_clip == null:
 		return
-	full_body_height = body_control.get_combined_minimum_size().y
+	var new_height := body_control.get_combined_minimum_size().y
+	if absf(new_height - full_body_height) < 0.5:
+		return
+	full_body_height = new_height
 	if panel_open:
 		body_clip.custom_minimum_size.y = full_body_height
 	_layout_body()

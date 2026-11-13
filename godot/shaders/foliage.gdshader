@@ -135,6 +135,14 @@ void fragment() {
 		}
 	}
 	vec3 albedo = base_color.rgb * v_color * season_tint;
+	// K9: spring blossom freckles on broadleaf spray (web foliageTint.g > 1).
+	float spring = clamp((season_tint.g - 1.02) * 6.0, 0.0, 1.0);
+	if (leaf_cut > 0.5 && leaf_cut < 1.5 && spring > 0.01) {
+		float blossom = smoothstep(0.56, 0.72,
+			fbm(v_world.xz * 1.2 + vec2(v_world.y * 0.42)));
+		albedo = mix(albedo, vec3(0.93, 0.55, 0.66),
+			blossom * spring * 0.75);
+	}
 	// Leafy dapple: world-space noise breaks the flat canopy blobs into
 	// lighter and darker leaf clusters, like the reference's foliage.
 	float leaf = fbm(v_world.xz * 7.0 + vec2(v_world.y * 2.7));
