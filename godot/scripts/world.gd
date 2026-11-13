@@ -1260,17 +1260,42 @@ func _build_garden_stairs() -> void:
 		path_points.append(Vector2(x, z))
 
 func _build_path_mask() -> void:
-	var size := 512
-	var image := Image.create(size, size, false, Image.FORMAT_RGBA8)
-	image.fill(Color.BLACK)
+	# G7: 1024² RGBA ground mask. R = leaf litter (tree radial stamps),
+	# G = soft trail (radial stamps along every path point), B/A unused.
+	# Linear filtering + radial falloff replace the old 6-pixel square mask.
+	var size := 1024
+	var data := PackedByteArray()
+	data.resize(size * size * 4)
+	data.fill(0)
+	for tree in FarmWorld.TREE_LIST:
+		var x: float = tree[0]
+		var z: float = tree[1]
+		var s: float = tree[2]
+		_stamp_ground_mask(data, size, x, z, 2.1 * s, 0, 1.0)
 	for p in path_points:
-		var px := int((p.x + 15.0) / 30.0 * size)
-		var pz := int((p.y + 15.0) / 30.0 * size)
-		var radius := 6
-		image.fill_rect(Rect2i(px - radius, pz - radius, radius * 2, radius * 2), Color.WHITE)
+		_stamp_ground_mask(data, size, p.x, p.y, 1.02, 1, 0.91)
+	var image := Image.create_from_data(size, size, false, Image.FORMAT_RGBA8, data)
 	path_mask = ImageTexture.create_from_image(image)
 	if terrain_material != null:
 		terrain_material.set_shader_parameter("path_mask", path_mask)
+
+func _stamp_ground_mask(data: PackedByteArray, size: int, x: float, z: float,
+		radius_world: float, channel: int, opacity: float) -> void:
+	var cx := int((x + 15.0) / 30.0 * float(size))
+	var cz := int((z + 15.0) / 30.0 * float(size))
+	var radius := maxi(1, int(ceil(radius_world / 30.0 * float(size))))
+	var radius_sq := float(radius * radius)
+	for py in range(maxi(0, cz - radius), mini(size, cz + radius + 1)):
+		for px in range(maxi(0, cx - radius), mini(size, cx + radius + 1)):
+			var dx := float(px - cx)
+			var dz := float(py - cz)
+			var distance_sq := dx * dx + dz * dz
+			if distance_sq > radius_sq:
+				continue
+			var value := int((1.0 - sqrt(distance_sq / radius_sq)) * opacity * 255.0)
+			var index := (py * size + px) * 4 + channel
+			if value > int(data[index]):
+				data[index] = value
 
 func set_surface_state(wet_value: float, snow_value: float, _season_value: int) -> void:
 	# Wet/snow are updated continuously; the season tint/winter blend is owned by
