@@ -189,6 +189,9 @@ func _ready() -> void:
 		orbit.set_view(Vector3(-1.1, 1.6, -7.3), 0.2, 0.95, 4.2)
 	if "--falls" in cli:
 		orbit.set_view(Vector3(16.2, 0.7, 6.1), 1.62, 0.34, 2.4)
+	if "--porch" in cli:
+		character.position = Vector3(-1.0, 0.0, 0.55)
+		orbit.set_view(Vector3(-1.0, 1.2, 0.3), 0.0, 0.62, 3.0)
 
 	ui = GameUI.new()
 	ui.name = "GameUI"

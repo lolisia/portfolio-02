@@ -246,7 +246,7 @@ func _task_route(type: String) -> Array[Vector2]:
 		target = world.pond_shore
 		task_face = atan2(POND.x - target.x, POND.y - target.y)
 	elif type == "salute":
-		target = Vector2(-0.35, 1.0)
+		target = Vector2(-1.0, -0.35)
 		task_face = atan2(-1.0 - target.x, -2.5 - target.y)
 	if target != current and paths != null and world != null:
 		var path: Array[Vector2] = paths.route(world, current, target)
@@ -314,6 +314,10 @@ func _walk_route(delta: float) -> void:
 
 func _can_stand(p: Vector2) -> bool:
 	if world == null:
+		return true
+	# The porch deck/steps are raised walking surfaces inside the house
+	# obstacle; allow them explicitly so the door route can climb.
+	if world.is_on_porch(p.x, p.y):
 		return true
 	return world.is_free_for_walker(p.x, p.y, 0.16)
 
@@ -402,7 +406,9 @@ func _update_task(delta: float) -> void:
 
 func _finish_task() -> void:
 	if task_type == "salute" and task_phase == 1:
-		position = Vector3(-0.35, position.y, 1.0)
+		position = Vector3(-0.35, 0.0, 1.0)
+		if world != null:
+			position.y = world.stand(position.x, position.z)
 		model.visible = true
 	mode = "stroll"
 	task_type = ""

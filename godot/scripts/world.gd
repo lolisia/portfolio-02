@@ -173,6 +173,22 @@ func snow_surface(x: float, z: float, snow_value: float) -> float:
 	var base := height(x, z)
 	return base + snow_lift(x, z, base, snow_value) + 0.012
 
+func is_on_porch(x: float, z: float) -> bool:
+	# Porch deck and steps, used to allow the walker onto the raised surfaces
+	# that the normal obstacle graph deliberately excludes.
+	var lx := x - cottage_origin.x
+	var lz := z - cottage_origin.y
+	var w: float = COTTAGE.W
+	var d: float = COTTAGE.D
+	var p: float = COTTAGE.P
+	var run_distance: float = COTTAGE.run
+	if absf(lx) < w * 0.5 and lz > d * 0.5 - 0.05 and lz < d * 0.5 + p:
+		return true
+	var step_depth: float = float(cottage_steps) * run_distance + 0.22
+	if absf(lx) < 0.62 and lz >= d * 0.5 + p - 0.05 and lz < d * 0.5 + p + step_depth:
+		return true
+	return false
+
 func is_free(x: float, z: float, pad: float = 0.0) -> bool:
 	for obstacle in obstacles:
 		var ox: float = obstacle[0]

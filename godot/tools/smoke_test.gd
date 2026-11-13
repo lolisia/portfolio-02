@@ -47,6 +47,17 @@ func _initialize() -> void:
 		failures.append("A* paths missing")
 	elif character.paths.route(main.world, Vector2(0, 2), Vector2(10, 5)).is_empty():
 		failures.append("A* route empty")
+	if character != null and character.paths != null:
+		var porch_route: Array = character.paths.route(main.world,
+			Vector2(-0.35, 1.0), Vector2(-1.0, -0.35))
+		var deck_route := false
+		for p in porch_route:
+			if float(p.y) < 0.1:
+				deck_route = true
+		if porch_route.is_empty() or not deck_route:
+			failures.append("porch route missing")
+		if not character._can_stand(Vector2(-1.0, -0.35)):
+			failures.append("porch walk blocked")
 
 	if main.get("footprints") == null:
 		failures.append("footprints layer missing")
