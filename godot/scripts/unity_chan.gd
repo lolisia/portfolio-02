@@ -564,9 +564,14 @@ func _update_fishing_gear() -> void:
 	bobber.global_position = bobber_position
 
 	line_mesh.clear_surfaces()
-	line_mesh.surface_begin(Mesh.PRIMITIVE_LINES)
-	line_mesh.surface_add_vertex(tip)
-	line_mesh.surface_add_vertex(bobber_position)
+	line_mesh.surface_begin(Mesh.PRIMITIVE_LINE_STRIP)
+	# unitychan.js draws 10 points with a sine sag of 0.18 between the rod tip
+	# and the bobber.
+	for i in range(10):
+		var u := float(i) / 9.0
+		var point := tip.lerp(bobber_position, u)
+		point.y -= sin(PI * u) * 0.18
+		line_mesh.surface_add_vertex(point)
 	line_mesh.surface_end()
 	line.global_position = Vector3.ZERO
 	line.visible = task_phase == 1

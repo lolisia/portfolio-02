@@ -753,6 +753,12 @@ func _update_atmosphere(daylight: Dictionary) -> void:
 	var from_index := int(daylight["from"])
 	var to_index := int(daylight["to"])
 	var blend := float(daylight["f"])
+	if fill != null:
+		# Web main.js: the sky fill uses the SKY palette and the time-of-day
+		# intensity, dimmed slightly by the blended weather coverage.
+		fill.light_color = Daylight.color_at(Daylight.SKY, from_index, to_index, blend)
+		fill.light_energy = Daylight.value_at([0.54, 0.62, 0.50, 0.10, 0.48],
+			from_index, to_index, blend) * (1.0 - weather_coverage * 0.09)
 	var base_density := Daylight.value_at(Daylight.FOG_DENSITY, from_index, to_index, blend)
 	atmosphere_effect.fog_density = base_density * (1.0 + 0.38 * coverage) * density_scale
 	var scatter := Daylight.color_at(Daylight.FOG_SCATTER, from_index, to_index, blend)
@@ -801,7 +807,7 @@ func _update_atmosphere(daylight: Dictionary) -> void:
 	var lamp_data: Array = []
 	if world != null:
 		for entry in world.lamps:
-			var light: OmniLight3D = entry.light
+			var light: SpotLight3D = entry.light
 			lamp_data.append(Vector4(light.global_position.x, light.global_position.y,
 				light.global_position.z, clampf(light.light_energy / 3.6, 0.0, 1.0)))
 	atmosphere_effect.lamps = lamp_data

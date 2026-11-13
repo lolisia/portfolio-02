@@ -49,7 +49,7 @@ func apply(level: int) -> void:
 		# Five shadow-casting lanterns dominate the shadow budget at night;
 		# only the High preset keeps them.
 		for entry in world.lamps:
-			var lamp_light: OmniLight3D = entry["light"]
+			var lamp_light: SpotLight3D = entry["light"]
 			if lamp_light != null:
 				lamp_light.shadow_enabled = high
 	if viewport != null:

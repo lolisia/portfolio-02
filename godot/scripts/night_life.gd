@@ -299,7 +299,7 @@ func _update_lamps(delta: float, night: float) -> void:
 					lamp["level"] = 1.0
 			if float(lamp["flicker"]) <= 0.0:
 				lamp["level"] = 1.0
-		var light: OmniLight3D = lamp["light"]
+		var light: SpotLight3D = lamp["light"]
 		var hum := 1.0 + 0.025 * sin(time * 47.0 + light.position.x) * sin(time * 3.1)
 		var level: float = float(lamp["level"]) * hum
 		light.light_energy = night * 3.6 * level

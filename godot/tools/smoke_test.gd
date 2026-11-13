@@ -121,7 +121,7 @@ func _initialize() -> void:
 		quality_manager.apply(2)
 		if world != null:
 			for entry in world.lamps:
-				var lamp_light: OmniLight3D = entry["light"]
+				var lamp_light: SpotLight3D = entry["light"]
 				if lamp_light != null and lamp_light.shadow_enabled:
 					failures.append("low quality kept lantern shadows")
 					break

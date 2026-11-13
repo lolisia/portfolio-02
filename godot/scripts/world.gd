@@ -1338,13 +1338,16 @@ func _build_lamps() -> void:
 			_lantern_parts("pendant")
 		)
 		obstacles.append([x, z, 0.2])
-		var light := OmniLight3D.new()
+		var light := SpotLight3D.new()
 		light.name = "LanternLight"
 		light.position = Vector3(x + 0.48 * cos(angle), y + 1.90, z - 0.48 * sin(angle))
 		light.light_color = Color(1.0, 0.92, 0.80)
 		light.light_energy = 0.0
-		light.omni_range = 6.0
-		light.omni_attenuation = 1.3
+		light.spot_range = 8.0
+		light.spot_angle = 67.0
+		light.spot_angle_attenuation = 0.72
+		light.spot_attenuation = 1.65
+		light.rotation_degrees = Vector3(-90.0, 0.0, 0.0)
 		light.shadow_enabled = true
 		light.shadow_bias = 0.04
 		add_child(light)
@@ -1379,7 +1382,7 @@ func _collect_materials() -> void:
 
 func set_night(night: float) -> void:
 	for entry in lamps:
-		var light: OmniLight3D = entry.light
+		var light: SpotLight3D = entry.light
 		light.light_energy = night * 3.6
 		light.visible = night > 0.02
 	if window_light != null:
