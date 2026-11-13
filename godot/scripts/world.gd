@@ -30,6 +30,7 @@ var cascade_left := 4.25
 var cascade_width := 3.1
 var cascade_drop := WATER_Y - FLOOR_Y
 var veg_beds: Array = []
+var rose_bushes: Array[Vector2] = []
 var pond_shore := Vector2(6.9, 4.0)
 var lamps: Array = []
 var window_light: OmniLight3D
@@ -1078,21 +1079,24 @@ func _build_garden_beds() -> void:
 								b.part("flowerStem", fx, soil - 0.01, fz, fs, fs, fs, "#6f8f45", 0.0, b.randf() * TAU, 0.0, 0.22)
 								b.part("flowerHead", fx, soil - 0.01, fz, fs, fs, fs,
 									b.pick(["#f4f1e4", "#f2d25a"]), 0.0, b.randf() * TAU, 0.0, 0.22)
-		# Rose bushes at the four corners.
-		for rsx in [-1.0, 1.0]:
-			for rsz in [-1.0, 1.0]:
-				var rx: float = x0 + float(rsx) * (bw * 0.5 + gap * 0.5 + 0.42)
-				var rz: float = z0 + float(rsz) * (bd * 0.5 + gap * 0.5 - 0.1)
-				var ry := height(rx, rz) - 0.02
-				b.part("bushALeaves", rx, ry, rz, 0.62, 0.55, 0.62,
-					b.pick(["#4f6e33", "#5a7a3a"]), 0.0, b.randf() * TAU, 0.0, 0.0)
-				for i in range(9):
-					var a4 := b.randf() * TAU
-					var u := 0.12 + b.randf() * 0.16
-					b.part("roseBloom", rx + cos(a4) * u, ry + 0.22 + b.randf() * 0.14,
-						rz + sin(a4) * u, 1.2, 1.2, 1.2,
-						b.pick(["#c8243a", "#e85a78", "#f3b3c0", "#a51d2e"]), 0.0, b.randf() * TAU, 0.0, 0.05)
+		# A per-cell obstacle for the bed frame.
 		obstacles.append([x0, z0, 0.8])
+	# Rose bushes at the four garden corners (web: cx ± (bw+gap/2+.42),
+	# cz ± (bd+gap/2−.1)); not one set per bed.
+	for rsx in [-1.0, 1.0]:
+		for rsz in [-1.0, 1.0]:
+			var rx: float = cx + float(rsx) * (bw + gap * 0.5 + 0.42)
+			var rz: float = cz + float(rsz) * (bd + gap * 0.5 - 0.1)
+			var ry := height(rx, rz) - 0.02
+			b.part("bushALeaves", rx, ry, rz, 0.62, 0.55, 0.62,
+				b.pick(["#4f6e33", "#5a7a3a"]), 0.0, b.randf() * TAU, 0.0, 0.0)
+			for i in range(9):
+				var a4 := b.randf() * TAU
+				var u := 0.12 + b.randf() * 0.16
+				b.part("roseBloom", rx + cos(a4) * u, ry + 0.22 + b.randf() * 0.14,
+					rz + sin(a4) * u, 1.2, 1.2, 1.2,
+					b.pick(["#c8243a", "#e85a78", "#f3b3c0", "#a51d2e"]), 0.0, b.randf() * TAU, 0.0, 0.05)
+			rose_bushes.append(Vector2(rx, rz))
 	# Gravel cross.
 	for i in range(8):
 		var f := (i + 0.5) / 8.0 - 0.5

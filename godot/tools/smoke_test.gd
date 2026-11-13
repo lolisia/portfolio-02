@@ -31,6 +31,15 @@ func _initialize() -> void:
 			failures.append("procedural garden asset missing")
 		if world.window_glass_material == null:
 			failures.append("window interior material missing")
+		if world.rose_bushes.size() != 4:
+			failures.append("rose bush count wrong")
+		else:
+			for rose in world.rose_bushes:
+				var rose_offset: Vector2 = rose - Vector2(-1.1, -7.65)
+				if absf(absf(rose_offset.x) - 2.19) > 0.06 \
+						or absf(absf(rose_offset.y) - 0.83) > 0.06:
+					failures.append("rose bush not at a garden corner")
+					break
 		if world.boxes.is_empty():
 			failures.append("oriented collision boxes missing")
 		if world.bodies.size() < 7:
