@@ -4,6 +4,15 @@ Godot 4.7 프로젝트. 원본 Three.js 디오라마(`../src`)를 PC/모바일 �
 
 ## 실행
 
+리포지토리 루트의 `start-godot.bat`을 더블클릭하거나:
+
+```bat
+start-godot.bat
+```
+
+Godot 실행 파일이 다른 곳에 있으면 `GODOT_EXE` 환경 변수로 지정할 수 있습니다.
+추가 인자는 그대로 전달됩니다 (예: `start-godot.bat -- --dawn`).
+
 ```powershell
 # Windows PowerShell
 & 'D:\Godot\Godot_v4.7.2-stable_mono_win64\Godot_v4.7.2-stable_mono_win64_console.exe' --path .
