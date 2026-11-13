@@ -67,7 +67,7 @@ func finish() -> void:
 				var swap = items[i]
 				items[i] = items[j]
 				items[j] = swap
-		var material: Material = _material_for(kind_name)
+		var material: Material = _material_for(kind_name, mesh)
 		var mm := MultiMesh.new()
 		mm.transform_format = MultiMesh.TRANSFORM_3D
 		mm.use_colors = true
@@ -126,13 +126,23 @@ func _mesh_for(kind: String) -> Mesh:
 			fallback.size = Vector3.ONE
 			return fallback
 
-func _material_for(kind: String) -> Material:
+func _material_for(kind: String, mesh: Mesh = null) -> Material:
 	if kind in PLANT_KINDS:
 		var shader_mat := ShaderMaterial.new()
 		shader_mat.shader = preload("res://shaders/foliage.gdshader")
 		shader_mat.set_shader_parameter("wind_strength", 1.0)
-		if kind == "sunflowerBloom":
-			shader_mat.set_shader_parameter("use_vertex_color", 1.0)
+		# K4: the Blender nature meshes carry their baked shading in vertex
+		# colours. Detect that per mesh and multiply it into the instance tint.
+		var has_vertex_colors := false
+		if mesh != null:
+			for surface in range(mesh.get_surface_count()):
+				var arrays := mesh.surface_get_arrays(surface)
+				var colors = arrays[Mesh.ARRAY_COLOR]
+				if colors != null and (colors as PackedColorArray).size() > 0:
+					has_vertex_colors = true
+					break
+		shader_mat.set_shader_parameter("use_vertex_color",
+			1.0 if has_vertex_colors else 0.0)
 		# Only low ground cover is flattened by walkers; trees keep their sway.
 		if kind.begins_with("turf") or kind.begins_with("grass"):
 			shader_mat.set_shader_parameter("trample_strength", 1.0)

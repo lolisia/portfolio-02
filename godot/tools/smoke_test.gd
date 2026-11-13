@@ -73,6 +73,17 @@ func _initialize() -> void:
 				failures.append(stem_kind + " is not tubular")
 		if world.meshes.has("sunflowerDisc"):
 			failures.append("separate sunflower disc still exists")
+		var oak_mmi := world.find_child("oakALeaves", true, false) as MultiMeshInstance3D
+		if oak_mmi == null or not (oak_mmi.material_override is ShaderMaterial):
+			failures.append("oak foliage material missing")
+		else:
+			var oak_mat := oak_mmi.material_override as ShaderMaterial
+			if absf(float(oak_mat.get_shader_parameter("use_vertex_color")) - 1.0) > 0.01:
+				failures.append("baked foliage vertex colours not used")
+			if _mesh_color_count(world.meshes["oakALeaves"]) <= 0:
+				failures.append("foliage shade colours missing")
+			if float(oak_mat.get_shader_parameter("leaf_cut")) < 0.5:
+				failures.append("leaf backlight flag missing")
 		var bloom_mesh: Mesh = world.meshes.get("sunflowerBloom")
 		if bloom_mesh == null:
 			failures.append("sunflower bloom missing")
@@ -448,3 +459,12 @@ func _initialize() -> void:
 func _fail(message: String) -> void:
 	push_error("SMOKE FAIL: " + message)
 	quit(1)
+
+func _mesh_color_count(mesh: Mesh) -> int:
+	var total := 0
+	for surface in range(mesh.get_surface_count()):
+		var arrays := mesh.surface_get_arrays(surface)
+		var colors = arrays[Mesh.ARRAY_COLOR]
+		if colors != null:
+			total += (colors as PackedColorArray).size()
+	return total

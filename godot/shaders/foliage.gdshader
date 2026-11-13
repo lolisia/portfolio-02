@@ -155,3 +155,15 @@ void fragment() {
 		discard;
 	}
 }
+
+void light() {
+	float ndl = max(0.0, dot(NORMAL, LIGHT));
+	DIFFUSE_LIGHT += ndl * ATTENUATION * LIGHT_COLOR / PI;
+	// K5: backlit leaves transmit a warm-green light when the sun is behind
+	// them, matching the web alphaTest foliage term.
+	if (leaf_cut > 0.5) {
+		float back = max(0.0, -dot(NORMAL, LIGHT));
+		DIFFUSE_LIGHT += LIGHT_COLOR * ATTENUATION
+			* vec3(0.38, 0.48, 0.16) * (0.12 + 0.88 * back);
+	}
+}
