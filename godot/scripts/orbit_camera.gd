@@ -76,9 +76,9 @@ func _unhandled_input(event: InputEvent) -> void:
 			_dragging = mb.pressed
 			_drag_button = mb.button_index
 			if mb.pressed:
-				Input.set_default_cursor_shape(Input.CURSOR_POINTING_HAND)
+				Input.set_default_cursor_shape(Input.CURSOR_DRAG)
 			else:
-				Input.set_default_cursor_shape(Input.CURSOR_ARROW)
+				Input.set_default_cursor_shape(Input.CURSOR_POINTING_HAND)
 		elif mb.pressed and mb.button_index == MOUSE_BUTTON_WHEEL_UP:
 			_zoom_at(mb.position, zoom_step)
 		elif mb.pressed and mb.button_index == MOUSE_BUTTON_WHEEL_DOWN:
