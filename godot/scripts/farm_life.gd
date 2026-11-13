@@ -15,6 +15,9 @@ var smoke: GPUParticles3D
 var smoke_process: ParticleProcessMaterial
 var smoke_material: StandardMaterial3D
 var fish_school: Array = []
+var fish_palette_count := 0
+var fish_fin_count := 0
+var vane_bracket_count := 0
 var next_leap := 4.0
 var character
 var bird: Node3D
@@ -148,7 +151,12 @@ func _build_vane() -> void:
 	head.radial_segments = 3
 	var head_mesh := _cylinder(vane_arrow, head, brass, 0.0, 0.0, 0.8)
 	head_mesh.rotation.x = PI * 0.5
-	_box(vane_arrow, brass, 0.0, 0.05, -0.62, 0.26, 0.18, 0.025)
+	# A9: two small brass brackets under the rooster; the web has no tail plate.
+	for z in [-0.12, 0.12]:
+		var bracket := _box(vane_arrow, brass, 0.0, 0.13, float(z),
+			0.035, 0.16, 0.025)
+		bracket.name = "vane-bracket"
+		vane_bracket_count += 1
 	var hub := SphereMesh.new()
 	hub.radius = 0.065
 	hub.height = 0.13
@@ -387,7 +395,9 @@ func _build_fish() -> void:
 		[Color(0.384, 0.475, 0.420), Color(0.678, 0.694, 0.545), Color(0.502, 0.420, 0.322)],
 		[Color(0.541, 0.435, 0.298), Color(0.824, 0.698, 0.486), Color(0.608, 0.420, 0.239)],
 		[Color(0.886, 0.863, 0.796), Color(0.949, 0.933, 0.886), Color(0.847, 0.471, 0.235)],
+		[Color(0.690, 0.416, 0.227), Color(0.906, 0.753, 0.541), Color(0.651, 0.353, 0.184)],
 	]
+	fish_palette_count = palettes.size()
 	for i in range(10):
 		var palette: Array = palettes[i % palettes.size()]
 		var group := Node3D.new()
@@ -399,6 +409,11 @@ func _build_fish() -> void:
 		belly.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		var tail := _egg(group, palette[2], 0, 0, -0.36, 0.028, 0.14, 0.14)
 		tail.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		# A7: web fish carry a dorsal fin on top of the body.
+		var dorsal := _egg(group, palette[2], 0, 0.11, -0.05, 0.025, 0.055, 0.11)
+		dorsal.name = "dorsal-fin"
+		dorsal.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		fish_fin_count += 1
 		for s in [-1.0, 1.0]:
 			var eye := _egg(group, Color(0.153, 0.157, 0.114), float(s) * 0.074, 0.024, 0.208, 0.016, 0.016, 0.016)
 			eye.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF

@@ -263,6 +263,10 @@ func _initialize() -> void:
 	else:
 		if farm_life.paths == null:
 			failures.append("chicken path graph missing")
+		if farm_life.fish_palette_count != 4 or farm_life.fish_fin_count != 10:
+			failures.append("fish palette or dorsal fins wrong")
+		if farm_life.vane_bracket_count != 2:
+			failures.append("weather vane brackets missing")
 		if farm_life.chickens.is_empty():
 			failures.append("chicken flock missing")
 		elif String(farm_life.chickens[0]["state"]) != "inside" \
