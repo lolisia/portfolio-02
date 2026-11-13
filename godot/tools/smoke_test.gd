@@ -60,6 +60,25 @@ func _initialize() -> void:
 			failures.append("porch route missing")
 		if not character._can_stand(Vector2(-1.0, -0.35)):
 			failures.append("porch walk blocked")
+	if character != null:
+		if character.state != "inside" or character.model == null or character.model.visible:
+			failures.append("character did not start inside")
+		if absf(float(character.walk_speed) - 0.62) > 0.001:
+			failures.append("character walk speed wrong")
+		if absf(float(character.world.cottage_door.x) + 1.0) > 0.001:
+			failures.append("cottage door position wrong")
+
+	var farm_life = main.get("farm_life")
+	if farm_life == null:
+		failures.append("farm life missing")
+	else:
+		if farm_life.paths == null:
+			failures.append("chicken path graph missing")
+		if farm_life.chickens.is_empty():
+			failures.append("chicken flock missing")
+		elif String(farm_life.chickens[0]["state"]) != "inside" \
+				or bool(farm_life.chickens[0]["group"].visible):
+			failures.append("chickens did not start inside")
 
 	if main.get("footprints") == null:
 		failures.append("footprints layer missing")

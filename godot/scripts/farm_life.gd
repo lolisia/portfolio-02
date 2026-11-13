@@ -15,7 +15,7 @@ var smoke: GPUParticles3D
 var smoke_process: ParticleProcessMaterial
 var fish_school: Array = []
 var next_leap := 4.0
-var character: Node3D
+var character
 var bird: Node3D
 var bird_wings: Array = []
 var bird_state := "perched"
@@ -39,7 +39,10 @@ var materials: Dictionary = {}
 
 const WIND_HEADING := 1.22
 const COOP_CENTER := Vector2(2.25, -0.35)
-const COOP_DOOR := Vector2(2.25, -0.95)
+const COOP_DOOR := Vector2(2.25, -1.12)
+const COOP_APRON := Vector2(2.25, 0.38)
+
+var paths: FarmPaths
 
 func build() -> void:
 	sphere = SphereMesh.new()
@@ -287,6 +290,7 @@ func _build_smoke() -> void:
 	add_child(smoke)
 
 func _build_flock() -> void:
+	paths = FarmPaths.new(world) if world != null else null
 	var positions := [
 		Vector2(2.1, -0.25), Vector2(2.7, -0.1), Vector2(1.5, 0.4),
 		Vector2(3.0, 0.5), Vector2(2.2, 1.15), Vector2(3.5, 1.2),
@@ -294,11 +298,13 @@ func _build_flock() -> void:
 	for i in range(positions.size()):
 		var chick := i >= 2
 		var chicken := _chicken(chick, i)
-		chicken["x"] = positions[i].x
-		chicken["z"] = positions[i].y
+		chicken["x"] = COOP_DOOR.x
+		chicken["z"] = COOP_DOOR.y
 		chicken["target"] = Vector2(positions[i].x, positions[i].y)
 		chicken["wait"] = randf() * 2.0
-		chicken["group"].position = Vector3(positions[i].x, world.height(positions[i].x, positions[i].y), positions[i].y)
+		chicken["group"].position = Vector3(COOP_DOOR.x,
+			world.height(COOP_DOOR.x, COOP_DOOR.y) + 0.65, COOP_DOOR.y)
+		chicken["group"].visible = false
 		chickens.append(chicken)
 
 func _chicken(chick: bool, index: int) -> Dictionary:
@@ -332,7 +338,10 @@ func _chicken(chick: bool, index: int) -> Dictionary:
 		"group": group, "head": head, "legs": legs, "chick": chick, "index": index,
 		"x": 0.0, "z": 0.0, "target": Vector2.ZERO, "wait": 0.0,
 		"gait": randf() * 4.0, "speed": (0.31 if chick else 0.27) + randf() * 0.12,
-		"state": "foraging", "stride": -1, "flee": 0.0, "inside": false,
+		"state": "inside", "stride": -1, "flee": 0.0, "inside": false,
+		"route": [], "pace": 0.0, "noticed": false, "intent": false,
+		"reaction": 1.5 + randf() * 10.0, "flee_cool": 0.0, "stuck": 0.0,
+		"retry": 0.0, "leg_speed": 1.0,
 	}
 
 func _pick_target(c: Dictionary) -> Vector2:
@@ -559,7 +568,7 @@ func _process(delta: float) -> void:
 	time += delta
 	_update_fish(delta)
 	_update_bird(delta)
-	var outside := hour >= 6.0 and hour < 19.0 and (weather <= 1 or weather == 4) and wind < 11.0
+	var outside := hour >= 6.0 and hour < 18.0 and (weather <= 1 or weather == 4) and wind < 11.0
 	var gust := sin(time * 1.37) + 0.42 * sin(time * 2.31)
 	var target_heading := WIND_HEADING + gust * 0.11 * minf(1.0, wind / 8.0)
 	vane_arrow.rotation.y = lerp_angle(vane_arrow.rotation.y, target_heading, 1.0 - exp(-delta * (1.0 + wind * 0.35)))
@@ -568,94 +577,230 @@ func _process(delta: float) -> void:
 	if smoke_process != null:
 		smoke_process.gravity = Vector3(wind * 0.055, 0.22, wind * 0.028)
 
+	_update_chickens(delta, outside)
+
+func _update_chickens(delta: float, outside: bool) -> void:
+	var threat := Vector2(1e9, 1e9)
+	if character != null and character.model != null and character.model.visible:
+		threat = Vector2(character.position.x, character.position.z)
 	for c in chickens:
 		var group: Node3D = c["group"]
-		if not outside:
-			if bool(c["inside"]):
-				group.visible = false
-				continue
-			# Walk to the coop door, then slip inside and hide.
-			var door := COOP_DOOR + Vector2((float(c["index"]) - 2.5) * 0.06, 0.10)
-			var to_door := door - Vector2(float(c["x"]), float(c["z"]))
-			if to_door.length() > 0.09:
-				var dir := to_door.normalized()
-				var step := minf(0.45 * delta, to_door.length())
-				c["x"] = float(c["x"]) + dir.x * step
-				c["z"] = float(c["z"]) + dir.y * step
-				c["gait"] = float(c["gait"]) + step / (0.045 if c["chick"] else 0.085)
+		if bool(c["noticed"]) != outside:
+			c["noticed"] = outside
+			c["reaction"] = (1.5 + randf() * 10.0) if outside \
+				else ((1.0 + randf() * 6.0) if weather >= 2 else (3.0 + randf() * 11.0))
+		c["reaction"] = maxf(0.0, float(c["reaction"]) - delta)
+		if float(c["reaction"]) <= 0.0:
+			c["intent"] = outside
+		if c["state"] == "inside":
+			group.visible = false
+			c["pace"] = 0.0
+			if bool(c["intent"]):
+				c["state"] = "exiting"
+				c["x"] = COOP_DOOR.x
+				c["z"] = COOP_DOOR.y
+				c["route"] = [COOP_APRON]
 				group.visible = true
-				group.position = Vector3(float(c["x"]), world.height(float(c["x"]), float(c["z"])), float(c["z"]))
-				group.rotation.y = lerp_angle(group.rotation.y, atan2(dir.x, dir.y), 1.0 - exp(-delta * 5.0))
-				group.rotation.z = sin(float(c["gait"])) * 0.017
-				var head3: Node3D = c["head"]
-				head3.rotation.x = lerp(head3.rotation.x, 0.08, 1.0 - exp(-delta * 5.0))
-				var legs2: Array = c["legs"]
-				for i in range(legs2.size()):
-					var leg2: MeshInstance3D = legs2[i]
-					leg2.rotation.x = sin(float(c["gait"]) + float(i) * PI) * 0.28
-			else:
-				c["inside"] = true
-				group.visible = false
+				c["wait"] = 0.0
+				c["pace"] = 0.0
 			continue
-
-		if bool(c["inside"]):
-			c["inside"] = false
-			c["x"] = COOP_DOOR.x + (float(c["index"]) - 2.5) * 0.06
-			c["z"] = COOP_DOOR.y + 0.22
-			group.visible = true
-			group.position = Vector3(float(c["x"]), world.height(float(c["x"]), float(c["z"])), float(c["z"]))
-			group.rotation.z = 0.0
-			c["wait"] = 0.4
-		else:
-			group.visible = true
-		c["flee"] = maxf(0.0, float(c["flee"]) - delta)
-		var threat := Vector2(1e9, 1e9)
-		if character != null:
-			threat = Vector2(character.position.x, character.position.z)
-		var away := Vector2(float(c["x"]), float(c["z"])) - threat
-		if away.length() < 1.25:
-			var push := away.normalized() if away.length() > 0.001 else Vector2(1.0, 0.0)
-			c["target"] = Vector2(float(c["x"]), float(c["z"])) + push * 1.5
+		if not bool(c["intent"]) and c["state"] != "returning":
+			c["state"] = "returning"
+			c["wait"] = 0.4 + randf() * 1.8
+			_set_chicken_trip(c, true)
+		c["retry"] = maxf(0.0, float(c["retry"]) - delta)
+		var here := Vector2(float(c["x"]), float(c["z"]))
+		if c["state"] == "foraging" and float(c["wait"]) > 0.0 \
+				and _in_coop_entrance(here):
 			c["wait"] = 0.0
-			c["flee"] = 0.8
-		if c.wait > 0.0:
-			c.wait = maxf(0.0, c.wait - delta)
-			c.state = "pecking"
-			var head: Node3D = c["head"]
-			var peck := 0.2 + maxf(0.0, sin(time * (2.1 + c.index * 0.19))) * 0.95
-			head.rotation.x = lerp(head.rotation.x, peck, 1.0 - exp(-delta * 5.0))
-		else:
-			var target: Vector2 = c.target
-			var flat := target - Vector2(c.x, c.z)
-			if flat.length() < 0.07:
-				c.target = _pick_target(c)
-				c.wait = 1.8 + randf() * 5.0
-				c.state = "pecking"
+			if (c["route"] as Array).is_empty():
+				_set_chicken_trip(c, false)
+		c["flee_cool"] = maxf(0.0, float(c["flee_cool"]) - delta)
+		if threat.x < 1e8 and (c["state"] == "foraging" or c["state"] == "fleeing") \
+				and float(c["flee_cool"]) <= 0.0 and here.distance_to(threat) < 1.5:
+			_chicken_flee(c, threat)
+		var moving := false
+		if float(c["wait"]) > 0.0:
+			c["wait"] = maxf(0.0, float(c["wait"]) - delta)
+			c["pace"] = lerpf(float(c["pace"]), 0.0, 1.0 - exp(-delta * 6.0))
+		elif c["state"] == "exiting":
+			moving = true
+			if _chicken_walk(c, delta, 0.85):
+				c["state"] = "foraging"
+				c["wait"] = 0.0
+				_set_chicken_trip(c, false)
+		elif c["state"] == "returning":
+			moving = true
+			if _chicken_walk(c, delta, 1.25):
+				c["state"] = "inside"
+				group.visible = false
+				c["pace"] = 0.0
 				continue
-			c.state = "foraging"
-			var direction := flat.normalized()
-			var pace := float(c["speed"]) * (2.4 if float(c["flee"]) > 0.0 else 1.0)
-			var step := minf(pace * delta, flat.length())
-			c.x += direction.x * step
-			c.z += direction.y * step
-			c.gait += step / (0.045 if c.chick else 0.085)
-			group.position = Vector3(c.x, world.height(c.x, c.z), c.z)
-			group.rotation.y = lerp_angle(group.rotation.y, atan2(direction.x, direction.y), 1.0 - exp(-delta * 5.0))
-			group.rotation.z = sin(c.gait) * 0.017
-			var head2: Node3D = c["head"]
-			head2.rotation.x = lerp(head2.rotation.x, 0.08, 1.0 - exp(-delta * 5.0))
-			var legs: Array = c["legs"]
-			for i in range(legs.size()):
-				var leg: MeshInstance3D = legs[i]
-				leg.rotation.x = sin(c.gait + i * PI) * 0.28
-			# Each half stride sets a foot down: a three-toed print in the snow.
-			var stride := int(floor(c.gait / PI))
-			if footprints != null and stride != int(c["stride"]):
-				var heading: float = group.rotation.y
-				var side := 1.0 if stride % 2 else -1.0
-				var chick_scale := 0.48 if c["chick"] else 1.0
-				footprints.press("claw",
-					float(c["x"]) + cos(heading) * side * 0.075 * chick_scale,
-					float(c["z"]) - sin(heading) * side * 0.075 * chick_scale,
-					heading, chick_scale * (0.9 + 0.2 * randf()))
-			c["stride"] = stride
+		elif c["state"] == "fleeing":
+			moving = true
+			if _chicken_walk(c, delta, 3.0):
+				c["state"] = "foraging"
+				c["wait"] = 0.4 + randf() * 1.2
+				c["leg_speed"] = 0.7 + randf() * 0.65
+		elif c["state"] == "foraging":
+			moving = true
+			if _chicken_walk(c, delta, 1.0):
+				moving = false
+				c["wait"] = 2.0 + randf() * 6.0
+				_set_chicken_trip(c, false)
+			elif randf() < delta * 0.025 and not _in_coop_entrance(here):
+				c["wait"] = 0.8 + randf() * 2.5
+		if not group.visible:
+			continue
+		var x := float(c["x"])
+		var z := float(c["z"])
+		var ramp := 0.0
+		if absf(x - COOP_DOOR.x) < 0.5:
+			ramp = clampf((0.35 - z) / 1.47, 0.0, 1.0) * 0.65
+		group.position = Vector3(x, world.height(x, z) + ramp, z)
+		group.rotation.z = sin(float(c["gait"])) * 0.017 if moving else 0.0
+		var head: Node3D = c["head"]
+		var peck := 0.0
+		if not moving and c["state"] == "foraging":
+			peck = 0.2 + maxf(0.0, sin(time * (2.1 + float(c["index"]) * 0.19)
+				+ float(c["index"]) * 0.53)) * 0.95
+		head.rotation.x = lerp(head.rotation.x, peck, 1.0 - exp(-delta * 5.0))
+		var legs: Array = c["legs"]
+		for i in range(legs.size()):
+			var leg: MeshInstance3D = legs[i]
+			leg.rotation.x = sin(float(c["gait"]) + float(i) * PI) * 0.28 if moving else 0.0
+		var stride := int(floor(float(c["gait"]) / PI))
+		if footprints != null and moving and ramp == 0.0 and stride != int(c["stride"]):
+			var heading: float = group.rotation.y
+			var side := 1.0 if stride % 2 else -1.0
+			var chick_scale := 0.48 if c["chick"] else 1.0
+			footprints.press("claw",
+				x + cos(heading) * side * 0.075 * chick_scale,
+				z - sin(heading) * side * 0.075 * chick_scale,
+				heading, chick_scale * (0.9 + 0.2 * randf()))
+		c["stride"] = stride
+
+func _in_coop_entrance(point: Vector2) -> bool:
+	return absf(point.x - COOP_DOOR.x) < 0.6 \
+		and point.y > COOP_DOOR.y - 0.2 and point.y < COOP_APRON.y + 0.75
+
+func _in_coop_ramp(x: float, z: float) -> bool:
+	return absf(x - COOP_DOOR.x) < 0.5 \
+		and z > COOP_DOOR.y - 0.2 and z < COOP_APRON.y + 0.2
+
+func _chicken_free(x: float, z: float) -> bool:
+	# The coop ramp is tagged 'coop' in the web colliders; here the entrance
+	# strip is explicitly walkable so the birds can use the ramp.
+	if _in_coop_ramp(x, z):
+		return true
+	return world.is_free(x, z, 0.12)
+
+func _set_chicken_trip(c: Dictionary, home: bool) -> void:
+	if paths == null:
+		c["route"] = [_pick_target(c)]
+		return
+	var current := Vector2(float(c["x"]), float(c["z"]))
+	if home:
+		var route: Array = paths.route(world, current, COOP_APRON)
+		route.append(COOP_DOOR)
+		c["route"] = route
+		return
+	if float(c["retry"]) > 0.0:
+		return
+	c["retry"] = 0.5
+	var far := randf() > 0.42
+	var candidates: Array[Vector2] = []
+	for node in paths.nodes:
+		if node.has("porch"):
+			continue
+		var p := Vector2(float(node["x"]), float(node["z"]))
+		var radius := p.distance_to(COOP_APRON)
+		if radius > (3.5 if far else 1.0) and radius < (9.0 if far else 4.0) \
+				and p.distance_to(current) > 1.0 and not _in_coop_entrance(p):
+			candidates.append(p)
+	for i in range(8):
+		if candidates.is_empty():
+			break
+		var target := candidates[randi() % candidates.size()]
+		var route2: Array = paths.route(world, current, target)
+		if not route2.is_empty():
+			c["route"] = route2
+			break
+	if (c["route"] as Array).is_empty():
+		c["route"] = [_pick_target(c)]
+	c["leg_speed"] = 0.7 + randf() * 0.65
+
+func _chicken_flee(c: Dictionary, threat: Vector2) -> void:
+	var current := Vector2(float(c["x"]), float(c["z"]))
+	var away := current - threat
+	var length := maxf(away.length(), 0.001)
+	var ax := away.x / length
+	var az := away.y / length
+	var best: Vector2 = Vector2.ZERO
+	var best_score := -INF
+	if paths != null:
+		for node in paths.nodes:
+			if node.has("porch"):
+				continue
+			var p := Vector2(float(node["x"]), float(node["z"]))
+			var reach := p.distance_to(current)
+			if reach < 1.3 or reach > 3.4 or _in_coop_entrance(p):
+				continue
+			var facing := ((p.x - current.x) * ax + (p.y - current.y) * az) / reach
+			if facing < 0.45:
+				continue
+			var value := p.distance_to(threat) + facing + randf() * 0.6
+			if value > best_score:
+				best_score = value
+				best = p
+	var route: Array = paths.route(world, current, best) if best_score > -INF else []
+	if route.is_empty():
+		route = [current + Vector2(ax, az) * 1.4]
+	c["route"] = route
+	c["state"] = "fleeing"
+	c["wait"] = 0.0
+	c["flee_cool"] = 0.7
+	c["leg_speed"] = 1.15 + randf() * 0.3
+
+func _chicken_walk(c: Dictionary, delta: float, multiplier: float) -> bool:
+	var route: Array = c["route"]
+	if route.is_empty():
+		c["pace"] = lerpf(float(c["pace"]), 0.0, 1.0 - exp(-delta * 5.0))
+		return true
+	var target: Vector2 = route[0]
+	var x := float(c["x"])
+	var z := float(c["z"])
+	var dx := target.x - x
+	var dz := target.y - z
+	var distance := sqrt(dx * dx + dz * dz)
+	var desired := float(c["speed"]) * float(c["leg_speed"]) * multiplier \
+		* (0.9 + 0.1 * sin(float(c["gait"]) * 0.17 + float(c["index"])))
+	c["pace"] = lerpf(float(c["pace"]), desired, 1.0 - exp(-delta * 2.8))
+	var step := minf(distance, float(c["pace"]) * delta)
+	var moved := 0.0
+	if distance > 0.001:
+		var nx := x + dx / distance * step
+		var nz := z + dz / distance * step
+		if _chicken_free(nx, nz):
+			x = nx
+			z = nz
+			moved = step
+		elif _chicken_free(nx, z):
+			x = nx
+			moved = absf(dx / distance * step)
+		elif _chicken_free(x, nz):
+			z = nz
+			moved = absf(dz / distance * step)
+		c["x"] = x
+		c["z"] = z
+		c["stuck"] = (float(c["stuck"]) + delta) if moved < step * 0.3 else 0.0
+		if float(c["stuck"]) > 1.5:
+			c["stuck"] = 0.0
+			route.pop_front()
+		var group: Node3D = c["group"]
+		group.rotation.y = lerp_angle(group.rotation.y, atan2(dx, dz),
+			1.0 - exp(-delta * 5.0))
+		c["gait"] = float(c["gait"]) + moved / (0.045 if c["chick"] else 0.085)
+	if distance < 0.045:
+		route.pop_front()
+	return route.is_empty()

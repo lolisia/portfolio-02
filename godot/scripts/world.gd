@@ -41,8 +41,12 @@ var cottage_chimney := Vector3.ZERO
 var cottage_origin := Vector2(-1.0, -2.5)
 var cottage_drop := 0.12
 var cottage_steps := 1
+var cottage_door := Vector2(-1.0, -0.6)
+var cottage_threshold := Vector2(-1.0, -0.88)
+var cottage_apron := Vector2(-1.0, 0.75)
 var door_leaf: Node3D
 var door_target_open := false
+var door_open := 0.0
 var obstacles: Array = []
 var path_points: Array[Vector2] = []
 var flight := {
@@ -483,11 +487,23 @@ func _build_door_leaf(cx: float, gy: float, cz: float, rot: float) -> Node3D:
 func set_door_open(open: bool) -> void:
 	door_target_open = open
 
+func door_open_amount() -> float:
+	return door_open
+
 func _process(delta: float) -> void:
 	if door_leaf == null:
 		return
-	var target := -1.55 if door_target_open else 0.0
-	door_leaf.rotation.y = lerp_angle(door_leaf.rotation.y, target, 1.0 - exp(-delta * 4.0))
+	# Web parity: the hinge eases out while opening and lands with a small
+	# rebound against the jamb when it falls shut.
+	var want := 1.0 if door_target_open else 0.0
+	var rate := 1.6 if want > door_open else 1.15
+	door_open = move_toward(door_open, want, rate * delta)
+	var k := (1.0 - pow(1.0 - door_open, 2.0)) if door_target_open \
+		else pow(door_open, 1.6)
+	var rebound := 0.0
+	if not door_target_open and door_open < 0.06:
+		rebound = 0.025 * sin(door_open / 0.06 * PI)
+	door_leaf.rotation.y = -1.68 * k + rebound
 
 func _cottage_steps(drop: float) -> int:
 	return maxi(1, int(round(drop / 0.16)))
@@ -544,6 +560,9 @@ func _build_cottage(cx: float, cz: float, rot: float) -> void:
 	cottage_origin = Vector2(cx, cz)
 	cottage_drop = drop
 	cottage_steps = _cottage_steps(drop)
+	cottage_door = Vector2(cx, cz + COTTAGE.D * 0.5 + 0.4)
+	cottage_threshold = Vector2(cx, cz + COTTAGE.D * 0.5 + 0.12)
+	cottage_apron = Vector2(cx, porch_z + float(cottage_steps) * float(COTTAGE.run) + 0.3)
 	b.place(cx, gy, cz, 1.0, rot, func() -> void:
 		_cottage_parts(drop)
 	)

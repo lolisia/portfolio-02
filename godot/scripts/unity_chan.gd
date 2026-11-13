@@ -20,8 +20,16 @@ var blink := 2.0
 var blink_t := 0.0
 var weather := 0
 var season := 1
+var hour := 8.5
+var wind := 3.0
+var water_freeze := 0.0
 
-var walk_speed := 0.48
+var walk_speed := 0.62
+var pace := 0.0
+var state := "inside"
+var intent := false
+var reaction := 3.0
+var door_wait := 0.0
 var waypoints := [
 	Vector2(-0.2, 2.2), Vector2(2.2, 2.8), Vector2(4.2, 2.2),
 	Vector2(4.6, 4.2), Vector2(2.4, 5.2), Vector2(0.0, 4.8),
@@ -69,9 +77,15 @@ func _ready() -> void:
 	_fit_model()
 	_find_face()
 	_build_fishing_gear()
-	position.y = world.stand(position.x, position.z) if world != null else 0.0
 	if world != null:
 		paths = FarmPaths.new(world)
+		position = Vector3(world.cottage_door.x,
+			world.stand(world.cottage_door.x, world.cottage_door.y), world.cottage_door.y)
+		model.visible = false
+		state = "inside"
+		reaction = 2.0 + randf() * 5.0
+	else:
+		position.y = 0.0
 	_play("Standing", 0.0)
 
 func _fit_model() -> void:
@@ -161,19 +175,68 @@ func _process(delta: float) -> void:
 	if model == null:
 		return
 	time += delta
-	if mode == "task":
-		_update_task(delta)
-	elif wait > 0.0:
-		wait -= delta
-		_play("Standing", 0.3)
-		if animation != null:
-			animation.speed_scale = 1.0
-		if wait <= 0.0:
-			_choose_next()
-	elif route.is_empty():
-		_choose_next()
+	_update_schedule(delta)
+
+	if state == "inside":
+		model.visible = false
+		pace = 0.0
+		if world != null:
+			world.set_door_open(false)
+		if intent:
+			state = "opening"
+			door_wait = 0.0
+			if world != null:
+				world.set_door_open(true)
+	elif state == "opening":
+		model.visible = false
+		door_wait += delta
+		if not intent:
+			state = "inside"
+			if world != null:
+				world.set_door_open(false)
+		elif world != null and world.door_open_amount() > 0.55:
+			# Step out once the door is most of the way open, exactly like
+			# unitychan.js.
+			state = "exiting"
+			position = Vector3(world.cottage_threshold.x,
+				world.stand(world.cottage_threshold.x, world.cottage_threshold.y),
+				world.cottage_threshold.y)
+			rotation.y = 0.0
+			route = [
+				Vector2(world.cottage_door.x, world.cottage_door.y),
+				world.cottage_apron,
+			]
+			pace = 0.0
+			model.visible = true
+			_play("Walking", 0.0)
 	else:
-		_walk_route(delta)
+		if not intent and state != "returning":
+			_start_return()
+		if state == "exiting":
+			_walk_route(delta, walk_speed)
+			if world != null and Vector2(position.x, position.z).distance_to(
+					world.cottage_threshold) > 0.62:
+				world.set_door_open(false)
+			if route.is_empty():
+				state = "strolling"
+				mode = "stroll"
+				wait = 1.0 + randf() * 2.0
+				_choose_next()
+		elif state == "returning":
+			var return_speed := 1.45 if weather >= 2 else 0.75
+			if world != null and route.size() <= 2 \
+					and Vector2(position.x, position.z).distance_to(world.cottage_door) < 1.15:
+				world.set_door_open(true)
+			_walk_route(delta, return_speed)
+			if route.is_empty():
+				state = "inside"
+				model.visible = false
+				pace = 0.0
+				_play("Standing", 0.0)
+				if world != null:
+					world.set_door_open(false)
+		elif state == "strolling":
+			_update_stroll(delta)
 
 	if world != null:
 		position.y = world.stand(position.x, position.z)
@@ -186,6 +249,32 @@ func _process(delta: float) -> void:
 			blink_t = 0.16
 		blink_t = maxf(0.0, blink_t - delta)
 		blend_face.set_blend_shape_value(blink_index, sin(PI * blink_t / 0.16))
+
+func _update_schedule(delta: float) -> void:
+	# unitychan.js: 07–19, clear/cloudy/light snow, wind under 11; a 2–7 s
+	# reaction delay keeps the switch from looking mechanical.
+	var outside := hour >= 7.0 and hour < 19.0 \
+		and (weather <= 1 or weather == 4) and wind < 11.0
+	if intent != outside and reaction <= 0.0:
+		reaction = 2.0 + randf() * 5.0
+	reaction = maxf(0.0, reaction - delta)
+	intent = outside if reaction <= 0.0 else intent
+
+func _update_stroll(delta: float) -> void:
+	if mode == "task":
+		_update_task(delta)
+	elif wait > 0.0:
+		wait -= delta
+		pace = lerpf(pace, 0.0, 1.0 - exp(-delta * 6.0))
+		_play("Standing", 0.3)
+		if animation != null:
+			animation.speed_scale = 1.0
+		if wait <= 0.0:
+			_choose_next()
+	elif route.is_empty():
+		_choose_next()
+	else:
+		_walk_route(delta, walk_speed)
 
 func _play(clip_name: String, fade: float) -> void:
 	if animation == null or current_clip == clip_name:
@@ -203,19 +292,24 @@ func _clip_length(clip_name: String) -> float:
 func _choose_next() -> void:
 	mode = "stroll"
 	var roll := randf()
-	if roll < 0.26:
+	if roll < 0.30:
 		_begin_journey("gather")
-	elif roll < 0.50 and can_fish():
+	elif roll < 0.55 and can_fish():
 		_begin_journey("fish")
-	elif roll < 0.68:
-		_begin_journey("salute")
-	elif roll < 0.78:
-		_start_task("kneel")
+	elif roll < 0.75:
+		if randf() < 0.45:
+			_start_task("kneel")
+		else:
+			task_face = rotation.y
+			_start_task("salute")
 	else:
+		wait = 2.0 + randf() * 5.0
 		_stroll_next()
 
 func can_fish() -> bool:
-	return season != 3 and weather != 2 and weather != 3 and weather != 5
+	# The web only blocks fishing while the pond is frozen; weather does not
+	# matter (unitychan.js checks water.userData.freeze > .3).
+	return season != 3 and water_freeze <= 0.3
 
 func _nearest_waypoint() -> int:
 	var best := 0
@@ -227,7 +321,40 @@ func _nearest_waypoint() -> int:
 			best = i
 	return best
 
+func _start_return() -> void:
+	state = "returning"
+	mode = "stroll"
+	task_type = ""
+	wait = 0.0
+	route = _home_route()
+	_play("Walking", 0.25)
+
+func _home_route() -> Array[Vector2]:
+	var result: Array[Vector2] = []
+	if world == null:
+		return result
+	var current := Vector2(position.x, position.z)
+	if paths != null:
+		result = paths.route(world, current, world.cottage_apron)
+		if result.size() > 1 and result[0].distance_to(current) < 0.35:
+			result.pop_front()
+	result.append(world.cottage_door)
+	result.append(world.cottage_threshold)
+	return result
+
 func _begin_journey(type: String) -> void:
+	# Dev presets and the schedule can both call this: make sure she is out of
+	# the cottage before starting a task route.
+	if state != "strolling":
+		if world != null and Vector2(position.x, position.z).distance_to(
+				world.cottage_door) < 0.6:
+			position = Vector3(world.cottage_apron.x,
+				world.stand(world.cottage_apron.x, world.cottage_apron.y),
+				world.cottage_apron.y)
+		state = "strolling"
+		model.visible = true
+		if world != null:
+			world.set_door_open(false)
 	task_type = type
 	mode = "to_task"
 	route = _task_route(type)
@@ -258,10 +385,24 @@ func _task_route(type: String) -> Array[Vector2]:
 
 func _stroll_next() -> void:
 	mode = "stroll"
-	waypoint_index = (waypoint_index + 1) % waypoints.size()
-	var target: Vector2 = waypoints[waypoint_index]
-	route.clear()
 	var current := Vector2(position.x, position.z)
+	var target: Vector2 = waypoints[waypoint_index]
+	if world != null and paths != null:
+		var apron := world.cottage_apron
+		var far := randf() > 0.5
+		var candidates: Array[Vector2] = []
+		for node in paths.nodes:
+			if node.has("porch"):
+				continue
+			var p := Vector2(float(node["x"]), float(node["z"]))
+			var radius := p.distance_to(apron)
+			if radius > (3.5 if far else 1.2) and radius < (8.5 if far else 4.0) \
+					and p.distance_to(current) > 1.2:
+				candidates.append(p)
+		if not candidates.is_empty():
+			target = candidates[randi() % candidates.size()]
+	waypoint_index = (waypoint_index + 1) % waypoints.size()
+	route.clear()
 	if paths != null and world != null:
 		route = paths.route(world, current, target)
 		if route.size() > 1 and route[0].distance_to(current) < 0.35:
@@ -270,8 +411,9 @@ func _stroll_next() -> void:
 		route.append(target)
 	_play("Walking", 0.3)
 
-func _walk_route(delta: float) -> void:
+func _walk_route(delta: float, speed: float = 0.62) -> void:
 	if route.is_empty():
+		pace = lerpf(pace, 0.0, 1.0 - exp(-delta * 6.0))
 		if mode == "to_task":
 			_start_task(task_type)
 		else:
@@ -281,6 +423,7 @@ func _walk_route(delta: float) -> void:
 	var flat := target - Vector2(position.x, position.z)
 	if flat.length() < 0.10:
 		route.pop_front()
+		pace = lerpf(pace, 0.0, 1.0 - exp(-delta * 6.0))
 		if route.is_empty():
 			if mode == "to_task":
 				_start_task(task_type)
@@ -288,7 +431,8 @@ func _walk_route(delta: float) -> void:
 				wait = 0.8 + randf() * 2.0
 		return
 	var direction := flat.normalized()
-	var step := minf(walk_speed * delta, flat.length())
+	pace = lerpf(pace, speed, 1.0 - exp(-delta * 3.0))
+	var step := minf(pace * delta, flat.length())
 	var moved := false
 	var start := Vector2(position.x, position.z)
 	var candidates := [
@@ -305,12 +449,14 @@ func _walk_route(delta: float) -> void:
 			break
 	if not moved:
 		route.pop_front()
+		pace = lerpf(pace, 0.0, 1.0 - exp(-delta * 6.0))
 		return
-	_track_feet(start.distance_to(Vector2(position.x, position.z)))
+	var running := pace > 1.1
+	_track_feet(start.distance_to(Vector2(position.x, position.z)), running)
 	rotation.y = lerp_angle(rotation.y, atan2(direction.x, direction.y), 1.0 - exp(-delta * 7.0))
-	_play("Walking", 0.3)
+	_play("Running" if running else "Walking", 0.25)
 	if animation != null:
-		animation.speed_scale = clampf(walk_speed / 0.62, 0.75, 1.2)
+		animation.speed_scale = pace / (1.7 if running else 0.62)
 
 func _can_stand(p: Vector2) -> bool:
 	if world == null:
@@ -322,13 +468,13 @@ func _can_stand(p: Vector2) -> bool:
 	return world.is_free_for_walker(p.x, p.y, 0.16)
 
 ## One print per stride, alternating feet either side of her path.
-func _track_feet(moved: float) -> void:
+func _track_feet(moved: float, running: bool = false) -> void:
 	if footprints == null or moved <= 0.0001:
 		return
 	stride_left -= moved
 	if stride_left > 0.0:
 		return
-	stride_left = 0.19
+	stride_left = 0.3 if running else 0.19
 	foot = -foot
 	var heading := rotation.y
 	footprints.press("boot",
@@ -355,8 +501,6 @@ func _start_task(type: String) -> void:
 		"salute":
 			_play("Salute", 0.3)
 			task_timer = _clip_length("Salute") + 0.4
-			if world != null:
-				world.set_door_open(true)
 		"kneel":
 			_play("KneelDown", 0.25)
 			task_timer = _clip_length("KneelDown") + 0.2
@@ -372,15 +516,6 @@ func _update_task(delta: float) -> void:
 	if task_timer > 0.0:
 		if task_type == "fish" and task_phase >= 1:
 			_update_fishing_gear()
-		return
-	if task_type == "salute" and task_phase == 0:
-		# Step through the open door and stay inside for a moment.
-		task_phase = 1
-		task_timer = 4.5
-		if world != null:
-			world.set_door_open(true)
-		position = Vector3(-1.0, position.y, -1.15)
-		model.visible = false
 		return
 	if task_type == "fish":
 		if task_phase == 0:
@@ -405,15 +540,8 @@ func _update_task(delta: float) -> void:
 	_finish_task()
 
 func _finish_task() -> void:
-	if task_type == "salute" and task_phase == 1:
-		position = Vector3(-0.35, 0.0, 1.0)
-		if world != null:
-			position.y = world.stand(position.x, position.z)
-		model.visible = true
 	mode = "stroll"
 	task_type = ""
-	if world != null:
-		world.set_door_open(false)
 	rod.visible = false
 	line.visible = false
 	bobber.visible = false

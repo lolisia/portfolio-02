@@ -344,7 +344,11 @@ func _ready() -> void:
 	_snap_weather_blend()
 	var shot_index := cli.find("--shot")
 	if shot_index >= 0 and shot_index + 1 < cli.size():
-		_capture_screenshot(String(cli[shot_index + 1]))
+		var shot_delay := 0.0
+		var delay_index := cli.find("--shot-delay")
+		if delay_index >= 0 and delay_index + 1 < cli.size():
+			shot_delay = float(cli[delay_index + 1])
+		_capture_screenshot(String(cli[shot_index + 1]), shot_delay)
 	var bench_index := cli.find("--bench")
 	if bench_index >= 0:
 		_bench_target = int(cli[bench_index + 1]) if bench_index + 1 < cli.size() else 600
@@ -386,8 +390,10 @@ func _update_view_framing(delta: float) -> void:
 	if absf(orbit.portrait_scale - wanted_scale) > 0.0005:
 		orbit.set_portrait_scale(lerpf(orbit.portrait_scale, wanted_scale, 1.0 - exp(-delta * 7.0)))
 
-func _capture_screenshot(path: String) -> void:
+func _capture_screenshot(path: String, delay: float = 0.0) -> void:
 	# Development helper: save the current window at its real resolution.
+	if delay > 0.0:
+		await get_tree().create_timer(delay).timeout
 	await get_tree().process_frame
 	await get_tree().process_frame
 	await RenderingServer.frame_post_draw
@@ -627,6 +633,10 @@ func _process(delta: float) -> void:
 		_water_freeze_applied = water_freeze
 	if farm_life != null:
 		farm_life.water_freeze = water_freeze
+	if character != null:
+		character.hour = hour
+		character.wind = wind
+		character.water_freeze = water_freeze
 
 	if footprints != null:
 		footprints.snow_depth = snow_depth
