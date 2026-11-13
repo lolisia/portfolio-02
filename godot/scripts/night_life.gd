@@ -216,7 +216,8 @@ func _build_lamp_halos() -> void:
 		halo.visible = false
 		add_child(halo)
 		lamp_states.append({
-			"light": lamp["light"], "halo": halo, "material": material,
+			"light": lamp["light"], "glass": lamp.get("glass", null),
+			"halo": halo, "material": material,
 			"level": 1.0, "flicker": 0.0, "chunk": 0.0,
 			"next": 6.0 + rng.randf() * 30.0,
 		})
@@ -310,11 +311,12 @@ func _update_lamps(delta: float, night: float) -> void:
 		var tint := material.albedo_color
 		tint.a = night * 0.85 * level
 		material.albedo_color = tint
+		var glass_material: StandardMaterial3D = lamp.get("glass", null)
+		if glass_material != null:
+			glass_material.emission_energy_multiplier = 0.03 + night * 3.0 * level
 		total += level
 		count += 1
 	lamp_glass_average = total / maxf(float(count), 1.0)
-	for glass in world.lamp_glass_materials:
-		glass.emission_energy_multiplier = 0.03 + night * 3.0 * lamp_glass_average
 
 func _update_moths(delta: float, night: float, weather: int, season: int, wind: float) -> void:
 	var mild := season != 3 and weather in [0, 1, 3] and wind < 8.0

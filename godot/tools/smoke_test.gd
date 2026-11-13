@@ -113,6 +113,26 @@ func _initialize() -> void:
 				failures.append("lantern pivot light missing")
 		if world.lamp_glass_materials.size() < 5:
 			failures.append("lantern glass materials missing")
+		for lamp_entry in world.lamps:
+			if lamp_entry.get("glass", null) == null:
+				failures.append("lantern per-lamp glass missing")
+		var lamp_night = main.get("night_life")
+		if lamp_night != null and lamp_night.lamp_states.size() >= 2:
+			var state_a: Dictionary = lamp_night.lamp_states[0]
+			var state_b: Dictionary = lamp_night.lamp_states[1]
+			state_a["flicker"] = 0.0
+			state_a["next"] = 999.0
+			state_a["level"] = 0.2
+			state_b["flicker"] = 0.0
+			state_b["next"] = 999.0
+			state_b["level"] = 1.0
+			lamp_night._update_lamps(0.0, 1.0)
+			var glass_a: StandardMaterial3D = state_a.get("glass", null)
+			var glass_b: StandardMaterial3D = state_b.get("glass", null)
+			if glass_a == null or glass_b == null \
+					or absf(glass_a.emission_energy_multiplier
+						- glass_b.emission_energy_multiplier) < 0.01:
+				failures.append("lantern glass flicker is shared")
 		world.breeze = 1.0
 		world.lamp_sway_time = 0.0
 		world._process(0.1)

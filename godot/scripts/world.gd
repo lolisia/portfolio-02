@@ -1555,6 +1555,11 @@ func _build_lamps() -> void:
 			_lantern_parts("pendant", pendant)
 		)
 		pendant.finish()
+		var glass_material: StandardMaterial3D
+		for node in pivot.find_children("lampglass", "MultiMeshInstance3D", true, false):
+			var glass_mmi := node as MultiMeshInstance3D
+			if glass_mmi.material_override is StandardMaterial3D:
+				glass_material = glass_mmi.material_override as StandardMaterial3D
 		var phase := pivot.position.x * 0.39 + pivot.position.z * 0.23
 		lamp_pivots.append({"pivot": pivot, "phase": phase})
 		var light := SpotLight3D.new()
@@ -1572,6 +1577,7 @@ func _build_lamps() -> void:
 		pivot.add_child(light)
 		lamps.append({
 			"light": light,
+			"glass": glass_material,
 			"position": Vector3(x + 0.48 * cos(angle), y + 1.90,
 				z - 0.48 * sin(angle)),
 		})
