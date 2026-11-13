@@ -389,6 +389,14 @@ func _initialize() -> void:
 				or storm_energy < clear_energy * 0.20:
 			failures.append("weather sun dimming curve wrong")
 		main._apply_time(true)
+	var backdrop = main.get("backdrop")
+	if backdrop == null or backdrop.layers != 4:
+		failures.append("screen-space backdrop missing")
+	elif backdrop.material_override == null \
+			or not backdrop.material_override.shader.code.contains("bg_top"):
+		failures.append("backdrop gradient shader missing")
+	elif backdrop.material_override.get_shader_parameter("bg_top") == null:
+		failures.append("backdrop colors are not driven by the day cycle")
 	if main.get("night_life") == null:
 		failures.append("night life missing")
 	if main.get("seasons_fx") == null:

@@ -49,6 +49,8 @@ var fill: DirectionalLight3D
 var env: Environment
 var sky_material: ProceduralSkyMaterial
 var world_environment: WorldEnvironment
+var backdrop: MeshInstance3D
+var backdrop_material: ShaderMaterial
 
 var hour := 8.5
 var hour_target := 8.5
@@ -144,6 +146,7 @@ func _ready() -> void:
 	orbit.position = Vector3(31.0, 34.0, 41.0)
 	orbit.target = Vector3(0.0, 1.0, 0.0)
 	add_child(orbit)
+	_setup_backdrop()
 
 	night_life = NightLife.new()
 	night_life.name = "NightLife"
@@ -243,6 +246,7 @@ func _ready() -> void:
 
 	day_cycle = DayCycle.new()
 	day_cycle.setup(sun, fill, env, sky_material, world)
+	day_cycle.set_backdrop(backdrop_material)
 	_apply_time(true)
 	world.set_wind(wind)
 	world.set_surface_state(0.0, 0.0, season)
@@ -435,6 +439,32 @@ func _apply_content_scale() -> void:
 	get_window().content_scale_size = Vector2i(
 		maxi(1, roundi(float(window_size.x) / ui_scale)),
 		maxi(1, roundi(float(window_size.y) / ui_scale)))
+
+func _setup_backdrop() -> void:
+	backdrop = MeshInstance3D.new()
+	backdrop.name = "SkyBackdrop"
+	backdrop.layers = 4
+	var quad := QuadMesh.new()
+	quad.size = Vector2.ONE
+	backdrop.mesh = quad
+	backdrop_material = ShaderMaterial.new()
+	backdrop_material.shader = preload("res://shaders/backdrop.gdshader")
+	backdrop.material_override = backdrop_material
+	backdrop.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	backdrop.gi_mode = GeometryInstance3D.GI_MODE_DISABLED
+	backdrop.position = Vector3(0.0, 0.0, -120.0)
+	orbit.add_child(backdrop)
+
+func _update_backdrop() -> void:
+	if backdrop == null or backdrop_material == null or orbit == null:
+		return
+	var viewport_size := get_viewport().get_visible_rect().size
+	var aspect := viewport_size.x / maxf(viewport_size.y, 1.0)
+	var height := maxf(orbit.size, 0.001) * 1.15
+	var width := height * aspect * 1.15
+	backdrop.scale = Vector3(width, height, 1.0)
+	backdrop.position = Vector3(0.0, 0.0, -minf(orbit.far * 0.8, 150.0))
+	backdrop_material.set_shader_parameter("aspect", aspect)
 
 func _setup_environment() -> void:
 	sky_material = ProceduralSkyMaterial.new()
@@ -633,6 +663,7 @@ func _process(delta: float) -> void:
 	var clock_hour := fposmod(hour, 24.0)
 
 	_update_view_framing(delta)
+	_update_backdrop()
 	if OS.has_feature("mobile"):
 		_fps_smooth = lerpf(_fps_smooth, Engine.get_frames_per_second(), 1.0 - exp(-delta * 0.3))
 		_fps_check += delta
@@ -778,6 +809,11 @@ func _process(delta: float) -> void:
 					* (1.0 - float(t["night"])), 0.0, 1.2)
 				var sun_screen := Vector2(screen.x / maxf(vp.x, 1.0), screen.y / maxf(vp.y, 1.0))
 				post.set_sun(sun_screen, strength, sun.light_color)
+				if backdrop_material != null:
+					backdrop_material.set_shader_parameter("sun_uv", sun_screen)
+					backdrop_material.set_shader_parameter("sun_strength", strength * 0.9)
+					backdrop_material.set_shader_parameter("sun_color",
+						sun.light_color.srgb_to_linear())
 				if atmosphere_effect != null:
 					atmosphere_effect.sun_uv = sun_screen
 					atmosphere_effect.sun_strength = strength
@@ -789,6 +825,9 @@ func _process(delta: float) -> void:
 			else:
 				post.set_sun(Vector2(-10.0, -10.0), 0.0, Color.WHITE)
 				post.set_shafts(0.0)
+				if backdrop_material != null:
+					backdrop_material.set_shader_parameter("sun_uv", Vector2(-10.0, -10.0))
+					backdrop_material.set_shader_parameter("sun_strength", 0.0)
 				if atmosphere_effect != null:
 					atmosphere_effect.sun_uv = Vector2(-10.0, -10.0)
 					atmosphere_effect.sun_strength = 0.0

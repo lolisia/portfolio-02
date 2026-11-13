@@ -6,6 +6,7 @@ var fill: DirectionalLight3D
 var env: Environment
 var sky_material: ProceduralSkyMaterial
 var world: FarmWorld
+var backdrop_material: ShaderMaterial
 
 func setup(p_sun: DirectionalLight3D, p_fill: DirectionalLight3D, p_env: Environment,
 		p_sky: ProceduralSkyMaterial, p_world: FarmWorld) -> void:
@@ -14,6 +15,9 @@ func setup(p_sun: DirectionalLight3D, p_fill: DirectionalLight3D, p_env: Environ
 	env = p_env
 	sky_material = p_sky
 	world = p_world
+
+func set_backdrop(material: ShaderMaterial) -> void:
+	backdrop_material = material
 
 func apply(hour: float, weather: int = 0, _season: int = 1,
 		coverage_value: float = -1.0) -> void:
@@ -56,6 +60,11 @@ func apply(hour: float, weather: int = 0, _season: int = 1,
 		Daylight.color_at(Daylight.SKY_BACK_BOTTOM, t["from"], t["to"], t["f"]), 0.55 * clear)
 	top_color *= dimming
 	horizon_color *= dimming
+	if backdrop_material != null:
+		# Shader uniforms receive these as linear values; convert the sRGB
+		# palette once here so the screen gradient matches the web composite.
+		backdrop_material.set_shader_parameter("bg_top", top_color.srgb_to_linear())
+		backdrop_material.set_shader_parameter("bg_bottom", horizon_color.srgb_to_linear())
 	var ground_color: Color = Daylight.color_at(Daylight.SKY_LAND, t["from"], t["to"], t["f"]).lerp(
 		Color(0.22, 0.25, 0.25), overcast * 0.5)
 	var fog_color: Color = Daylight.color_at(Daylight.FOG_SCATTER, t["from"], t["to"], t["f"])

@@ -38,7 +38,7 @@ func setup(p_water: MeshInstance3D, p_camera: Camera3D, p_water_y: float) -> voi
 	camera.keep_aspect = Camera3D.KEEP_HEIGHT
 	camera.near = main_camera.near
 	camera.far = main_camera.far
-	camera.cull_mask = 0xFFFFF & ~2
+	camera.cull_mask = 0xFFFFF & ~2 & ~4
 	viewport.add_child(camera)
 	camera.current = true
 	material.set_shader_parameter("reflection_tex", viewport.get_texture())
