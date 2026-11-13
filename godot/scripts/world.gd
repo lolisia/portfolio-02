@@ -32,6 +32,7 @@ var cascade_drop := WATER_Y - FLOOR_Y
 var veg_beds: Array = []
 var rose_bushes: Array[Vector2] = []
 var garden_plant_count := 0
+var gravel_slab_count := 0
 var pond_shore := Vector2(6.9, 4.0)
 var lamps: Array = []
 var window_light: OmniLight3D
@@ -1066,15 +1067,26 @@ func _build_garden_beds() -> void:
 					rz + sin(a4) * u, 1.2, 1.2, 1.2,
 					b.pick(["#c8243a", "#e85a78", "#f3b3c0", "#a51d2e"]), 0.0, b.randf() * TAU, 0.0, 0.05)
 			rose_bushes.append(Vector2(rx, rz))
-	# Gravel cross.
-	for i in range(8):
-		var f := (i + 0.5) / 8.0 - 0.5
-		b.part("stone", cx, height(cx, cz + f * bd * 2.0) + 0.02, cz + f * bd * 2.0,
-			gap, 0.06, bd * 2.0 / 8.0, b.pick(["#c9b994", "#bfb18e", "#d2c4a0"]))
-		b.part("stone", cx + f * bw * 2.0, height(cx + f * bw * 2.0, cz) + 0.02, cz,
-			bw * 2.0 / 8.0, 0.06, gap, b.pick(["#c9b994", "#bfb18e", "#d2c4a0"]))
-		path_points.append(Vector2(cx, cz + f * bd * 2.0))
-		path_points.append(Vector2(cx + f * bw * 2.0, cz))
+	# Gravel cross: web loop places ceil(len/.3) small 0.27-square slabs at
+	# 0.3 spacing along each axis (G4), instead of 8 long slabs.
+	for cross in [[cx, cz, gap, bd * 2.0 + gap + 0.1],
+			[cx, cz, bw * 2.0 + gap + 0.1, gap]]:
+		var x: float = cross[0]
+		var z: float = cross[1]
+		var w: float = cross[2]
+		var d: float = cross[3]
+		var count := ceili(maxf(w, d) / 0.3)
+		for i in range(count):
+			var f := (float(i) + 0.5) / float(count) - 0.5
+			var gx := x + (f * w if w > d else 0.0)
+			var gz := z + (f * d if d > w else 0.0)
+			var slab_w := (0.3 if w > d else gap) - 0.03
+			var slab_d := (0.3 if d > w else gap) - 0.03
+			b.part("stone", gx, height(gx, gz) + 0.02, gz,
+				slab_w, 0.06, slab_d, b.pick(["#c9b994", "#bfb18e", "#d2c4a0"]),
+				0.0, (b.randf() - 0.5) * 0.1, 0.0)
+			path_points.append(Vector2(gx, gz))
+			gravel_slab_count += 1
 
 func _plant_garden_cell(cell: int, x: float, z: float, y: float) -> void:
 	var s := 0.9 + b.randf() * 0.3

@@ -42,6 +42,8 @@ func _initialize() -> void:
 					break
 		if world.garden_plant_count != 86:
 			failures.append("garden planting count wrong: " + str(world.garden_plant_count))
+		if world.gravel_slab_count != 20:
+			failures.append("gravel slab count wrong: " + str(world.gravel_slab_count))
 		if world.boxes.is_empty():
 			failures.append("oriented collision boxes missing")
 		if world.bodies.size() < 7:
