@@ -258,6 +258,18 @@ func _ready() -> void:
 		world.set_surface_state(wet, snow_depth, season)
 		day_cycle.apply(hour, weather, season)
 		weather_fx.set_weather(weather)
+	if "--storm" in cli:
+		weather = 5
+		ui.set_weather(5)
+		wet = 1.0
+		_surface_wet = 1.0
+		snow_depth = 1.0
+		_surface_snow = 1.0
+		snow_fx = 1.0
+		storm_fx = 1.0
+		world.set_surface_state(wet, snow_depth, season)
+		day_cycle.apply(hour, weather, season)
+		weather_fx.set_weather(weather)
 	if "--panel" in cli:
 		ui.set_panel_open(true)
 	if "--night" in cli:
@@ -742,6 +754,8 @@ func _set_quality(index: int) -> void:
 		atmosphere_effect.active = quality < 2
 	if sun_shadow != null:
 		sun_shadow.set_active(quality < 2)
+	if footprints != null:
+		footprints.set_quality(quality)
 	_apply_render_scale()
 	if ui != null:
 		ui.set_quality(quality)

@@ -279,7 +279,7 @@ Godot의 사용자 인자는 `--` 뒤에 전달합니다.
 
 **남은 선택 작업**
 1. ~~`world.stand()`에 처마/계단 높이를 반영해 발자국이 데크 위에 남지 않게 보강~~ — `src/world.js` 그대로 포팅 완료, 스모크 테스트 추가.
-2. 발자국 해상도/수명 모바일 프리셋.
+2. ~~발자국 해상도/수명 모바일 프리셋~~ — High/Medium/Low 용량·텍스처(64/48/32px)·수명 배율 적용.
 3. 눈보라 시 발자국이 더 빨리 메워지는지 튜닝.
 
 ---
@@ -292,11 +292,12 @@ Godot의 사용자 인자는 `--` 뒤에 전달합니다.
 - 겨울 연못 결빙 셰이더(균열/서리) + 물고기 숨김 + 폭포 spray.
 - 계절 foliage tint (봄 연둣빛, 가을 주황, 겨울 청회색).
 - 비/눈이 그치면 입자 수가 서서히 줄어드는 것 확인.
+- 비/눈 파티클이 바람 방향으로 흐르고, 눈보라에는 횡방향 돌풍과 turbulence flutter 적용.
 - 비 수면 파문 링 + 지면 물보라 링, 지붕 충돌 박스로 비/눈이 실내로 들어가지 않음.
 
 **남은 일**
 1. ~~폭포 foam/vapor 디테일~~ — 화이트 폼/베이스 스프레이 강화 완료.
-2. 바람/눈보라 파티클의 세밀한 방향/속도 튜닝.
+2. ~~바람/눈보라 파티클의 세밀한 방향/속도 튜닝~~ — 원본 rain.js/seasons.js의 풍향 drift·눈보라 crosswind·flutter 포팅.
 3. 비가 나무 캐노피를 통과하지 않도록 충돌 확장(선택).
 
 **파일**
@@ -421,6 +422,7 @@ Godot의 사용자 인자는 `--` 뒤에 전달합니다.
 - 이 환경에는 export 템플릿과 Android SDK가 없어 실제 패키징은 실패:
   `export_templates/4.7.2.stable.mono/windows_release_x86_64.exe` 없음.
 - 1280×720 High `--house` `--bench 600`: 약 3.18ms/frame (정지 태양), 3.46ms/frame (`--auto`, 태양 이동) (RTX 3080, 반사 2프레임 갱신/288p + 레이마칭 안개/광선 + 1024² sun shadow pass 포함).
+- 1280×720 High `--winter --storm --house` `--bench 600`: 약 2.86ms/frame (350 fps, 눈 파티클 포함).
 - 360×640 Mobile 렌더러 UI/패널 캡처 및 `--shot` 확인.
 
 **남은 일**
@@ -478,7 +480,7 @@ Godot의 사용자 인자는 `--` 뒤에 전달합니다.
   - Unity-chan은 PNG 변환본 사용.
   - 원본 `public/`은 참고용; Godot 프로젝트에 복사된 에셋을 수정해야 함.
 - **개발 프리셋**
-  - `--house`, `--pond`, `--door`, `--fishtest`, `--fishnear`, `--gathernear`, `--falls`, `--bench`, `--auto`, `--noshadow`, `--shadowdebug` 등은 개발용.
+  - `--house`, `--pond`, `--door`, `--fishtest`, `--fishnear`, `--gathernear`, `--falls`, `--bench`, `--auto`, `--storm`, `--noshadow`, `--shadowdebug` 등은 개발용.
   - 최종 빌드에서 제거하거나 유지 여부 결정.
 
 ---

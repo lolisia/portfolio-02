@@ -25,8 +25,8 @@ var ground_accum := 0.0
 const RIPPLE_CAPACITY := 160
 
 func _ready() -> void:
-	rain = _make_particles("Rain", 1100, 1.15, 5.0, 9.0, Color(0.55, 0.66, 0.78, 0.30), Vector2(0.028, 0.52))
-	snow = _make_particles("Snow", 2400, 9.0, 0.5, 1.4, Color(0.92, 0.95, 1.0, 0.75), Vector2(0.045, 0.045))
+	rain = _make_particles("Rain", 1400, 1.15, 8.5, 13.5, Color(0.55, 0.66, 0.78, 0.30), Vector2(0.028, 0.52))
+	snow = _make_particles("Snow", 4200, 9.0, 0.8, 1.4, Color(0.92, 0.95, 1.0, 0.75), Vector2(0.045, 0.045))
 	rain.position = Vector3(0, 7, 0)
 	snow.position = Vector3(0, 7, 0)
 	rain.emitting = false
@@ -63,7 +63,8 @@ func _make_particles(label: String, amount: int, lifetime: float, vmin: float, v
 	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	material.albedo_color = color
-	material.billboard_mode = BaseMaterial3D.BILLBOARD_ENABLED
+	material.billboard_mode = (BaseMaterial3D.BILLBOARD_PARTICLES if label == "Rain"
+		else BaseMaterial3D.BILLBOARD_ENABLED)
 	material.billboard_keep_scale = true
 	material.cull_mode = BaseMaterial3D.CULL_DISABLED
 	quad.material = material
@@ -75,10 +76,18 @@ func _make_particles(label: String, amount: int, lifetime: float, vmin: float, v
 	process.spread = 4.0
 	process.initial_velocity_min = vmin
 	process.initial_velocity_max = vmax
-	process.gravity = Vector3(0, -9.8 if label == "Rain" else -0.8, 0)
+	process.gravity = Vector3(0.0, -0.8 if label == "Rain" else -0.1, 0.0)
 	process.lifetime_randomness = 0.25
 	process.angular_velocity_min = -15.0
 	process.angular_velocity_max = 15.0
+	if label == "Snow":
+		# Flutter and gusty swirl, like the sine/cosine drift in seasons.js.
+		process.turbulence_enabled = true
+		process.turbulence_noise_strength = 0.55
+		process.turbulence_noise_scale = 2.4
+		process.turbulence_noise_speed = Vector3(0.10, 0.05, 0.07)
+		process.turbulence_influence_min = 0.03
+		process.turbulence_influence_max = 0.16
 	particles.process_material = process
 
 	add_child(particles)
@@ -257,9 +266,29 @@ func set_intensity(rain_amount: float, snow_amount: float, storm_amount: float, 
 	rain.amount_ratio = rain_level * quality_scale
 	snow.amount_ratio = snow_level * (0.35 + 0.65 * storm_level) * quality_scale
 	if rain_process != null:
-		rain_process.gravity = Vector3(wind * 0.16 + storm_level * 2.5, -9.8, wind * 0.05)
+		# Straight-line rain slanted by wind. The original uses a constant
+		# horizontal velocity (wind * .43 / .16), so encode it in the emission
+		# direction instead of accelerating the drops sideways.
+		var rain_side := wind * 0.43 + storm_level * 2.5
+		var rain_depth := wind * 0.16 + storm_level * 0.7
+		rain_process.direction = Vector3(rain_side, -11.0, rain_depth).normalized()
+		rain_process.initial_velocity_min = 8.5 + storm_level * 1.5
+		rain_process.initial_velocity_max = 13.0 + storm_level * 2.0
+		rain_process.spread = 2.5 + storm_level * 4.5
+		rain_process.gravity = Vector3(0.0, -0.8, 0.0)
 	if snow_process != null:
-		snow_process.gravity = Vector3(wind * 0.08 + storm_level * 1.8, -0.8, wind * 0.03)
+		# Snow drifts at a gentle constant speed and speeds up in a whiteout.
+		var snow_side := wind * 0.13 + storm_level * 2.4
+		var snow_depth := wind * 0.055 + storm_level * 0.15
+		snow_process.direction = Vector3(snow_side, -1.0, snow_depth).normalized()
+		snow_process.initial_velocity_min = 0.8 + storm_level * 0.9
+		snow_process.initial_velocity_max = 1.4 + storm_level * 1.8
+		snow_process.spread = 8.0 + storm_level * 10.0
+		snow_process.gravity = Vector3(0.0, -0.10, 0.0)
+		snow_process.turbulence_noise_strength = 0.55 + storm_level * 0.9
+		snow_process.turbulence_influence_max = 0.16 + storm_level * 0.25
+		snow_process.turbulence_noise_speed = Vector3(
+			0.10 + wind * 0.012, 0.05, 0.07 + wind * 0.008)
 	if spray != null:
 		spray.amount_ratio = quality_scale
 	if delta > 0.0:

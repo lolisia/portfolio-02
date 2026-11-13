@@ -50,6 +50,14 @@ func _initialize() -> void:
 
 	if main.get("footprints") == null:
 		failures.append("footprints layer missing")
+	else:
+		var footprints = main.get("footprints")
+		footprints.set_quality(2)
+		if int(footprints.layers["boot"]["capacity"]) >= 360:
+			failures.append("footprint low capacity not applied")
+		if int(footprints.layers["boot"]["texture_size"]) != 32:
+			failures.append("footprint low texture not applied")
+		footprints.set_quality(0)
 	if main.get("night_life") == null:
 		failures.append("night life missing")
 	if main.get("seasons_fx") == null:

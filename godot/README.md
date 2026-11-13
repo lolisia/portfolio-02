@@ -42,7 +42,7 @@ Godot 4.7 프로젝트. 원본 Three.js 디오라마(`../src`)를 PC/모바일 �
 - 태양/하늘/안개/톤매핑/글로우/SSAO 기본 환경, 원본 backdrop 기반 하늘 그라데이션과 분할 톤(그림자/하이라이트) 그레이드
 - Forward+ 볼류메트릭 미스트(FogVolume)와 **SubViewport 평면 물 반사**(모바일은 화면공간 반사 폴백), 4옥타브 advected wave normal·바람 기반 slope·slope 반사 왜곡
 - 표면 셰이더: 나무결·석재·기와·흙 디테일, 절벽 지층, foliage dapple, 젖은 표면, 눈 덮임
-- 봄 벚꽃잎/가을 낙엽 파티클과 지면 레이어, 계절 foliage tint, 겨울 연못 결빙/균열, 폭포 white-water foam·spray, 비 파문
+- 봄 벚꽃잎/가을 낙엽 파티클과 지면 레이어, 계절 foliage tint, 겨울 연못 결빙/균열, 폭포 white-water foam·spray, 비 파문, 바람/눈보라 파티클 drift
 - 밤 별 dome·달, 램프별 플리커/후광, 램프 주변 나방, 여름밤 반딧불
 - Forward+ 하프레스 레이마칭 안개·광선(CompositorEffect: 높이/노이즈/저지대 미스트/램프 산란) + Mobile canvas 광선 폴백, 태양 글레어, 비 지붕 충돌·수면/지면 파문
 - 커스텀 1024² sun shadow depth pass(태양 이동 시에만 갱신)로 안개/광선에 실제 수목·건물 그림자 투영 (`--noshadow` 폴백, `--shadowdebug` 마스크 뷰)
