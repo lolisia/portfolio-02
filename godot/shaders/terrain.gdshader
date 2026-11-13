@@ -5,6 +5,7 @@ uniform sampler2D path_mask : filter_linear;
 uniform float wet : hint_range(0.0, 1.0) = 0.0;
 uniform float snow_depth : hint_range(0.0, 1.0) = 0.0;
 uniform float winter : hint_range(0.0, 1.0) = 0.0;
+uniform vec3 winter_bare_color = vec3(0.36, 0.235, 0.135);
 uniform float water_y = 0.44;
 
 varying vec3 v_world;
@@ -96,12 +97,17 @@ void fragment() {
 		+ vec3(soil_detail - hx, 0.0, soil_detail - hz) / eps * 0.012);
 	NORMAL = normalize((VIEW_MATRIX * vec4(bumped, 0.0)).xyz);
 
+	// Web surfaces.js winterBare: swap the exposed ground to the #5c3c22
+	// bare-soil tone, modulated by the local soil grain, before snow settles.
+	float soil_grain = dot(albedo, vec3(0.30, 0.50, 0.20));
+	albedo = mix(albedo,
+		winter_bare_color * (soil_grain * 1.8 + 0.25), winter);
+
 	float snow_noise = fbm(v_world.xz * 3.4);
 	float snow_mask = smoothstep(0.04, 0.42, snow_depth * 1.18 - snow_noise * 0.38)
 		* smoothstep(0.0, 0.58, up);
 	albedo = mix(albedo, vec3(0.66, 0.75, 0.86), snow_mask);
 	roughness = mix(roughness, 0.94, snow_mask);
-	albedo *= 1.0 - 0.22 * winter * (1.0 - snow_mask);
 
 	ALBEDO = albedo;
 	ROUGHNESS = roughness;

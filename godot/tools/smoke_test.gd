@@ -31,6 +31,10 @@ func _initialize() -> void:
 			failures.append("procedural garden asset missing")
 		if world.window_glass_material == null:
 			failures.append("window interior material missing")
+		var bare_color = world.terrain_material.get_shader_parameter("winter_bare_color")
+		if bare_color == null or (bare_color as Vector3).distance_to(
+				Vector3(0.36, 0.235, 0.135)) > 0.001:
+			failures.append("winter bare soil color wrong")
 		if world.rose_bushes.size() != 4:
 			failures.append("rose bush count wrong")
 		else:

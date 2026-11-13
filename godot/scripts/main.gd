@@ -273,6 +273,14 @@ func _ready() -> void:
 		farm_life.water_freeze = 1.0
 		world.set_surface_state(wet, snow_depth, season)
 		day_cycle.apply(hour, weather, season)
+	if "--winter-bare" in cli:
+		# Development view of the bare-soil winter ground (G8) without the
+		# snow cover hiding it.
+		season = 3
+		ui.set_season(3)
+		snow_depth = 0.0
+		_surface_snow = 0.0
+		world.set_surface_state(wet, snow_depth, season)
 	if "--snow" in cli:
 		weather = 4
 		ui.set_weather(4)

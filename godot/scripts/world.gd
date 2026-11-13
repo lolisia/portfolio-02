@@ -387,6 +387,8 @@ func _build_terrain() -> void:
 	var mesh := st.commit()
 	terrain_material = ShaderMaterial.new()
 	terrain_material.shader = preload("res://shaders/terrain.gdshader")
+	terrain_material.set_shader_parameter("winter_bare_color",
+		Vector3(0.36, 0.235, 0.135))
 	ground = MeshInstance3D.new()
 	ground.name = "Ground"
 	ground.mesh = mesh
