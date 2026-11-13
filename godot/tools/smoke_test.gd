@@ -67,6 +67,27 @@ func _initialize() -> void:
 			failures.append("character walk speed wrong")
 		if absf(float(character.world.cottage_door.x) + 1.0) > 0.001:
 			failures.append("cottage door position wrong")
+		if character.gather_spots.size() != 6:
+			failures.append("gather spot count wrong")
+		if character.shore_spots.size() != 5:
+			failures.append("shore spot count wrong")
+		var gather_route: Array = character._task_route("gather")
+		if gather_route.is_empty():
+			failures.append("gather route missing")
+		else:
+			var gather_end: Vector2 = gather_route[gather_route.size() - 1]
+			var bed_distance := minf(gather_end.distance_to(Vector2(1.1, 3.3)),
+				gather_end.distance_to(Vector2(2.7, 3.3)))
+			if bed_distance > 1.0:
+				failures.append("gather spot is not at a front bed")
+		var fish_route: Array = character._task_route("fish")
+		if fish_route.is_empty():
+			failures.append("fishing route missing")
+		else:
+			var fish_end: Vector2 = fish_route[fish_route.size() - 1]
+			var pond_distance := fish_end.distance_to(Vector2(10.7, 6.3))
+			if fish_end.y >= 6.3 or pond_distance < 3.0 or pond_distance > 6.0:
+				failures.append("fishing spot is not on the north bank")
 
 	var farm_life = main.get("farm_life")
 	if farm_life == null:

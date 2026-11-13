@@ -44,6 +44,8 @@ var task_type := ""
 var task_phase := 0
 var task_timer := 0.0
 var task_face := 0.0
+var gather_spots: Array = []
+var shore_spots: Array = []
 var time := 0.0
 var stride_left := 0.0
 var foot := 1.0
@@ -62,10 +64,10 @@ func _ready() -> void:
 	add_child(model)
 	animation = model.find_child("AnimationPlayer", true, false) as AnimationPlayer
 	if animation != null:
-		for clip_name in ["Standing", "Walking", "Running", "FishingLoop"]:
+		for clip_name in ["Standing", "Walking", "Running", "Gathering", "FishingLoop"]:
 			if animation.has_animation(clip_name):
 				animation.get_animation(clip_name).loop_mode = Animation.LOOP_LINEAR
-		for clip_name in ["Salute", "Gathering", "KneelDown", "KneelDownToUp", "FishingBegin", "FishingStop"]:
+		for clip_name in ["Salute", "KneelDown", "KneelDownToUp", "FishingBegin", "FishingStop"]:
 			if animation.has_animation(clip_name):
 				animation.get_animation(clip_name).loop_mode = Animation.LOOP_NONE
 		animation.play("Standing")
@@ -79,6 +81,7 @@ func _ready() -> void:
 	_build_fishing_gear()
 	if world != null:
 		paths = FarmPaths.new(world)
+		_find_spots()
 		position = Vector3(world.cottage_door.x,
 			world.stand(world.cottage_door.x, world.cottage_door.y), world.cottage_door.y)
 		model.visible = false
@@ -361,11 +364,89 @@ func _begin_journey(type: String) -> void:
 	wait = 0.0
 	_play("Walking", 0.3)
 
+func _find_spots() -> void:
+	gather_spots.clear()
+	shore_spots.clear()
+	if world == null or paths == null:
+		return
+	# Web findSpots(): only the two front-yard beds, each with the three
+	# nearest graph nodes and a step toward the bed until her body touches it.
+	for bed_value in [Vector2(1.1, 3.3), Vector2(2.7, 3.3)]:
+		var bed: Vector2 = bed_value
+		var nearest: Array = []
+		for node in paths.nodes:
+			if node.has("porch"):
+				continue
+			var p := Vector2(float(node["x"]), float(node["z"]))
+			nearest.append([p.distance_to(bed), p])
+		nearest.sort_custom(func(a: Array, b: Array) -> bool:
+			return float(a[0]) < float(b[0])
+		)
+		for i in range(mini(3, nearest.size())):
+			var node: Vector2 = nearest[i][1]
+			var distance := node.distance_to(bed)
+			if distance < 0.001:
+				continue
+			var t := 0.0
+			while t < distance:
+				var u := (t + 0.02) / distance
+				var px := node.x + (bed.x - node.x) * u
+				var pz := node.y + (bed.y - node.y) * u
+				if not world.is_free_for_walker(px, pz, 0.20):
+					break
+				t += 0.02
+			var u2 := minf(t / distance, 1.0)
+			var sx := node.x + (bed.x - node.x) * u2
+			var sz := node.y + (bed.y - node.y) * u2
+			gather_spots.append({
+				"node": node, "x": sx, "z": sz,
+				"face": atan2(bed.x - sx, bed.y - sz),
+			})
+	# Five north-bank fishing spots (165°..225°), walked out to the water's
+	# edge and then 0.15 into the grass.
+	for degrees in [165, 180, 195, 210, 225]:
+		var angle := float(degrees) * PI / 180.0
+		var dx := sin(angle)
+		var dz := cos(angle)
+		var t := 0.5
+		while t < 7.0 and world.height(POND.x + dx * t, POND.y + dz * t) \
+				< world.water.position.y + 0.1:
+			t += 0.05
+		var sx := POND.x + dx * (t + 0.15)
+		var sz := POND.y + dz * (t + 0.15)
+		var index := paths.closest(world, Vector2(sx, sz))
+		if index < 0:
+			continue
+		var node: Dictionary = paths.nodes[index]
+		shore_spots.append({
+			"node": Vector2(float(node["x"]), float(node["z"])),
+			"x": sx, "z": sz, "face": atan2(-dx, -dz),
+		})
+
+func _spot_route(spot: Dictionary) -> Array[Vector2]:
+	var result: Array[Vector2] = []
+	var current := Vector2(position.x, position.z)
+	var node: Vector2 = spot["node"]
+	if paths != null and world != null:
+		result = paths.route(world, current, node)
+		if result.size() > 1 and result[0].distance_to(current) < 0.35:
+			result.pop_front()
+	result.append(Vector2(float(spot["x"]), float(spot["z"])))
+	return result
+
 func _task_route(type: String) -> Array[Vector2]:
 	var result: Array[Vector2] = []
 	var current := Vector2(position.x, position.z)
 	var target := current
-	if type == "gather" and world != null and not world.veg_beds.is_empty():
+	if type == "gather" and not gather_spots.is_empty():
+		var spot: Dictionary = gather_spots[randi() % gather_spots.size()]
+		task_face = float(spot["face"])
+		return _spot_route(spot)
+	elif type == "fish" and not shore_spots.is_empty():
+		var spot2: Dictionary = shore_spots[randi() % shore_spots.size()]
+		task_face = float(spot2["face"])
+		return _spot_route(spot2)
+	elif type == "gather" and world != null and not world.veg_beds.is_empty():
 		var bed: Vector2 = world.veg_beds[randi() % world.veg_beds.size()]
 		target = bed + Vector2(0, -1.05)
 		task_face = atan2(bed.x - target.x, bed.y - target.y)
@@ -493,7 +574,7 @@ func _start_task(type: String) -> void:
 	match type:
 		"gather":
 			_play("Gathering", 0.3)
-			task_timer = _clip_length("Gathering") + 0.5
+			task_timer = 5.0 + randf() * 5.0
 		"fish":
 			_play("FishingBegin", 0.3)
 			task_timer = _clip_length("FishingBegin") + 0.2
@@ -521,7 +602,7 @@ func _update_task(delta: float) -> void:
 		if task_phase == 0:
 			_play("FishingLoop", 0.2)
 			task_phase = 1
-			task_timer = 9.0 + randf() * 4.0
+			task_timer = 12.0 + randf() * 12.0
 			line.visible = true
 			bobber.visible = true
 			return
