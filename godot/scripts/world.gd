@@ -1099,8 +1099,6 @@ func _plant_garden_cell(cell: int, x: float, z: float, y: float) -> void:
 			b.part("sunflowerStem", x, y, z, s, s, s, "#6f9142", 0.0, a0, 0.0, 0.12)
 			b.part("sunflowerBloom", x, y, z, s, s, s,
 				b.pick(["#ffffff", "#fff3d8", "#ffe2b0"]), 0.0, a0, 0.0, 0.12)
-			b.part("sunflowerDisc", x, y, z, s, s, s,
-				"#4f3114", 0.0, a0, 0.0, 0.12)
 		1:
 			s = 1.0 + b.randf() * 0.4
 			var a1 := b.randf() * TAU

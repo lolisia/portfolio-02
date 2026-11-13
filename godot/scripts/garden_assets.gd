@@ -13,7 +13,6 @@ static func build() -> Dictionary:
 		"lavenderBloom": _lavender_bloom(),
 		"sunflowerStem": _sunflower_stem(),
 		"sunflowerBloom": _sunflower_bloom(),
-		"sunflowerDisc": _sunflower_disc(),
 		"foxgloveStem": _foxglove_stem(),
 		"foxgloveBloom": _foxglove_bloom(),
 		"roseBloom": _rose_bloom(),
@@ -216,20 +215,33 @@ static func _sunflower_stem() -> ArrayMesh:
 	return _merge(parts)
 
 static func _sunflower_bloom() -> ArrayMesh:
-	var petal := _sphere(0.025, 5, 3)
+	# G5: the dark disc and yellow rays live in the bloom mesh and carry their
+	# two-tone vertex colours; the separate sunflowerDisc kind is gone.
+	var ray_color := Color(1.0, 0.78, 0.12)
 	var parts := []
-	for i in range(16):
-		var angle := float(i) * TAU / 16.0
+	for i in range(18):
+		var angle := float(i) * TAU / 18.0
+		var petal := _tint_mesh(_sphere(0.024, 5, 3), ray_color)
 		parts.append(_place(petal,
 			Vector3(cos(angle) * 0.11, 1.0, sin(angle) * 0.11),
 			Vector3(1.0, 2.3, 0.35),
 			Vector3(-0.2, angle + PI * 0.5, 0.0)))
+	var disc := _tint_mesh(_cylinder(0.075, 0.08, 0.035, 12),
+		Color(0.32, 0.19, 0.08))
+	parts.append(_place(disc, Vector3(0.0, 1.0, 0.0), Vector3.ONE,
+		Vector3(PI * 0.5, 0.0, 0.0)))
 	return _merge(parts)
 
-static func _sunflower_disc() -> ArrayMesh:
-	var disc := _cylinder(0.075, 0.08, 0.035, 12)
-	var parts := [_place(disc, Vector3(0, 1.0, 0), Vector3.ONE, Vector3(PI * 0.5, 0, 0))]
-	return _merge(parts)
+static func _tint_mesh(mesh: Mesh, color: Color) -> ArrayMesh:
+	var arrays: Array = mesh.surface_get_arrays(0)
+	var count: int = (arrays[Mesh.ARRAY_VERTEX] as PackedVector3Array).size()
+	var colors := PackedColorArray()
+	colors.resize(count)
+	colors.fill(color)
+	arrays[Mesh.ARRAY_COLOR] = colors
+	var result := ArrayMesh.new()
+	result.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
+	return result
 
 static func _foxglove_stem() -> ArrayMesh:
 	var parts: Array = [[_tube_stem(0.62, 0.008, 0.0, 0.015), Transform3D.IDENTITY]]

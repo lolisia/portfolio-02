@@ -8,6 +8,7 @@ uniform float snow_depth : hint_range(0.0, 1.0) = 0.0;
 uniform float winter : hint_range(0.0, 1.0) = 0.0;
 uniform float evergreen : hint_range(0.0, 1.0) = 0.0;
 uniform float leaf_cut : hint_range(0.0, 2.0) = 0.0;
+uniform float use_vertex_color : hint_range(0.0, 1.0) = 0.0;
 uniform float trample_strength : hint_range(0.0, 1.0) = 0.0;
 uniform vec3 season_tint = vec3(1.0);
 uniform vec4 trample[16];
@@ -66,7 +67,8 @@ float needle_mask(vec3 p) {
 }
 
 void vertex() {
-	v_color = INSTANCE_CUSTOM.rgb;
+	v_color = INSTANCE_CUSTOM.rgb
+		* (use_vertex_color > 0.5 ? COLOR.rgb : vec3(1.0));
 	float sway = INSTANCE_CUSTOM.a;
 	vec3 origin = MODEL_MATRIX[3].xyz;
 	v_origin = origin;

@@ -61,6 +61,18 @@ func _initialize() -> void:
 			var minimum_vertices := 300 if stem_kind == "lavenderStem" else 80
 			if stem_vertices < minimum_vertices:
 				failures.append(stem_kind + " is not tubular")
+		if world.meshes.has("sunflowerDisc"):
+			failures.append("separate sunflower disc still exists")
+		var bloom_mesh: Mesh = world.meshes.get("sunflowerBloom")
+		if bloom_mesh == null:
+			failures.append("sunflower bloom missing")
+		else:
+			var bloom_arrays: Array = bloom_mesh.surface_get_arrays(0)
+			var bloom_colors: PackedColorArray = bloom_arrays[Mesh.ARRAY_COLOR]
+			if bloom_colors.is_empty():
+				failures.append("sunflower two-tone vertex colours missing")
+		if not world.find_children("sunflowerDisc", "MultiMeshInstance3D", true, false).is_empty():
+			failures.append("sunflowerDisc node still present")
 		if world.path_mask == null or world.path_mask.get_width() != 1024:
 			failures.append("ground mask is not 1024")
 		elif not world.path_points.is_empty():
