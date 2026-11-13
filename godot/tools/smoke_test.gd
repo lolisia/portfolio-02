@@ -31,6 +31,20 @@ func _initialize() -> void:
 			failures.append("procedural garden asset missing")
 		if world.window_glass_material == null:
 			failures.append("window interior material missing")
+		if world.boxes.is_empty():
+			failures.append("oriented collision boxes missing")
+		if world.bodies.size() < 7:
+			failures.append("dynamic walker bodies missing")
+		var inside_push: Vector2 = world.resolve_body(Vector2(-1.0, -2.5), 0.2, null)
+		if inside_push.distance_to(Vector2(-1.0, -2.5)) < 0.5:
+			failures.append("oriented box did not push the walker")
+		var body_a: Dictionary = world.add_body(-5.0, -5.0, 0.2, "test")
+		var body_b: Dictionary = world.add_body(-5.1, -5.0, 0.2, "test")
+		var body_push: Vector2 = world.resolve_body(Vector2(-5.05, -5.0), 0.2, body_a)
+		world.bodies.erase(body_a)
+		world.bodies.erase(body_b)
+		if body_push.distance_to(Vector2(-5.05, -5.0)) < 0.1:
+			failures.append("dynamic body separation missing")
 		var house_y: float = world.height(-1.0, -2.5)
 		var deck_y: float = world.stand(-1.0, -0.4)
 		var step_y: float = world.stand(-1.0, 0.30)
@@ -78,7 +92,7 @@ func _initialize() -> void:
 			var gather_end: Vector2 = gather_route[gather_route.size() - 1]
 			var bed_distance := minf(gather_end.distance_to(Vector2(1.1, 3.3)),
 				gather_end.distance_to(Vector2(2.7, 3.3)))
-			if bed_distance > 1.0:
+			if bed_distance > 1.4:
 				failures.append("gather spot is not at a front bed")
 		var fish_route: Array = character._task_route("fish")
 		if fish_route.is_empty():

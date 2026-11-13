@@ -48,6 +48,8 @@ var door_leaf: Node3D
 var door_target_open := false
 var door_open := 0.0
 var obstacles: Array = []
+var boxes: Array = []
+var bodies: Array = []
 var path_points: Array[Vector2] = []
 var flight := {
 	"ax": -4.72, "az": -3.0, "bx": -5.02, "bz": -6.75,
@@ -207,7 +209,114 @@ func is_free(x: float, z: float, pad: float = 0.0) -> bool:
 		var radius: float = obstacle[2]
 		if pow(x - ox, 2.0) + pow(z - oz, 2.0) <= pow(radius + pad, 2.0):
 			return false
+	for box in boxes:
+		if _box_overlap(x, z, pad, box):
+			return false
 	return true
+
+func add_box(x: float, z: float, w: float, d: float, angle: float, tag: String = "") -> void:
+	boxes.append({"x": x, "z": z, "w": w, "d": d, "angle": angle, "tag": tag})
+
+func add_body(x: float, z: float, radius: float, kind: String) -> Dictionary:
+	var body := {
+		"id": bodies.size(), "x": x, "z": z, "r": radius, "kind": kind,
+		"active": true, "ignore": "",
+	}
+	bodies.append(body)
+	return body
+
+func _box_overlap(x: float, z: float, pad: float, box: Dictionary) -> bool:
+	var dx := x - float(box["x"])
+	var dz := z - float(box["z"])
+	var angle := float(box["angle"])
+	var c := cos(angle)
+	var s := sin(angle)
+	var lx := c * dx - s * dz
+	var lz := s * dx + c * dz
+	var hx := float(box["w"]) * 0.5
+	var hz := float(box["d"]) * 0.5
+	var closest_x := clampf(lx, -hx, hx)
+	var closest_z := clampf(lz, -hz, hz)
+	var ox := lx - closest_x
+	var oz := lz - closest_z
+	if absf(lx) <= hx and absf(lz) <= hz:
+		return true
+	return ox * ox + oz * oz < pad * pad
+
+func resolve_body(point: Vector2, radius: float, self_body = null) -> Vector2:
+	# Web parity (colliders.resolve): three passes of oriented boxes, static
+	# circles and the other walkers. Large building circles are covered by the
+	# boxes and are skipped here; the porch/door tags are resolved by ignore.
+	var p := point
+	for iteration in range(3):
+		for box in boxes:
+			if self_body != null \
+					and String(box.get("tag", "")) == String(self_body.get("ignore", "")):
+				continue
+			p = _push_out_box(p, radius, box)
+		for obstacle in obstacles:
+			var obstacle_radius: float = obstacle[2]
+			if obstacle_radius >= 1.3:
+				continue
+			var ox := p.x - float(obstacle[0])
+			var oz := p.y - float(obstacle[1])
+			var minimum := obstacle_radius + radius
+			var distance_sq := ox * ox + oz * oz
+			if distance_sq < minimum * minimum:
+				if distance_sq > 1e-9:
+					var distance := sqrt(distance_sq)
+					p += Vector2(ox, oz) / distance * (minimum - distance)
+				else:
+					p.x += minimum
+		if self_body != null:
+			for other in bodies:
+				if int(other["id"]) == int(self_body["id"]) or not bool(other["active"]):
+					continue
+				var dx := p.x - float(other["x"])
+				var dz := p.y - float(other["z"])
+				var minimum_b := radius + float(other["r"])
+				var distance_sq_b := dx * dx + dz * dz
+				if distance_sq_b < minimum_b * minimum_b:
+					if distance_sq_b > 1e-9:
+						var distance_b := sqrt(distance_sq_b)
+						p += Vector2(dx, dz) / distance_b * (minimum_b - distance_b)
+					else:
+						p.x += minimum_b
+	return p
+
+func _push_out_box(point: Vector2, radius: float, box: Dictionary) -> Vector2:
+	var dx := point.x - float(box["x"])
+	var dz := point.y - float(box["z"])
+	var angle := float(box["angle"])
+	var c := cos(angle)
+	var s := sin(angle)
+	var lx := c * dx - s * dz
+	var lz := s * dx + c * dz
+	var hx := float(box["w"]) * 0.5
+	var hz := float(box["d"]) * 0.5
+	var closest_x := clampf(lx, -hx, hx)
+	var closest_z := clampf(lz, -hz, hz)
+	var ox := lx - closest_x
+	var oz := lz - closest_z
+	var distance_sq := ox * ox + oz * oz
+	if distance_sq >= radius * radius:
+		return point
+	var push_x := 0.0
+	var push_z := 0.0
+	if distance_sq > 1e-8:
+		var distance := sqrt(distance_sq)
+		push_x = ox / distance * (radius - distance)
+		push_z = oz / distance * (radius - distance)
+	else:
+		# Inside the box: exit through the nearest face.
+		var face_x := hx - absf(lx)
+		var face_z := hz - absf(lz)
+		if face_x < face_z:
+			push_x = (1.0 if lx >= 0.0 else -1.0) * (face_x + radius)
+		else:
+			push_z = (1.0 if lz >= 0.0 else -1.0) * (face_z + radius)
+	# Rotate the local push back into world space.
+	return point + Vector2(c * push_x + s * push_z, -s * push_x + c * push_z)
 
 func is_free_for_walker(x: float, z: float, pad: float = 0.16) -> bool:
 	if wet(x, z) > -0.10:
@@ -221,6 +330,9 @@ func is_free_for_walker(x: float, z: float, pad: float = 0.16) -> bool:
 		var dx := x - float(obstacle[0])
 		var dz := z - float(obstacle[1])
 		if dx * dx + dz * dz <= pow(radius + pad, 2.0):
+			return false
+	for box in boxes:
+		if _box_overlap(x, z, pad, box):
 			return false
 	return true
 
@@ -594,6 +706,15 @@ func _build_cottage(cx: float, cz: float, rot: float) -> void:
 	b.place(cx, gy, cz, 1.0, rot, func() -> void:
 		_cottage_parts(drop)
 	)
+	# Oriented collision boxes: house body, porch side railings and the two
+	# front railings with the door step gap left open (U9).
+	add_box(cx, cz, COTTAGE.W + 0.26, COTTAGE.D + 0.26, rot, "house")
+	for side in [-1.0, 1.0]:
+		add_box(cx + float(side) * (COTTAGE.W * 0.5 - 0.06),
+			cz + COTTAGE.D * 0.5 + 0.13 + (COTTAGE.P - 0.13) * 0.5,
+			0.14, COTTAGE.P - 0.13, rot, "house")
+		add_box(cx + float(side) * (COTTAGE.W * 0.5 + 0.58) * 0.5,
+			porch_z - 0.06, COTTAGE.W * 0.5 - 0.58, 0.14, rot, "house")
 	door_leaf = _build_door_leaf(cx, gy, cz, rot)
 	obstacles.append([cx, cz, 2.3])
 	obstacles.append([cx, porch_z + 0.2, 0.75])
@@ -870,6 +991,10 @@ func _build_coop(cx: float, cz: float, rot: float) -> void:
 		_house_parts(true)
 	)
 	obstacles.append([cx, cz, 1.4])
+	add_box(cx, cz, 1.76, 1.82, rot, "coop")
+	var ramp := 1.82 * 0.5 + 0.6
+	add_box(cx + sin(rot) * ramp, cz + cos(rot) * ramp,
+		0.86, 1.2, rot, "coop")
 
 func _build_shed(cx: float, cz: float, rot: float) -> void:
 	var gy := height(cx, cz)
@@ -877,6 +1002,10 @@ func _build_shed(cx: float, cz: float, rot: float) -> void:
 		_house_parts(false)
 	)
 	obstacles.append([cx, cz, 1.4])
+	add_box(cx, cz, 1.76, 1.82, rot, "")
+	var ramp := 1.82 * 0.5 + 0.6
+	add_box(cx + sin(rot) * ramp, cz + cos(rot) * ramp,
+		0.86, 1.2, rot, "")
 
 func _build_garden_beds() -> void:
 	var cx := -1.1
@@ -995,6 +1124,7 @@ func _build_vegetable_beds() -> void:
 						b.part("carrot", px, 0.19, pz, s, s, s, b.pick(["#6f9a3e", "#7ea946"]), 0.0, b.randf() * TAU, 0.0, 0.3)
 		)
 		obstacles.append([x, z, 0.78])
+		add_box(x, z, 1.32, 1.72, 0.0, "bed")
 		veg_beds.append(Vector2(x, z))
 
 func _build_fences() -> void:

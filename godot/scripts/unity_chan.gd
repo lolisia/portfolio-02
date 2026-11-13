@@ -12,6 +12,7 @@ const POND := Vector2(10.7, 6.3)
 var world: FarmWorld
 var footprints: Footprints
 var paths: FarmPaths
+var body: Dictionary
 var model: Node3D
 var animation: AnimationPlayer
 var blend_face: MeshInstance3D
@@ -81,6 +82,8 @@ func _ready() -> void:
 	_build_fishing_gear()
 	if world != null:
 		paths = FarmPaths.new(world)
+		body = world.add_body(position.x, position.z, 0.20, "unitychan")
+		body["active"] = false
 		_find_spots()
 		position = Vector3(world.cottage_door.x,
 			world.stand(world.cottage_door.x, world.cottage_door.y), world.cottage_door.y)
@@ -243,6 +246,11 @@ func _process(delta: float) -> void:
 
 	if world != null:
 		position.y = world.stand(position.x, position.z)
+		if not body.is_empty():
+			body["active"] = model.visible
+			body["x"] = position.x
+			body["z"] = position.z
+			body["ignore"] = "house" if _in_doorway() else ""
 	_update_fishing_gear()
 
 	if blend_face != null and blink_index >= 0:
@@ -524,6 +532,8 @@ func _walk_route(delta: float, speed: float = 0.62) -> void:
 	for candidate in candidates:
 		var point: Vector2 = candidate
 		if _can_stand(point):
+			if world != null and not body.is_empty():
+				point = world.resolve_body(point, 0.20, body)
 			position.x = point.x
 			position.z = point.y
 			moved = true
@@ -547,6 +557,12 @@ func _can_stand(p: Vector2) -> bool:
 	if world.is_on_porch(p.x, p.y):
 		return true
 	return world.is_free_for_walker(p.x, p.y, 0.16)
+
+func _in_doorway() -> bool:
+	if world == null:
+		return false
+	return absf(position.x - world.cottage_threshold.x) < 0.45 \
+		and position.z < world.cottage_door.y + 0.08
 
 ## One print per stride, alternating feet either side of her path.
 func _track_feet(moved: float, running: bool = false) -> void:

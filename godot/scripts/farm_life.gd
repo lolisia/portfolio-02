@@ -342,6 +342,10 @@ func _chicken(chick: bool, index: int) -> Dictionary:
 			float(side) * 0.078, 0.1, 0.025))
 	group.scale = Vector3.ONE * (0.48 if chick else 1.0)
 	add_child(group)
+	var body := world.add_body(COOP_DOOR.x, COOP_DOOR.y,
+		0.09 if chick else 0.15, "chicken")
+	body["ignore"] = "coop"
+	body["active"] = false
 	return {
 		"group": group, "head": head, "legs": legs, "chick": chick, "index": index,
 		"x": 0.0, "z": 0.0, "target": Vector2.ZERO, "wait": 0.0,
@@ -349,7 +353,7 @@ func _chicken(chick: bool, index: int) -> Dictionary:
 		"state": "inside", "stride": -1, "flee": 0.0, "inside": false,
 		"route": [], "pace": 0.0, "noticed": false, "intent": false,
 		"reaction": 1.5 + randf() * 10.0, "flee_cool": 0.0, "stuck": 0.0,
-		"retry": 0.0, "leg_speed": 1.0,
+		"retry": 0.0, "leg_speed": 1.0, "body": body,
 	}
 
 func _pick_target(c: Dictionary) -> Vector2:
@@ -593,6 +597,10 @@ func _update_chickens(delta: float, outside: bool) -> void:
 		threat = Vector2(character.position.x, character.position.z)
 	for c in chickens:
 		var group: Node3D = c["group"]
+		var c_body: Dictionary = c["body"]
+		c_body["active"] = group.visible
+		c_body["x"] = float(c["x"])
+		c_body["z"] = float(c["z"])
 		if bool(c["noticed"]) != outside:
 			c["noticed"] = outside
 			c["reaction"] = (1.5 + randf() * 10.0) if outside \
@@ -692,17 +700,6 @@ func _in_coop_entrance(point: Vector2) -> bool:
 	return absf(point.x - COOP_DOOR.x) < 0.6 \
 		and point.y > COOP_DOOR.y - 0.2 and point.y < COOP_APRON.y + 0.75
 
-func _in_coop_ramp(x: float, z: float) -> bool:
-	return absf(x - COOP_DOOR.x) < 0.5 \
-		and z > COOP_DOOR.y - 0.2 and z < COOP_APRON.y + 0.2
-
-func _chicken_free(x: float, z: float) -> bool:
-	# The coop ramp is tagged 'coop' in the web colliders; here the entrance
-	# strip is explicitly walkable so the birds can use the ramp.
-	if _in_coop_ramp(x, z):
-		return true
-	return world.is_free(x, z, 0.12)
-
 func _set_chicken_trip(c: Dictionary, home: bool) -> void:
 	if paths == null:
 		c["route"] = [_pick_target(c)]
@@ -789,18 +786,16 @@ func _chicken_walk(c: Dictionary, delta: float, multiplier: float) -> bool:
 	if distance > 0.001:
 		var nx := x + dx / distance * step
 		var nz := z + dz / distance * step
-		if _chicken_free(nx, nz):
-			x = nx
-			z = nz
-			moved = step
-		elif _chicken_free(nx, z):
-			x = nx
-			moved = absf(dx / distance * step)
-		elif _chicken_free(x, nz):
-			z = nz
-			moved = absf(dz / distance * step)
+		var radius := 0.09 if c["chick"] else 0.15
+		var resolved := world.resolve_body(Vector2(nx, nz), radius, c["body"])
+		var moved_vec := resolved - Vector2(x, z)
+		x = resolved.x
+		z = resolved.y
+		moved = moved_vec.length()
 		c["x"] = x
 		c["z"] = z
+		c["body"]["x"] = x
+		c["body"]["z"] = z
 		c["stuck"] = (float(c["stuck"]) + delta) if moved < step * 0.3 else 0.0
 		if float(c["stuck"]) > 1.5:
 			c["stuck"] = 0.0
