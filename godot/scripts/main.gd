@@ -690,6 +690,8 @@ func _process(delta: float) -> void:
 				lerpf(0.015, 0.20, low_target), 1.0 - exp(-delta * 0.7))
 			low_mist.visible = quality < 2 and low_target > 0.04 and not compositor_fog
 	_update_atmosphere(daylight)
+	if farm_life != null:
+		farm_life.set_night(float(daylight["night"]))
 	if world != null:
 		world.update_cascade(delta, wind, 1.0 - float(daylight["night"]) * 0.9)
 	if night_life != null:

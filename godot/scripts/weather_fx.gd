@@ -24,8 +24,8 @@ var ground_accum := 0.0
 const RIPPLE_CAPACITY := 160
 
 func _ready() -> void:
-	rain = _make_particles("Rain", 1400, 1.15, 8.5, 13.5, Color(0.55, 0.66, 0.78, 0.30), Vector2(0.028, 0.52))
-	snow = _make_particles("Snow", 4200, 9.0, 0.8, 1.4, Color(0.92, 0.95, 1.0, 0.75), Vector2(0.045, 0.045))
+	rain = _make_particles("Rain", 1600, 1.15, 8.5, 13.5, Color(0.55, 0.66, 0.78, 0.30), Vector2(0.028, 0.52))
+	snow = _make_particles("Snow", 9000, 9.0, 0.8, 1.4, Color(0.92, 0.95, 1.0, 0.75), Vector2(0.045, 0.045))
 	rain.position = Vector3(0, 7, 0)
 	snow.position = Vector3(0, 7, 0)
 	rain.emitting = false

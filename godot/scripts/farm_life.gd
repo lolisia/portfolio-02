@@ -13,6 +13,7 @@ var vane_arrow: Node3D
 var vane_rotor: Node3D
 var smoke: GPUParticles3D
 var smoke_process: ParticleProcessMaterial
+var smoke_material: StandardMaterial3D
 var fish_school: Array = []
 var next_leap := 4.0
 var character
@@ -259,10 +260,11 @@ func _build_smoke() -> void:
 
 	smoke = GPUParticles3D.new()
 	smoke.name = "ChimneySmoke"
-	smoke.amount = 70
-	smoke.lifetime = 9.0
+	smoke.amount = 144
+	smoke.lifetime = 32.0
+	smoke.preprocess = 18.0
 	smoke.local_coords = false
-	smoke.visibility_aabb = AABB(Vector3(-12, -4, -12), Vector3(24, 18, 24))
+	smoke.visibility_aabb = AABB(Vector3(-14, -4, -14), Vector3(28, 32, 28))
 	smoke.draw_pass_1 = quad
 	smoke.position = world.cottage_chimney + Vector3(0, 0.1, 0)
 	smoke_process = ParticleProcessMaterial.new()
@@ -273,7 +275,7 @@ func _build_smoke() -> void:
 	smoke_process.initial_velocity_min = 0.28
 	smoke_process.initial_velocity_max = 0.75
 	smoke_process.gravity = Vector3(0, 0.22, 0)
-	smoke_process.lifetime_randomness = 0.3
+	smoke_process.lifetime_randomness = 0.38
 	smoke_process.angular_velocity_min = -18.0
 	smoke_process.angular_velocity_max = 18.0
 	smoke_process.scale_min = 0.38
@@ -287,7 +289,13 @@ func _build_smoke() -> void:
 	ramp_texture.gradient = ramp
 	smoke_process.color_ramp = ramp_texture
 	smoke.process_material = smoke_process
+	smoke_material = material
 	add_child(smoke)
+
+func set_night(night: float) -> void:
+	if smoke_material != null:
+		var shade := 1.0 - clampf(night, 0.0, 1.0) * 0.72
+		smoke_material.albedo_color = Color(0.58 * shade, 0.58 * shade, 0.55 * shade, 0.42)
 
 func _build_flock() -> void:
 	paths = FarmPaths.new(world) if world != null else null
