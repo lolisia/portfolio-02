@@ -47,6 +47,7 @@ var weather_index := 0
 var season_index := 1
 var panel_open := false
 var full_body_height := 0.0
+var _panel_animating := false
 var _panel_tween: Tween
 var _syncing := false
 var _bold_font: FontVariation
@@ -609,12 +610,14 @@ func set_panel_open(open: bool, instant: bool = false) -> void:
 		_panel_tween.kill()
 	_refresh_body_height()
 	if instant:
+		_panel_animating = false
 		body_control.visible = open
 		body_control.modulate.a = 1.0 if open else 0.0
 		body_clip.custom_minimum_size.y = full_body_height if open else 0.0
 		_layout_body()
 		return
 	if open:
+		_panel_animating = true
 		body_control.visible = true
 		body_control.modulate.a = 0.0
 		body_clip.custom_minimum_size.y = 0.0
@@ -623,6 +626,7 @@ func set_panel_open(open: bool, instant: bool = false) -> void:
 		if body_clip.custom_minimum_size.y <= 0.01:
 			body_control.visible = false
 			return
+		_panel_animating = true
 	_panel_tween = create_tween()
 	_panel_tween.set_parallel(true)
 	_panel_tween.tween_property(body_clip, "custom_minimum_size:y",
@@ -631,10 +635,12 @@ func set_panel_open(open: bool, instant: bool = false) -> void:
 	_panel_tween.tween_property(body_control, "modulate:a",
 		1.0 if open else 0.0, 0.30) \
 		.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
-	if not open:
-		_panel_tween.chain().tween_callback(func() -> void:
-			body_control.visible = false
-		)
+	_panel_tween.chain().tween_callback(func() -> void:
+		_panel_animating = false
+		body_clip.custom_minimum_size.y = full_body_height if panel_open else 0.0
+		body_control.visible = panel_open
+		_layout_body()
+	)
 
 func _refresh_body_height() -> void:
 	if body_control == null or body_clip == null:
@@ -643,7 +649,7 @@ func _refresh_body_height() -> void:
 	if absf(new_height - full_body_height) < 0.5:
 		return
 	full_body_height = new_height
-	if panel_open:
+	if panel_open and not _panel_animating:
 		body_clip.custom_minimum_size.y = full_body_height
 	_layout_body()
 
