@@ -19,6 +19,7 @@ layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
 layout(set = 0, binding = 0) uniform sampler2D scene_color;
 layout(set = 0, binding = 1) uniform sampler2D scene_depth;
 layout(set = 0, binding = 2, rgba16f) uniform image2D shaft_image;
+layout(set = 0, binding = 4) uniform sampler2D sun_shadow;
 layout(set = 0, binding = 3, std140) uniform Params {
 	vec4 sun;         // xy: sun screen uv (x < -5 = hidden)
 	vec4 sun_color;   // rgb: sun light color, w: shaft strength
@@ -31,6 +32,10 @@ layout(set = 0, binding = 3, std140) uniform Params {
 	vec4 fog;         // x: mist low, y: lamp power, z: golden, w: sun energy
 	vec4 sun_dir;     // xyz: direction toward the sun, w: orthographic flag
 	vec4 lamps[5];    // xyz: lantern world position, w: normalized energy
+	vec4 shadow_right;   // xyz: sun camera right, w: ortho size
+	vec4 shadow_up;      // xyz: sun camera up, w: camera far
+	vec4 shadow_forward; // xyz: sun camera forward
+	vec4 shadow_pos;     // xyz: sun camera position, w: enabled
 } params;
 
 const vec3 BOX_MIN = vec3(-17.0, -0.7, -17.0);
@@ -55,6 +60,22 @@ float value_noise(vec2 p) {
 	float c = hash12(i + vec2(0.0, 1.0));
 	float d = hash12(i + vec2(1.0, 1.0));
 	return mix(mix(a, b, f.x), mix(c, d, f.x), f.y);
+}
+
+float shadow_visibility(vec3 p) {
+	if (params.shadow_pos.w < 0.5) {
+		return 1.0;
+	}
+	vec3 rel = p - params.shadow_pos.xyz;
+	vec2 suv = vec2(
+		0.5 + dot(rel, params.shadow_right.xyz) / params.shadow_right.w,
+		0.5 - dot(rel, params.shadow_up.xyz) / params.shadow_right.w);
+	if (suv.x <= 0.002 || suv.x >= 0.998 || suv.y <= 0.002 || suv.y >= 0.998) {
+		return 1.0;
+	}
+	float stored = texture(sun_shadow, suv).r * params.shadow_up.w;
+	float actual = dot(rel, params.shadow_forward.xyz);
+	return smoothstep(-0.18, 0.04, stored - actual);
 }
 
 void main() {
@@ -167,8 +188,12 @@ void main() {
 				* smoothstep(-0.7, 0.65, p.y)
 				* (1.0 + params.fog.x * 2.4 * exp(-2.2 * max(0.0, p.y - 0.85)));
 			float opacity = 1.0 - exp(-rho * ds);
+			float shadow_lit = shadow_visibility(p);
+			// The real shadow map drives the fog's sun term. The screen-space
+			// proxy is only used when no shadow pass is available (Mobile/Low).
+			float sun_visible = (params.shadow_pos.w > 0.5) ? shadow_lit : lit;
 			vec3 incident = params.scatter.rgb
-				+ sun_light * (phase * lit * (1.0 - params.settings.w
+				+ sun_light * (phase * sun_visible * (1.0 - params.settings.w
 					* smoothstep(0.31, 0.66, bank)));
 			if (params.fog.y > 0.01) {
 				for (int j = 0; j < 5; j++) {
@@ -186,6 +211,15 @@ void main() {
 			through *= 1.0 - opacity;
 			p += ray * ds;
 		}
+	}
+
+	// Debug view: blot the scene by the shadow mask so sampling and alignment
+	// can be checked without the fog's scattering term hiding it.
+	if (params.shadow_pos.w > 1.5) {
+		vec3 debug_point = origin + ray * max(0.0, surface_dist - 0.05);
+		float debug_lit = shadow_visibility(debug_point);
+		imageStore(shaft_image, pixel, vec4(0.0, 0.0, 0.0, debug_lit));
+		return;
 	}
 
 	// Add the screen-space shafts themselves, softened at night.

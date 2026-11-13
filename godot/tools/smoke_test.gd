@@ -79,6 +79,10 @@ func _initialize() -> void:
 		failures.append("atmosphere shaft shader missing")
 	if not FileAccess.file_exists("res://shaders/atmosphere_composite.glsl"):
 		failures.append("atmosphere composite shader missing")
+	if not FileAccess.file_exists("res://scripts/sun_shadow.gd"):
+		failures.append("sun shadow script missing")
+	if not FileAccess.file_exists("res://shaders/shadow_capture.glsl"):
+		failures.append("shadow capture shader missing")
 	var post = main.get("post")
 	if post == null or post.material == null or post.material.shader == null:
 		failures.append("post-process shader missing")

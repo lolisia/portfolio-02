@@ -37,6 +37,16 @@ var sun_energy := 1.0
 var cloud_amount := 0.7
 var sun_direction := Vector3.UP
 var lamps: Array = []
+var shadow_texture_rid := RID()
+var shadow_enabled := true
+var shadow_right := Vector3.RIGHT
+var shadow_up := Vector3.UP
+var shadow_forward := Vector3.FORWARD
+var shadow_position := Vector3.ZERO
+var shadow_size := 44.0
+var shadow_far := 120.0
+var shadow_debug := false
+var dummy_texture: RID
 
 var rd: RenderingDevice
 var initialized := false
@@ -58,6 +68,7 @@ var composite_set: RID
 var cached_size := Vector2i.ZERO
 var cached_color := RID()
 var cached_depth := RID()
+var cached_shadow_rid := RID()
 
 func _init() -> void:
 	effect_callback_type = CompositorEffect.EFFECT_CALLBACK_TYPE_POST_TRANSPARENT
@@ -100,7 +111,20 @@ func _initialize_compute() -> void:
 	sampler_state.repeat_u = RenderingDevice.SAMPLER_REPEAT_MODE_CLAMP_TO_EDGE
 	sampler_state.repeat_v = RenderingDevice.SAMPLER_REPEAT_MODE_CLAMP_TO_EDGE
 	sampler = rd.sampler_create(sampler_state)
-	params_buffer = rd.uniform_buffer_create(240, PackedByteArray())
+	params_buffer = rd.uniform_buffer_create(304, PackedByteArray())
+	var dummy_format := RDTextureFormat.new()
+	dummy_format.width = 1
+	dummy_format.height = 1
+	dummy_format.depth = 1
+	dummy_format.array_layers = 1
+	dummy_format.mipmaps = 1
+	dummy_format.texture_type = RenderingDevice.TEXTURE_TYPE_2D
+	dummy_format.samples = RenderingDevice.TEXTURE_SAMPLES_1
+	dummy_format.format = RenderingDevice.DATA_FORMAT_R8G8B8A8_UNORM
+	dummy_format.usage_bits = RenderingDevice.TEXTURE_USAGE_SAMPLING_BIT \
+		| RenderingDevice.TEXTURE_USAGE_CAN_UPDATE_BIT
+	dummy_texture = rd.texture_create(dummy_format, RDTextureView.new(), [])
+	rd.texture_update(dummy_texture, 0, PackedByteArray([255, 255, 255, 255]))
 	initialized = true
 	working = true
 
@@ -115,13 +139,14 @@ func _render_callback(_callback_type: int, render_data: RenderData) -> void:
 		return
 	var color_rid: RID = buffers.get_color_layer(0)
 	var depth_rid: RID = buffers.get_depth_layer(0)
-	if size != cached_size or color_rid != cached_color or depth_rid != cached_depth:
+	if size != cached_size or color_rid != cached_color or depth_rid != cached_depth \
+			or shadow_texture_rid != cached_shadow_rid:
 		_build(buffers, size, color_rid, depth_rid)
 		if not supported:
 			return
 
 	var params := PackedFloat32Array()
-	params.resize(60)
+	params.resize(76)
 	params[0] = sun_uv.x
 	params[1] = sun_uv.y
 	params[2] = 0.0
@@ -169,7 +194,23 @@ func _render_callback(_callback_type: int, render_data: RenderData) -> void:
 		params[base + 1] = lamp_data.y
 		params[base + 2] = lamp_data.z
 		params[base + 3] = lamp_data.w
-	rd.buffer_update(params_buffer, 0, 240, params.to_byte_array())
+	params[60] = shadow_right.x
+	params[61] = shadow_right.y
+	params[62] = shadow_right.z
+	params[63] = shadow_size
+	params[64] = shadow_up.x
+	params[65] = shadow_up.y
+	params[66] = shadow_up.z
+	params[67] = shadow_far
+	params[68] = shadow_forward.x
+	params[69] = shadow_forward.y
+	params[70] = shadow_forward.z
+	params[71] = 0.0
+	params[72] = shadow_position.x
+	params[73] = shadow_position.y
+	params[74] = shadow_position.z
+	params[75] = 2.0 if shadow_debug else (1.0 if shadow_enabled and shadow_texture_rid.is_valid() else 0.0)
+	rd.buffer_update(params_buffer, 0, 304, params.to_byte_array())
 
 	var shaft_list := rd.compute_list_begin()
 	rd.compute_list_bind_compute_pipeline(shaft_list, shaft_pipeline)
@@ -258,6 +299,13 @@ func _build(buffers: RenderSceneBuffersRD, size: Vector2i, color_rid: RID, depth
 	u_params.binding = 3
 	u_params.add_id(params_buffer)
 	shaft_uniforms.append(u_params)
+	var shadow_rid: RID = shadow_texture_rid if shadow_texture_rid.is_valid() else dummy_texture
+	var u_shadow := RDUniform.new()
+	u_shadow.uniform_type = RenderingDevice.UNIFORM_TYPE_SAMPLER_WITH_TEXTURE
+	u_shadow.binding = 4
+	u_shadow.add_id(sampler)
+	u_shadow.add_id(shadow_rid)
+	shaft_uniforms.append(u_shadow)
 	shaft_set = rd.uniform_set_create(shaft_uniforms, shaft_shader, 0)
 
 	var composite_uniforms: Array[RDUniform] = []
@@ -283,6 +331,7 @@ func _build(buffers: RenderSceneBuffersRD, size: Vector2i, color_rid: RID, depth
 	cached_size = size
 	cached_color = color_rid
 	cached_depth = depth_rid
+	cached_shadow_rid = shadow_texture_rid
 	supported = true
 	working = true
 	if not logged:
@@ -306,12 +355,15 @@ func _shutdown() -> void:
 		rd.free_rid(shaft_shader)
 	if composite_shader.is_valid():
 		rd.free_rid(composite_shader)
+	if dummy_texture.is_valid():
+		rd.free_rid(dummy_texture)
 	params_buffer = RID()
 	sampler = RID()
 	shaft_pipeline = RID()
 	composite_pipeline = RID()
 	shaft_shader = RID()
 	composite_shader = RID()
+	dummy_texture = RID()
 	working = false
 
 func _free_resources() -> void:

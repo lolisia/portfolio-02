@@ -237,13 +237,12 @@ Godot의 사용자 인자는 `--` 뒤에 전달합니다.
   - 출력 rgb=산란광, a=투과율; full-res composite에서 `scene * a + rgb`로 HDR scene color에 copy-back
   - Mobile/Low는 기존 canvas bright-pass 광선 + FogVolume 폴백
 - CompositorEffect가 동작하면 FogVolume density를 22%, Environment volumetric fog를 30%로 줄여 이중 안개를 방지.
-- 원본의 sun shadow map 직접 샘플링은 아직 아님(화면공간 depth-mask 근사).
+- **커스텀 sun shadow depth pass**: `sun_shadow.gd`가 768² orthographic SubViewport를 쏘고 `shadow_capture.gd`가 depth를 선형 거리로 인코딩; `atmosphere_shafts.glsl`이 실제 그림자 맵으로 태양 가시성을 판정. `--noshadow` 폴백/`--shadowdebug` 마스크 뷰 지원.
 - 밤 별 dome/달은 `night_life.gd`로 구현.
 
 **할 일**
-1. Forward+ `CompositorEffect` half-res fog pass에 **sun shadow map** 직접 샘플링 추가.
-   - 현재는 depth 버퍼의 전경 occluder 마스크를 태양 가시성 프록시로 사용.
-   - CompositorEffect API에서 shadow map 직접 접근이 불가해 별도 shadow depth SubViewport 등 대안 검토 필요.
+1. 커스텀 sun shadow pass 튜닝: 해상도(768²)/바이어스/갱신 주기, 모바일 폴백 검증.
+   - 엔진 shadow atlas는 CompositorEffect에 노출되지 않아 별도 SubViewport depth pass로 구현.
 2. 새벽/밤/비/눈에 따른 안개 밀도·색·산란 미세 튜닝.
 3. ~~램프 5개의 볼류메트릭 산란~~ — 컴포지트 안개에서 구현.
 4. ~~밤하늘 별~~ — `night_life.gd` 별 dome + `stars.gdshader`로 구현.
@@ -421,7 +420,7 @@ Godot의 사용자 인자는 `--` 뒤에 전달합니다.
 - Windows Desktop export preset 준비 (`export_presets.cfg`), 앱 버전 0.1.0.
 - 이 환경에는 export 템플릿과 Android SDK가 없어 실제 패키징은 실패:
   `export_templates/4.7.2.stable.mono/windows_release_x86_64.exe` 없음.
-- 1280×720 High `--house` `--bench 600`: 약 3.19ms/frame (RTX 3080, 반사 2프레임 갱신/288p + 레이마칭 안개/광선 포함).
+- 1280×720 High `--house` `--bench 600`: 약 4.02ms/frame (RTX 3080, 반사 2프레임 갱신/288p + 레이마칭 안개/광선 + 768² sun shadow pass 포함).
 - 360×640 Mobile 렌더러 UI/패널 캡처 및 `--shot` 확인.
 
 **남은 일**
@@ -444,7 +443,8 @@ Godot의 사용자 인자는 `--` 뒤에 전달합니다.
   - `FogVolume`과 Environment volumetric fog는 Forward+ 전용.
   - `AtmosphereEffect`는 Forward+ + RGBA16F scene color + single-sample resolved depth가 필요.
   - 하프레스 24스텝 레이마칭이 색/깊이를 읽고, full-res composite는 투과율을 적용해 HDR color에 copy-back.
-  - 실제 sun shadow map 샘플링이 아니라 화면공간 depth-mask + 밝기 프록시를 태양 가시성으로 사용.
+  - 엔진 shadow atlas 대신 `SunShadow` 768² orthographic depth pass를 사용하고, depth를 선형 거리로 인코딩해 샘플.
+  - `--noshadow`로 화면공간 프록시 폴백, `--shadowdebug`로 섀도 마스크 확인.
   - CompositorEffect 동작 시 FogVolume을 22%, volumetric fog를 30%로 줄여 이중 안개를 방지.
   - Mobile/Low는 FogVolume + canvas bright-pass 광선 폴백.
 - **눈**
@@ -477,7 +477,7 @@ Godot의 사용자 인자는 `--` 뒤에 전달합니다.
   - Unity-chan은 PNG 변환본 사용.
   - 원본 `public/`은 참고용; Godot 프로젝트에 복사된 에셋을 수정해야 함.
 - **개발 프리셋**
-  - `--house`, `--pond`, `--door`, `--fishtest`, `--fishnear`, `--gathernear`, `--falls`, `--bench` 등은 개발용.
+  - `--house`, `--pond`, `--door`, `--fishtest`, `--fishnear`, `--gathernear`, `--falls`, `--bench`, `--noshadow`, `--shadowdebug` 등은 개발용.
   - 최종 빌드에서 제거하거나 유지 여부 결정.
 
 ---

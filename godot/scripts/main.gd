@@ -17,6 +17,7 @@ const NightLife = preload("res://scripts/night_life.gd")
 const SeasonsFX = preload("res://scripts/seasons_fx.gd")
 const QualityManager = preload("res://scripts/quality_manager.gd")
 const AtmosphereEffect = preload("res://scripts/atmosphere_effect.gd")
+const SunShadow = preload("res://scripts/sun_shadow.gd")
 
 var world: FarmWorld
 var orbit: OrbitCamera
@@ -31,6 +32,9 @@ var footprints: Footprints
 var night_life: NightLife
 var quality_manager: QualityManager
 var atmosphere_effect: AtmosphereEffect
+var sun_shadow: SunShadow
+var use_shadow_depth := true
+var shadow_debug := false
 var mist: FogVolume
 var mist_material: FogMaterial
 var low_mist: FogVolume
@@ -140,6 +144,10 @@ func _ready() -> void:
 		water_reflection.setup(world.water, orbit, world.water.position.y)
 		atmosphere_effect = null
 		if DisplayServer.get_name() != "headless":
+			sun_shadow = SunShadow.new()
+			sun_shadow.name = "SunShadow"
+			add_child(sun_shadow)
+			sun_shadow.setup(world.get_world_3d())
 			atmosphere_effect = AtmosphereEffect.new()
 			var compositor := Compositor.new()
 			compositor.compositor_effects = [atmosphere_effect]
@@ -289,6 +297,10 @@ func _ready() -> void:
 		_set_quality(1)
 	if "--high" in cli:
 		_set_quality(0)
+	if "--noshadow" in cli:
+		use_shadow_depth = false
+	if "--shadowdebug" in cli:
+		shadow_debug = true
 	var shot_index := cli.find("--shot")
 	if shot_index >= 0 and shot_index + 1 < cli.size():
 		_capture_screenshot(String(cli[shot_index + 1]))
@@ -304,6 +316,8 @@ func _ready() -> void:
 func _exit_tree() -> void:
 	if atmosphere_effect != null:
 		atmosphere_effect.shutdown()
+	if sun_shadow != null:
+		sun_shadow.shutdown()
 
 func _desired_v_offset() -> float:
 	if ui == null:
@@ -653,6 +667,20 @@ func _update_atmosphere(daylight: Dictionary) -> void:
 	atmosphere_effect.cam_near = orbit.near
 	atmosphere_effect.cam_far = orbit.far
 
+	if sun_shadow != null and atmosphere_effect != null:
+		var sun_dir := sun.global_transform.basis.z.normalized() if sun != null else Vector3.UP
+		sun_shadow.set_sun(sun_dir)
+		var shadow_xform := sun_shadow.camera.global_transform
+		atmosphere_effect.shadow_texture_rid = sun_shadow.capture_rid()
+		atmosphere_effect.shadow_enabled = use_shadow_depth
+		atmosphere_effect.shadow_debug = shadow_debug
+		atmosphere_effect.shadow_right = shadow_xform.basis.x.normalized()
+		atmosphere_effect.shadow_up = shadow_xform.basis.y.normalized()
+		atmosphere_effect.shadow_forward = -shadow_xform.basis.z.normalized()
+		atmosphere_effect.shadow_position = shadow_xform.origin
+		atmosphere_effect.shadow_size = sun_shadow.camera.size
+		atmosphere_effect.shadow_far = sun_shadow.camera.far
+
 	var lamp_data: Array = []
 	if world != null:
 		for entry in world.lamps:
@@ -708,6 +736,8 @@ func _set_quality(index: int) -> void:
 		quality_manager.apply(quality)
 	if atmosphere_effect != null:
 		atmosphere_effect.active = quality < 2
+	if sun_shadow != null:
+		sun_shadow.set_active(quality < 2)
 	_apply_render_scale()
 	if ui != null:
 		ui.set_quality(quality)

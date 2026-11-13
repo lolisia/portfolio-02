@@ -45,6 +45,7 @@ Godot 4.7 프로젝트. 원본 Three.js 디오라마(`../src`)를 PC/모바일 �
 - 봄 벚꽃잎/가을 낙엽 파티클과 지면 레이어, 계절 foliage tint, 겨울 연못 결빙/균열, 폭포 white-water foam·spray, 비 파문
 - 밤 별 dome·달, 램프별 플리커/후광, 램프 주변 나방, 여름밤 반딧불
 - Forward+ 하프레스 레이마칭 안개·광선(CompositorEffect: 높이/노이즈/저지대 미스트/램프 산란) + Mobile canvas 광선 폴백, 태양 글레어, 비 지붕 충돌·수면/지면 파문
+- 커스텀 768² sun shadow depth pass로 안개/광선에 실제 수목·건물 그림자 투영 (`--noshadow` 폴백, `--shadowdebug` 마스크 뷰)
 - 농가 창문/TV 컬러 플리커, 사람이 지날 때 창문 광량 감소와 창문 앞 실루엣
 - 겨울 지면 융기(셰이더)와 눈 위 부츠/닭 발자국, 눈이 쌓이면 서서히 메워짐
 - 캐릭터/닭이 지나간 자리의 풀 눌림과 회복 트레일(16슬롯 트램플 셰이더)
@@ -55,7 +56,7 @@ Godot 4.7 프로젝트. 원본 Three.js 디오라마(`../src`)를 PC/모바일 �
 
 ## 아직 남은 작업
 
-- Sun shadow map 직접 샘플링(현재는 화면공간 depth-mask 근사)
+- 커스텀 sun shadow depth pass의 해상도/바이어스 튜닝(768², Forward+ 전용)
 - 물 반사 디테일(선택)
 - 농가 주변 계단/먼 꽃정원 디테일(선택)
 - 모바일 실기기 프로파일링(중급 Android), 적응형 해상도, safe area
