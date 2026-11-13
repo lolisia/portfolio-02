@@ -497,10 +497,12 @@ func _setup_environment() -> void:
 	var high_end := method == "forward_plus"
 	high_end_rendering = high_end
 	env.ssao_enabled = high_end
-	env.ssao_radius = 1.2
-	env.ssao_intensity = 1.8
-	env.ssao_power = 1.0
+	env.ssao_radius = 0.58
+	env.ssao_intensity = 1.0
+	env.ssao_power = 1.3
 	env.ssao_detail = 0.5
+	env.ssao_horizon = 0.06
+	env.ssao_sharpness = 0.98
 	env.fog_enabled = true
 	env.fog_light_color = Color(0.42, 0.50, 0.52)
 	env.fog_density = 0.0025
@@ -765,6 +767,8 @@ func _process(delta: float) -> void:
 		world.set_cloud_shadow(cloud_amount, float(Time.get_ticks_msec()) / 1000.0)
 	if farm_life != null:
 		farm_life.set_night(float(daylight["night"]))
+	if weather_fx != null:
+		weather_fx.night_level = float(daylight["night"])
 	if world != null:
 		world.update_cascade(delta, wind, 1.0 - float(daylight["night"]) * 0.9)
 	if night_life != null:
@@ -794,7 +798,9 @@ func _process(delta: float) -> void:
 		post.set_grade(Color(mood_tint.x, mood_tint.y, mood_tint.z), sat, mood_contrast, vig,
 			shadow, highlight)
 		var mood_bloom := (1.0 + 1.1 * foggy + 0.5 * wet + 0.2 * storm_fx) * (1.0 - 0.5 * snow_depth)
-		env.glow_intensity = (0.14 + 0.42 * night) * mood_bloom
+		env.glow_intensity = (0.05 + 0.06 * float(t["golden"])
+			+ 0.11 * float(t["night"])) * mood_bloom
+		env.glow_hdr_threshold = lerpf(1.25, 0.55, float(t["night"]))
 		if sun != null and orbit != null:
 			var sun_dir := sun.global_transform.basis.z.normalized()
 			var facing := sun_dir.dot(-orbit.global_transform.basis.z)

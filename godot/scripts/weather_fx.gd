@@ -25,6 +25,15 @@ var water_material: ShaderMaterial
 var water_impacts: Array = []
 var water_time := 0.0
 var impact_cursor := 0
+var night_level := 0.0
+var lamp_rain: Array[GPUParticles3D] = []
+var lamp_rain_materials: Array[StandardMaterial3D] = []
+var splash_instance: MultiMeshInstance3D
+var splash_multimesh: MultiMesh
+var splash_items: Array = []
+var splash_cursor := 0
+var splash_accum := 0.0
+const SPLASH_COUNT := 300
 const RIPPLE_CAPACITY := 160
 
 func _ready() -> void:
@@ -47,6 +56,8 @@ func _ready() -> void:
 	_build_roof_collisions()
 	_build_ripples()
 	_setup_water_impacts()
+	_build_splashes()
+	_build_lamp_rain()
 
 func _setup_water_impacts() -> void:
 	if world == null or world.water == null:
@@ -66,6 +77,142 @@ func _water_impact(x: float, z: float, power: float) -> void:
 	water_impacts[impact_cursor] = Vector4(x, z, water_time, power)
 	impact_cursor = (impact_cursor + 1) % 18
 	water_material.set_shader_parameter("impacts", water_impacts)
+
+func _soft_dot_texture() -> ImageTexture:
+	var image := Image.create(32, 32, false, Image.FORMAT_RGBA8)
+	for y in range(32):
+		for x in range(32):
+			var dx := (float(x) - 15.5) / 15.5
+			var dy := (float(y) - 15.5) / 15.5
+			var a := pow(clampf(1.0 - sqrt(dx * dx + dy * dy), 0.0, 1.0), 2.2)
+			image.set_pixel(x, y, Color(1, 1, 1, a))
+	return ImageTexture.create_from_image(image)
+
+func _build_splashes() -> void:
+	var quad := QuadMesh.new()
+	quad.size = Vector2(0.06, 0.06)
+	var material := StandardMaterial3D.new()
+	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	material.albedo_texture = _soft_dot_texture()
+	material.albedo_color = Color(0.78, 0.87, 0.87, 0.0)
+	material.billboard_mode = BaseMaterial3D.BILLBOARD_ENABLED
+	material.billboard_keep_scale = true
+	material.cull_mode = BaseMaterial3D.CULL_DISABLED
+	material.vertex_color_use_as_albedo = true
+	quad.material = material
+	splash_multimesh = MultiMesh.new()
+	splash_multimesh.transform_format = MultiMesh.TRANSFORM_3D
+	splash_multimesh.use_colors = true
+	splash_multimesh.mesh = quad
+	splash_multimesh.instance_count = SPLASH_COUNT
+	splash_instance = MultiMeshInstance3D.new()
+	splash_instance.name = "RainSplashes"
+	splash_instance.multimesh = splash_multimesh
+	splash_instance.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	splash_instance.gi_mode = GeometryInstance3D.GI_MODE_DISABLED
+	splash_instance.custom_aabb = AABB(Vector3(-15, -3, -15), Vector3(30, 30, 30))
+	add_child(splash_instance)
+	for i in range(SPLASH_COUNT):
+		splash_items.append({"life": 0.0, "max": 1.0, "x": 0.0, "y": -80.0,
+			"z": 0.0, "vx": 0.0, "vy": 0.0, "vz": 0.0})
+		splash_multimesh.set_instance_transform(i,
+			Transform3D(Basis.from_scale(Vector3.ZERO), Vector3(0, -80, 0)))
+		splash_multimesh.set_instance_color(i, Color(0, 0, 0, 0))
+
+func _build_lamp_rain() -> void:
+	if world == null:
+		return
+	for lamp in world.lamps:
+		var position: Vector3 = lamp["position"]
+		var particles := GPUParticles3D.new()
+		particles.name = "LampRain"
+		particles.amount = 80
+		particles.lifetime = 1.4
+		particles.preprocess = 1.4
+		particles.local_coords = false
+		particles.visibility_aabb = AABB(Vector3(-4, -6, -4), Vector3(8, 10, 8))
+		particles.position = position
+		particles.emitting = false
+		var quad := QuadMesh.new()
+		quad.size = Vector2(0.024, 0.42)
+		var material := StandardMaterial3D.new()
+		material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		material.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+		material.albedo_color = Color(1.0, 0.72, 0.35, 0.0)
+		material.billboard_mode = BaseMaterial3D.BILLBOARD_ENABLED
+		material.billboard_keep_scale = true
+		material.cull_mode = BaseMaterial3D.CULL_DISABLED
+		quad.material = material
+		particles.draw_pass_1 = quad
+		var process := ParticleProcessMaterial.new()
+		process.emission_shape = ParticleProcessMaterial.EMISSION_SHAPE_SPHERE
+		process.emission_sphere_radius = 1.25
+		process.direction = Vector3(0, -1, 0)
+		process.spread = 4.0
+		process.initial_velocity_min = 4.5
+		process.initial_velocity_max = 7.0
+		process.gravity = Vector3(0, -8.0, 0)
+		particles.process_material = process
+		add_child(particles)
+		lamp_rain.append(particles)
+		lamp_rain_materials.append(material)
+
+func _update_splashes(delta: float) -> void:
+	if world == null or splash_instance == null:
+		return
+	splash_accum += delta * 1100.0 * rain_level * quality_scale
+	while splash_accum >= 1.0:
+		splash_accum -= 1.0
+		if rain_level <= 0.02:
+			continue
+		for attempt in range(8):
+			var x := randf_range(-13.0, 13.0)
+			var z := randf_range(-13.0, 13.0)
+			if world.height(x, z) < world.water.position.y - 0.04:
+				continue
+			var index := splash_cursor
+			splash_cursor = (splash_cursor + 1) % SPLASH_COUNT
+			var max_life := 0.17 + randf() * 0.10
+			splash_items[index] = {
+				"life": max_life, "max": max_life, "x": x,
+				"y": world.roof_floor(x, z) + 0.02, "z": z,
+				"vx": (randf() - 0.5) * 1.3, "vy": 0.38 + randf() * 0.7,
+				"vz": (randf() - 0.5) * 1.3,
+			}
+			break
+	for i in range(splash_items.size()):
+		var item: Dictionary = splash_items[i]
+		if float(item["life"]) <= 0.0:
+			continue
+		item["life"] = float(item["life"]) - delta
+		if float(item["life"]) <= 0.0:
+			splash_multimesh.set_instance_transform(i,
+				Transform3D(Basis.from_scale(Vector3.ZERO), Vector3(0, -80, 0)))
+			splash_multimesh.set_instance_color(i, Color(0, 0, 0, 0))
+			continue
+		item["vy"] = float(item["vy"]) - 6.0 * delta
+		item["x"] = float(item["x"]) + float(item["vx"]) * delta
+		item["y"] = float(item["y"]) + float(item["vy"]) * delta
+		item["z"] = float(item["z"]) + float(item["vz"]) * delta
+		splash_multimesh.set_instance_transform(i,
+			Transform3D(Basis.IDENTITY, Vector3(float(item["x"]), float(item["y"]),
+				float(item["z"]))))
+		var fade := float(item["life"]) / maxf(float(item["max"]), 0.001)
+		splash_multimesh.set_instance_color(i,
+			Color(1.0, 1.0, 1.0, 0.53 * rain_level * clampf(fade, 0.0, 1.0)))
+
+func _update_lamp_rain() -> void:
+	var level := rain_level * clampf(night_level, 0.0, 1.0)
+	for i in range(lamp_rain.size()):
+		var particles: GPUParticles3D = lamp_rain[i]
+		particles.emitting = level > 0.02
+		particles.amount_ratio = clampf(level, 0.0, 1.0)
+		var material: StandardMaterial3D = lamp_rain_materials[i]
+		var tint := material.albedo_color
+		tint.a = 0.55 * level
+		material.albedo_color = tint
 
 func _make_particles(label: String, amount: int, lifetime: float, vmin: float, vmax: float,
 		color: Color, quad_size: Vector2) -> GPUParticles3D:
@@ -270,6 +417,8 @@ func set_intensity(rain_amount: float, snow_amount: float, storm_amount: float, 
 			0.10 + wind * 0.012, 0.05, 0.07 + wind * 0.008)
 	if delta > 0.0:
 		_update_ripples(delta)
+	_update_splashes(delta)
+	_update_lamp_rain()
 
 func set_weather(weather: int) -> void:
 	set_intensity(1.0 if weather == 2 else 0.0, 1.0 if weather >= 4 else 0.0,

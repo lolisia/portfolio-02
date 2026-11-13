@@ -98,9 +98,9 @@ func apply(hour: float, weather: int = 0, _season: int = 1,
 	env.fog_sky_affect = 0.18
 	env.fog_aerial_perspective = 0.2
 	env.glow_enabled = true
-	env.glow_intensity = 0.14 + 0.42 * night
+	env.glow_intensity = 0.05 + 0.06 * golden + 0.11 * night
 	env.glow_bloom = 0.04 + 0.10 * night
-	env.glow_hdr_threshold = lerp(1.05, 0.35, night)
+	env.glow_hdr_threshold = lerpf(1.25, 0.55, night)
 	env.tonemap_mode = Environment.TONE_MAPPER_ACES
 	env.tonemap_exposure = 1.14
 	# L9(X): the web grades only in the composite pass; no Environment

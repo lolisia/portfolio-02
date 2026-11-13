@@ -396,6 +396,15 @@ func _initialize() -> void:
 				or storm_energy < clear_energy * 0.20:
 			failures.append("weather sun dimming curve wrong")
 		main._apply_time(true)
+	var environment = main.get("env")
+	if environment == null:
+		failures.append("environment missing")
+	else:
+		if absf(environment.ssao_radius - 0.58) > 0.001 \
+				or absf(environment.ssao_intensity - 1.0) > 0.001:
+			failures.append("SSAO does not match the web contact radius")
+		if absf(environment.glow_hdr_threshold - 1.25) > 0.01:
+			failures.append("day bloom threshold wrong")
 	var backdrop = main.get("backdrop")
 	if backdrop == null or backdrop.layers != 4:
 		failures.append("screen-space backdrop missing")
@@ -506,6 +515,26 @@ func _initialize() -> void:
 				(weather.impact_cursor + 17) % 18]
 			if impact.w <= 0.0 or absf(impact.x - 10.7) > 0.01:
 				failures.append("fish splash did not reach the pond shader")
+		if weather.splash_multimesh == null or weather.splash_multimesh.instance_count != 300:
+			failures.append("rain splash points missing")
+		if weather.lamp_rain.size() < 5:
+			failures.append("lamp-lit rain systems missing")
+		weather.rain_level = 1.0
+		weather.night_level = 1.0
+		weather._update_lamp_rain()
+		for lamp_rain in weather.lamp_rain:
+			if not lamp_rain.emitting:
+				failures.append("lamp rain did not light at night")
+				break
+		weather._update_splashes(0.2)
+		var live_splashes := 0
+		for splash_item in weather.splash_items:
+			if float(splash_item["life"]) > 0.0:
+				live_splashes += 1
+		if live_splashes <= 0:
+			failures.append("rain splashes did not spawn")
+		weather.rain_level = 0.0
+		weather.night_level = 0.0
 	var cascade = world.get("cascade_fx") if world != null else null
 	if cascade == null:
 		failures.append("cascade FX missing")
