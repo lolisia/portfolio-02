@@ -7,7 +7,6 @@ class_name NightLife
 
 const MOTHS_PER_LAMP := 16
 const FIREFLY_COUNT := 90
-const STAR_COUNT := 8000
 const TV_PALETTE := [
 	Color(0.48, 0.64, 1.00), Color(0.87, 0.91, 1.00), Color(0.62, 0.90, 0.75),
 	Color(1.00, 0.85, 0.66), Color(1.00, 0.56, 0.47), Color(0.72, 0.65, 1.00),
@@ -92,50 +91,13 @@ func _quad() -> QuadMesh:
 	return quad
 
 func _build_stars() -> void:
-	var width := 1024
-	var height := 512
-	var image := Image.create(width, height, false, Image.FORMAT_RGBA8)
-	var palette := [Color(0.72, 0.82, 1.0), Color(0.88, 0.94, 1.0), Color(1.0, 0.90, 0.74)]
-	for i in range(STAR_COUNT):
-		var x := int(rng.randf() * width)
-		# Stars live above the horizon line (the top half of the sphere map).
-		var v := pow(rng.randf(), 0.82)
-		var y := int(v * height * 0.70)
-		if y >= height:
-			y = height - 1
-		var bright := 0.42 + pow(rng.randf(), 1.8) * 0.58
-		var hue: Color = palette[rng.randi() % palette.size()]
-		var fade := 1.0 - smoothstep(0.46, 0.70, float(y) / float(height))
-		var alpha := bright * fade
-		if alpha <= 0.02:
-			continue
-		var color := Color(hue.r * alpha, hue.g * alpha, hue.b * alpha, 1.0)
-		image.set_pixel(x, y, color)
-		if bright > 0.72:
-			for ox in [-1, 0, 1]:
-				for oy in [-1, 0, 1]:
-					if ox == 0 and oy == 0:
-						continue
-					var px := clampi(x + ox, 0, width - 1)
-					var py := clampi(y + oy, 0, height - 1)
-					image.set_pixel(px, py, Color(color.r * 0.5, color.g * 0.5, color.b * 0.5, 1.0))
-			image.set_pixel(clampi(x + 1, 0, width - 1), y, color)
-			image.set_pixel(x, clampi(y + 1, 0, height - 1), color)
-	# A faint galactic band crosses the sky diagonally.
-	for i in range(950):
-		var x2 := int(rng.randf() * width)
-		var band := 0.20 + 0.06 * sin(float(x2) / float(width) * TAU * 1.4)
-		var y2 := int((band + rng.randf_range(-0.045, 0.045)) * height)
-		if y2 < 0 or y2 >= height:
-			continue
-		var a2 := 0.05 + rng.randf() * 0.16
-		image.set_pixel(x2, y2, Color(a2 * 0.78, a2 * 0.84, a2, 1.0))
-	image.generate_mipmaps()
-
+	# The star field is generated in the shader from the dome direction (like
+	# the web's screen-space star cells), so no texture resolution can turn a
+	# star into a magnified square under the orthographic camera.
 	star_material = ShaderMaterial.new()
 	star_material.shader = preload("res://shaders/stars.gdshader")
-	star_material.set_shader_parameter("star_tex", ImageTexture.create_from_image(image))
 	star_material.set_shader_parameter("amount", 0.0)
+	star_material.set_shader_parameter("clock", 0.0)
 
 	var sphere := SphereMesh.new()
 	sphere.radius = 145.0
@@ -306,6 +268,7 @@ func _update_stars(night: float, golden: float, clear: float, orbit_yaw: float) 
 		moon_halo.visible = false
 		return
 	star_material.set_shader_parameter("amount", amount)
+	star_material.set_shader_parameter("clock", time)
 	star_dome.rotation.y = -orbit_yaw * 0.9 + 0.15
 	moon.visible = amount > 0.02
 	moon_halo.visible = moon.visible

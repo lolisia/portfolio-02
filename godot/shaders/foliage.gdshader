@@ -7,6 +7,7 @@ uniform float wet : hint_range(0.0, 1.0) = 0.0;
 uniform float snow_depth : hint_range(0.0, 1.0) = 0.0;
 uniform float winter : hint_range(0.0, 1.0) = 0.0;
 uniform float evergreen : hint_range(0.0, 1.0) = 0.0;
+uniform float leaf_cut : hint_range(0.0, 2.0) = 0.0;
 uniform float trample_strength : hint_range(0.0, 1.0) = 0.0;
 uniform vec3 season_tint = vec3(1.0);
 uniform vec4 trample[16];
@@ -37,6 +38,31 @@ float fbm(vec2 p) {
 		a *= 0.5;
 	}
 	return n;
+}
+
+// Broadleaf spray: a grid of rotated pointed leaves cut into the solid
+// canopy mesh, standing in for the web's alpha-tested leaf texture.
+float broadleaf_mask(vec3 p) {
+	vec2 q = p.xz * 5.2 + vec2(p.y * 2.1, -p.y * 1.4);
+	vec2 cell = floor(q);
+	vec2 f = fract(q) - 0.5;
+	float r = hash(cell);
+	vec2 offset = vec2(r, hash(cell + 19.3)) - 0.5;
+	vec2 local = f - offset * 0.30;
+	float angle = r * 6.2831853;
+	float c = cos(angle);
+	float s = sin(angle);
+	vec2 rotated = vec2(local.x * c - local.y * s, local.x * s + local.y * c);
+	rotated.x *= 1.15;
+	return 1.0 - smoothstep(0.30, 0.55, length(rotated * vec2(1.0, 1.45)));
+}
+
+// Pine needle spray: thin overlapping strokes.
+float needle_mask(vec3 p) {
+	vec2 q = p.xz * 18.0 + vec2(p.y * 8.0, -p.y * 4.0);
+	vec2 f = fract(q) - 0.5;
+	float groove = abs(f.x + f.y * 0.45);
+	return 1.0 - smoothstep(0.10, 0.28, groove);
 }
 
 void vertex() {
@@ -94,6 +120,17 @@ void vertex() {
 void fragment() {
 	if (CAMERA_POSITION_WORLD.y < 0.0 && v_origin.y < 0.44) {
 		discard;
+	}
+	// Alpha-cut the canopy using a procedural leaf spray. Only leaf materials
+	// opt in; grass, stems and flowers keep their solid geometry.
+	if (leaf_cut > 1.5) {
+		if (needle_mask(v_world) < 0.24) {
+			discard;
+		}
+	} else if (leaf_cut > 0.5) {
+		if (broadleaf_mask(v_world) < 0.30) {
+			discard;
+		}
 	}
 	vec3 albedo = base_color.rgb * v_color * season_tint;
 	// Leafy dapple: world-space noise breaks the flat canopy blobs into

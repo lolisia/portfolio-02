@@ -13,6 +13,8 @@
 - **G1**: `src/world.js`의 `stairs()`를 `_build_garden_stairs()`로 포팅. 어두운 라이저 + 밝은 디딤판 + 계단식 측벽, `path_points`/경로 마스크 반영.
 - **H1–H6, S1–S2**: 농가 사이딩 면 순서(x=H+knee/10단, z=H/8단) 수정, 앞문 정적 판자/문짝 이중 생성 제거(`_door(..., has_leaf)`), 처마 스트립·박공 보드·지붕널을 웹의 roof-normal `at()` 공식으로 이동, 용마루 캡 제거. 닭장/헛간 지붕을 웹처럼 90° 회전 + rx 경사로 변경. `--coop` 프리셋 추가.
 - **K2–K3**: 소나무 `pineANeedles`에 `evergreen=1`을 주어 겨울 discard에서 제외. Bark/Twigs/Stump 파트를 stone이 아닌 wood 표면으로 매핑.
+- **K1**: `foliage.gdshader`에 절차적 `broadleaf_mask`/`needle_mask`를 추가하고 기존 잎 메시에 alpha cut 적용(`leaf_cut`). `*Leaves`는 회전된 피침형 잎 그리드, `pineANeedles`는 가는 침엽 스트로크로 갈라져 웹의 `spray`/`needle` 알파 테스트 느낌을 냄. 잔디·줄기·꽃은 솔리드 유지.
+- **L2**: 별 텍스처(1024×512)를 제거하고 dome 방향 기반 절차적 셀 별 필드로 교체. 직교 카메라에서 텍스처 1픽셀이 약 20px 사각형으로 확대되던 문제 해결. 별은 화면 높이 페이드·반짝임·궤도 yaw 회전을 가짐. 달/후광은 웹에 없는 추가 요소(X)로 유지.
 - **F1/F2/F7**: 수직 평면 폭포를 24×30 곡선 커튼 2겹(밝은 앞/어두운 뒤)으로 교체하고, 낙하 지점 바위 7개 추가. `freeze` 유니폼으로 겨울에 커튼과 spray가 사라짐. F3–F6(물방울 수/거품 원판/수증기/lit 재질)은 남음.
 
 ---

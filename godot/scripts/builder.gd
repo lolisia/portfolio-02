@@ -137,6 +137,9 @@ func _material_for(kind: String) -> Material:
 		# The web keeps pine needles evergreen in winter.
 		if kind == "pineANeedles":
 			shader_mat.set_shader_parameter("evergreen", 1.0)
+			shader_mat.set_shader_parameter("leaf_cut", 2.0)
+		elif kind.ends_with("Leaves"):
+			shader_mat.set_shader_parameter("leaf_cut", 1.0)
 		return shader_mat
 	if kind == "glass" or kind == "lampglass":
 		var mat := StandardMaterial3D.new()
