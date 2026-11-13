@@ -37,12 +37,13 @@
 - **G7**: 512 정사각 경로 마스크를 1024² RGBA 그라운드 마스크로 교체. R=나무 주변 낙엽(반경 2.1·s), G=경로(각 path point 반경 1.02, 선형 radial falloff), B/A 미사용. 셰이더는 부드러운 dirt path, leaf grain 낙엽, 수면 근처 mud band, fbm 미분 기반 soil bump, 고주파 spatter를 적용. 기존 6px 사각형 경로 마스크 제거.
 - **G8**: 겨울 지면을 단순 0.22 감광에서 웹 `surfaces.js`의 `winterBare` 혼합으로 교체. `soilGrain = dot(albedo, (.3,.5,.2))`, 목표색 `#5c3c22`(`vec3(.36,.235,.135)`) × `(soilGrain·1.8+.25)`로 `winter`만큼 mix하고, 그 위에 눈이 덮임. `--winter-bare` 개발 프리셋으로 눈을 끈 상태의 흙톤을 캡처.
 - **G5**: 별도 `sunflowerDisc` kind를 제거하고 디스크·18개 광선을 `sunflowerBloom` 메시 안으로 병합. 디스크는 `(.32,.19,.08)`, 광선은 `(1,.78,.12)` 정점색을 가지며, foliage 셰이더의 `use_vertex_color`를 이 kind에만 켜서 인스턴스 크림색과 곱해진다.
+- **H10**: 문짝을 교대 StandardMaterial 색상의 5장 판자 + 구형 손잡이에서, 문 hinge pivot 아래 `DioramaBuilder`로 만든 판자 5장(랜덤 `#6a432b/#73492f/#5f3c27`), 가로대 2개(`#4e3322`), 철 손잡이 상자(`#2f2a24`)로 교체. 모든 부품이 wood/iron 표면 셰이더를 사용하며 피벗과 함께 회전. `--doorleaf` 근접 프리셋 추가.
 
 ### 현재 상태
 
 - **P0 전부 수정**: C1–C3, W1–W4, F1–F7, H1–H6, S1–S2, G1, K1–K2, U1–U4, A1, E1, I1–I4.
-- **추가 수정(P1 일부)**: K3, F3–F6, E2–E5, E7, L4, L6, R1–R2, M1–M2, G2–G8, U5–U12, A2–A6/A8, H7–H9/H11, I5/I6/I7/I8/I9/I10–I12.
-- **남은 P1/P2**: H10/H12(X), S3, M3–M6, K4–K9, U13, A7/A9, L1/L3/L5/L8/L9, E6/E8, R3, I13–I15, C4–C6, X 항목 정리.
+- **추가 수정(P1 일부)**: K3, F3–F6, E2–E5, E7, L4, L6, R1–R2, M1–M2, G2–G8, U5–U12, A2–A6/A8, H7–H11, I5/I6/I7/I8/I9/I10–I12.
+- **남은 P1/P2**: H12(X), S3, M3–M6, K4–K9, U13, A7/A9, L1/L3/L5/L8/L9, E6/E8, R3, I13–I15, C4–C6, X 항목 정리.
 
 ---
 

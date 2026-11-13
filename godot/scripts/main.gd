@@ -193,6 +193,9 @@ func _ready() -> void:
 		orbit.set_view(Vector3(6.6, 0.6, 4.0), 0.55, 1.2, 4.0)
 	if "--door" in cli:
 		orbit.set_view(Vector3(-0.8, 1.0, -0.6), 0.25, 1.35, 4.2)
+	if "--doorleaf" in cli:
+		orbit.max_zoom = 12.0
+		orbit.set_view(Vector3(-1.0, 2.1, -0.5), 0.0, 0.22, 8.0)
 	if "--front" in cli:
 		orbit.set_view(Vector3(-1.0, 1.2, -0.4), 0.1, 0.42, 4.0)
 	if "--garden" in cli:

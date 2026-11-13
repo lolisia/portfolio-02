@@ -151,6 +151,22 @@ func _initialize() -> void:
 			failures.append("double-sided hair material missing")
 		if absf(float(character.world.cottage_door.x) + 1.0) > 0.001:
 			failures.append("cottage door position wrong")
+		if world.door_leaf == null:
+			failures.append("cottage door leaf missing")
+		else:
+			var door_wood_count := -1
+			var door_iron_count := -1
+			for child in world.door_leaf.get_children():
+				if child is MultiMeshInstance3D:
+					var leaf_mmi := child as MultiMeshInstance3D
+					if String(leaf_mmi.name) == "wood":
+						door_wood_count = leaf_mmi.multimesh.instance_count
+					elif String(leaf_mmi.name) == "iron":
+						door_iron_count = leaf_mmi.multimesh.instance_count
+					if not (leaf_mmi.material_override is ShaderMaterial):
+						failures.append("door leaf lost its wood surface")
+			if door_wood_count != 7 or door_iron_count != 1:
+				failures.append("door leaf builder planks wrong")
 		if character.gather_spots.size() != 6:
 			failures.append("gather spot count wrong")
 		if character.shore_spots.size() != 5:

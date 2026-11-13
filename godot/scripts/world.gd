@@ -589,44 +589,22 @@ func _build_door_leaf(cx: float, gy: float, cz: float, rot: float) -> Node3D:
 	pivot.position = Vector3(cx - 0.37, gy + F + 0.12, cz + D * 0.5 + 0.01)
 	pivot.rotation.y = rot
 	add_child(pivot)
-	var wood := StandardMaterial3D.new()
-	wood.albedo_color = Color(0.42, 0.27, 0.17)
-	wood.roughness = 0.82
-	var dark := StandardMaterial3D.new()
-	dark.albedo_color = Color(0.30, 0.20, 0.13)
-	dark.roughness = 0.8
-	var iron := StandardMaterial3D.new()
-	iron.albedo_color = Color(0.18, 0.16, 0.14)
-	iron.metallic = 0.6
-	iron.roughness = 0.5
+	# H10: the leaf is built through the same batched builder as the rest of
+	# the cottage, so the planks use the wood surface shader and the web's
+	# random board palette instead of alternating StandardMaterial colors.
+	var leaf := DioramaBuilder.new(pivot, meshes, 9182)
+	var leaf_w := 0.74
+	var leaf_h := 1.28
 	for i in range(5):
-		var plank := BoxMesh.new()
-		plank.size = Vector3(0.74 / 5.0 - 0.012, 1.28, 0.04)
-		var mi := MeshInstance3D.new()
-		mi.mesh = plank
-		mi.material_override = wood if i % 2 == 0 else dark
-		mi.position = Vector3((i + 0.5) * 0.74 / 5.0, 0.65, 0.02)
-		mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
-		pivot.add_child(mi)
-	for yy in [0.28, 1.02]:
-		var batten := BoxMesh.new()
-		batten.size = Vector3(0.66, 0.08, 0.02)
-		var mi := MeshInstance3D.new()
-		mi.mesh = batten
-		mi.material_override = dark
-		mi.position = Vector3(0.37, yy, 0.05)
-		mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
-		pivot.add_child(mi)
-	var knob_mesh := SphereMesh.new()
-	knob_mesh.radius = 0.035
-	knob_mesh.height = 0.07
-	knob_mesh.radial_segments = 8
-	knob_mesh.rings = 5
-	var knob := MeshInstance3D.new()
-	knob.mesh = knob_mesh
-	knob.material_override = iron
-	knob.position = Vector3(0.62, 0.65, 0.08)
-	pivot.add_child(knob)
+		leaf.part("wood", (float(i) + 0.5) * leaf_w / 5.0, leaf_h * 0.5, 0.02,
+			leaf_w / 5.0 - 0.012, leaf_h - 0.02, 0.04,
+			b.pick(["#6a432b", "#73492f", "#5f3c27"]))
+	for fraction in [0.22, 0.78]:
+		leaf.part("wood", leaf_w * 0.5, leaf_h * float(fraction), 0.05,
+			leaf_w - 0.08, 0.08, 0.02, "#4e3322")
+	leaf.part("iron", leaf_w - 0.12, leaf_h * 0.5, 0.065,
+		0.04, 0.1, 0.04, "#2f2a24")
+	leaf.finish()
 	return pivot
 
 func set_door_open(open: bool) -> void:
