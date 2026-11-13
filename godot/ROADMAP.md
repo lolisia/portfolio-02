@@ -356,10 +356,11 @@ Godot의 사용자 인자는 `--` 뒤에 전달합니다.
 - 경례 후 문을 열고 실내 위치로 이동해 4.5초 숨은 뒤, 문 앞으로 돌아와 다시 보임.
 - 실내 공간/가구는 없고 캐릭터 숨김으로 처리.
 - `--fishnear --fishtest`에서 연못까지 이동 후 낚시 상태 진입 확인.
+- `--pathdebug`로 A* 노드/엣지와 캐릭터의 현재 경로를 3D 오버레이로 표시.
 
 **남은 일**
 1. 실내 방/가구는 원본에도 실제 메시가 없어 창문 연출로 유지 — 선택.
-2. 경로 캐시/그래프 디버그 시각화.
+2. ~~경로 캐시/그래프 디버그 시각화~~ — `--pathdebug`로 노드/엣지(초록)와 현재 경로(주황) 표시.
 3. `stand()` 높이(데크/계단)와 경로 그래프 연동 정밀화.
 4. 태스크 반복 시 장기 안정성 테스트.
 
@@ -481,7 +482,7 @@ Godot의 사용자 인자는 `--` 뒤에 전달합니다.
   - Unity-chan은 PNG 변환본 사용.
   - 원본 `public/`은 참고용; Godot 프로젝트에 복사된 에셋을 수정해야 함.
 - **개발 프리셋**
-  - `--house`, `--pond`, `--door`, `--fishtest`, `--fishnear`, `--gathernear`, `--falls`, `--bench`, `--auto`, `--storm`, `--noshadow`, `--shadowdebug` 등은 개발용.
+  - `--house`, `--pond`, `--door`, `--fishtest`, `--fishnear`, `--gathernear`, `--falls`, `--bench`, `--auto`, `--storm`, `--pathdebug`, `--noshadow`, `--shadowdebug` 등은 개발용.
   - 최종 빌드에서 제거하거나 유지 여부 결정.
 
 ---

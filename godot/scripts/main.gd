@@ -18,6 +18,7 @@ const SeasonsFX = preload("res://scripts/seasons_fx.gd")
 const QualityManager = preload("res://scripts/quality_manager.gd")
 const AtmosphereEffect = preload("res://scripts/atmosphere_effect.gd")
 const SunShadow = preload("res://scripts/sun_shadow.gd")
+const PathDebug = preload("res://scripts/path_debug.gd")
 
 var world: FarmWorld
 var orbit: OrbitCamera
@@ -33,6 +34,7 @@ var night_life: NightLife
 var quality_manager: QualityManager
 var atmosphere_effect: AtmosphereEffect
 var sun_shadow: SunShadow
+var path_debug: PathDebug
 var use_shadow_depth := true
 var shadow_debug := false
 var mist: FogVolume
@@ -96,6 +98,11 @@ func _ready() -> void:
 	character.weather = weather
 	character.season = season
 	add_child(character)
+
+	path_debug = PathDebug.new()
+	path_debug.name = "PathDebug"
+	add_child(path_debug)
+	path_debug.setup(world, character)
 
 	weather_fx = WeatherFX.new()
 	weather_fx.name = "WeatherFX"
@@ -302,6 +309,8 @@ func _ready() -> void:
 	if "--gathernear" in cli:
 		character.position = Vector3(1.0, 0.0, 2.2)
 		character._begin_journey("gather")
+	if "--pathdebug" in cli:
+		path_debug.visible = true
 	if "--snowtest" in cli:
 		character.position = Vector3(-3.0, 0.0, 4.0)
 		character._begin_journey("gather")

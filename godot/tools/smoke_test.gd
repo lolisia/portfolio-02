@@ -62,6 +62,8 @@ func _initialize() -> void:
 		failures.append("night life missing")
 	if main.get("seasons_fx") == null:
 		failures.append("season particles missing")
+	if main.get("path_debug") == null:
+		failures.append("path debug missing")
 	if main.get("quality_manager") == null:
 		failures.append("quality manager missing")
 	else:
