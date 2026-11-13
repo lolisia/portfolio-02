@@ -44,6 +44,19 @@ func _initialize() -> void:
 			failures.append("garden planting count wrong: " + str(world.garden_plant_count))
 		if world.gravel_slab_count != 20:
 			failures.append("gravel slab count wrong: " + str(world.gravel_slab_count))
+		for stem_kind in ["lavenderStem", "foxgloveStem"]:
+			var stem_mesh: Mesh = world.meshes.get(stem_kind)
+			if stem_mesh == null:
+				failures.append(stem_kind + " missing")
+				continue
+			var stem_vertices := 0
+			for surface in range(stem_mesh.get_surface_count()):
+				var arrays := stem_mesh.surface_get_arrays(surface)
+				var vertices: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
+				stem_vertices += vertices.size()
+			var minimum_vertices := 300 if stem_kind == "lavenderStem" else 80
+			if stem_vertices < minimum_vertices:
+				failures.append(stem_kind + " is not tubular")
 		if world.boxes.is_empty():
 			failures.append("oriented collision boxes missing")
 		if world.bodies.size() < 7:
