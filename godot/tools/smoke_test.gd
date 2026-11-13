@@ -404,6 +404,13 @@ func _initialize() -> void:
 		failures.append("backdrop gradient shader missing")
 	elif backdrop.material_override.get_shader_parameter("bg_top") == null:
 		failures.append("backdrop colors are not driven by the day cycle")
+	var sky_mat = main.get("sky_material")
+	if sky_mat == null or sky_mat.shader == null \
+			or not sky_mat.shader.code.contains("cloud_amount"):
+		failures.append("HDR reflection sky missing")
+	elif sky_mat.get_shader_parameter("sky_top") == null \
+			or sky_mat.get_shader_parameter("sun_dir") == null:
+		failures.append("reflection sky is not driven by the day cycle")
 	if main.get("night_life") == null:
 		failures.append("night life missing")
 	if main.get("seasons_fx") == null:

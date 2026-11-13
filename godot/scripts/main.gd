@@ -47,7 +47,7 @@ var day_cycle: DayCycle
 var sun: DirectionalLight3D
 var fill: DirectionalLight3D
 var env: Environment
-var sky_material: ProceduralSkyMaterial
+var sky_material: ShaderMaterial
 var world_environment: WorldEnvironment
 var backdrop: MeshInstance3D
 var backdrop_material: ShaderMaterial
@@ -467,17 +467,13 @@ func _update_backdrop() -> void:
 	backdrop_material.set_shader_parameter("aspect", aspect)
 
 func _setup_environment() -> void:
-	sky_material = ProceduralSkyMaterial.new()
-	sky_material.sky_top_color = Color(0.34, 0.55, 0.72)
-	sky_material.sky_horizon_color = Color(0.68, 0.76, 0.80)
-	sky_material.sky_curve = 0.15
-	sky_material.sky_energy_multiplier = 1.0
-	sky_material.ground_bottom_color = Color(0.055, 0.075, 0.068)
-	sky_material.ground_horizon_color = Color(0.68, 0.76, 0.80)
-	sky_material.ground_curve = 0.18
-	sky_material.ground_energy_multiplier = 1.0
-	sky_material.sun_angle_max = 9.0
-	sky_material.sun_curve = 0.12
+	sky_material = ShaderMaterial.new()
+	sky_material.shader = preload("res://shaders/sky.gdshader")
+	sky_material.set_shader_parameter("sky_top", Color(0.34, 0.55, 0.72).srgb_to_linear())
+	sky_material.set_shader_parameter("sky_horizon", Color(0.68, 0.76, 0.80).srgb_to_linear())
+	sky_material.set_shader_parameter("sky_land", Color(0.10, 0.12, 0.10).srgb_to_linear())
+	sky_material.set_shader_parameter("sun_strength", 0.8)
+	sky_material.set_shader_parameter("sun_dir", Vector3(0.0, 1.0, 0.0))
 
 	var sky := Sky.new()
 	sky.sky_material = sky_material

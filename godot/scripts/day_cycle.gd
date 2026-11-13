@@ -4,12 +4,12 @@ class_name DayCycle
 var sun: DirectionalLight3D
 var fill: DirectionalLight3D
 var env: Environment
-var sky_material: ProceduralSkyMaterial
+var sky_material: ShaderMaterial
 var world: FarmWorld
 var backdrop_material: ShaderMaterial
 
 func setup(p_sun: DirectionalLight3D, p_fill: DirectionalLight3D, p_env: Environment,
-		p_sky: ProceduralSkyMaterial, p_world: FarmWorld) -> void:
+		p_sky: ShaderMaterial, p_world: FarmWorld) -> void:
 	sun = p_sun
 	fill = p_fill
 	env = p_env
@@ -73,18 +73,20 @@ func apply(hour: float, weather: int = 0, _season: int = 1,
 	# foliageTint and winterBare. Keep the time-of-day palette untouched.
 
 	sun.light_energy = sun_energy
-	sky_material.sky_top_color = top_color
-	sky_material.sky_horizon_color = horizon_color
-	# Below the diorama the world falls away into a dark void rather than a
-	# bright green hemisphere; the sky gradient stays at the horizon.
-	sky_material.ground_bottom_color = ground_color.darkened(0.78).lerp(
-		Color(0.02, 0.035, 0.045), 0.40)
-	sky_material.ground_horizon_color = horizon_color
-	sky_material.ground_curve = 0.18
-	sky_material.sky_energy_multiplier = 1.0
-	sky_material.ground_energy_multiplier = 1.0
-	sky_material.sun_angle_max = 9.0
-	sky_material.sun_curve = 0.12
+	# L3: the sky shader is the reflection/ambient source. Pass linear colours
+	# so the PMREM radiance matches the backdrop's display palette.
+	sky_material.set_shader_parameter("sky_top", top_color.srgb_to_linear())
+	sky_material.set_shader_parameter("sky_horizon", horizon_color.srgb_to_linear())
+	sky_material.set_shader_parameter("sky_land",
+		ground_color.darkened(0.78).lerp(Color(0.02, 0.035, 0.045), 0.40).srgb_to_linear())
+	sky_material.set_shader_parameter("sun_dir", t["direction"])
+	sky_material.set_shader_parameter("sun_color", sun.light_color.srgb_to_linear())
+	sky_material.set_shader_parameter("sun_strength",
+		(0.45 + 0.75 * golden) * (1.0 - night * 0.75))
+	sky_material.set_shader_parameter("cloud_amount",
+		clampf(0.08 + overcast * 0.78, 0.0, 0.90))
+	sky_material.set_shader_parameter("cloud_clock",
+		float(Time.get_ticks_msec()) / 1000.0)
 
 	env.ambient_light_sky_contribution = 0.58
 	env.ambient_light_energy = 0.48
