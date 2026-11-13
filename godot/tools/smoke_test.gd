@@ -31,6 +31,8 @@ func _initialize() -> void:
 			failures.append("procedural garden asset missing")
 		if world.window_glass_material == null:
 			failures.append("window interior material missing")
+		if not world.find_children("CottageWindowSilhouette", "MeshInstance3D", true, false).is_empty():
+			failures.append("non-web window silhouette still present")
 		var bare_color = world.terrain_material.get_shader_parameter("winter_bare_color")
 		if bare_color == null or (bare_color as Vector3).distance_to(
 				Vector3(0.36, 0.235, 0.135)) > 0.001:

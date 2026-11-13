@@ -49,7 +49,6 @@ var person := Vector2(-1.6, -2.4)
 var person_target := Vector2(-1.6, -2.4)
 var person_wait := 2.0
 var person_shade := 0.62
-var person_silhouette: MeshInstance3D
 
 func setup() -> void:
 	rng.seed = 88411
@@ -58,7 +57,6 @@ func setup() -> void:
 	_build_moths()
 	_build_fireflies()
 	_build_lamp_halos()
-	_build_person_silhouette()
 
 func _glow_texture() -> ImageTexture:
 	var image := Image.create(64, 64, false, Image.FORMAT_RGBA8)
@@ -222,36 +220,6 @@ func _build_lamp_halos() -> void:
 			"next": 6.0 + rng.randf() * 30.0,
 		})
 
-func _build_person_silhouette() -> void:
-	var image := Image.create(64, 128, false, Image.FORMAT_RGBA8)
-	for y in range(128):
-		for x in range(64):
-			var dx := (float(x) - 31.5) / 31.5
-			var head := sqrt(pow(dx / 0.42, 2.0) + pow((float(y) - 30.0) / 22.0, 2.0))
-			var shoulders := sqrt(pow(dx / 0.88, 2.0) + pow((float(y) - 104.0) / 44.0, 2.0))
-			var alpha := maxf(1.0 - head, 0.0) + maxf(1.0 - shoulders, 0.0)
-			alpha = clampf(alpha, 0.0, 1.0)
-			if alpha <= 0.01:
-				continue
-			image.set_pixel(x, y, Color(1, 1, 1, alpha * 0.72))
-	var texture := ImageTexture.create_from_image(image)
-	person_silhouette = MeshInstance3D.new()
-	person_silhouette.name = "CottageWindowSilhouette"
-	var quad := QuadMesh.new()
-	quad.size = Vector2(0.30, 0.58)
-	var material := StandardMaterial3D.new()
-	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	material.albedo_texture = texture
-	material.albedo_color = Color(0.07, 0.065, 0.06, 0.58)
-	material.cull_mode = BaseMaterial3D.CULL_DISABLED
-	material.render_priority = 5
-	person_silhouette.mesh = quad
-	person_silhouette.material_override = material
-	person_silhouette.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	person_silhouette.visible = false
-	add_child(person_silhouette)
-
 func update(delta: float, night: float, golden: float, clear: float,
 		weather: int, season: int, wind: float, orbit_yaw: float) -> void:
 	time += delta
@@ -398,16 +366,6 @@ func _update_interior(delta: float, night: float) -> void:
 		else:
 			person += to_target.normalized() * minf(0.45 * delta, to_target.length())
 	person_shade = lerpf(person_shade, 0.62, 1.0 - exp(-delta * 2.0))
-	if person_silhouette != null:
-		var window_x_a := hx - 0.95
-		var window_x_b := hx + 0.95
-		var distance_a := absf(person.x - window_x_a)
-		var distance_b := absf(person.x - window_x_b)
-		var near_window := distance_a < 0.48 or distance_b < 0.48
-		var window_x := window_x_a if distance_a < distance_b else window_x_b
-		person_silhouette.position = Vector3(window_x, world.cottage_window.y - 0.15,
-			world.cottage_window.z - 0.62)
-		person_silhouette.visible = night > 0.25 and near_window
 
 	var warm := Color(1.0, 0.67, 0.27)
 	var reading := Color(1.0, 0.82, 0.60)
@@ -420,6 +378,9 @@ func _update_interior(delta: float, night: float) -> void:
 		glass.set_shader_parameter("lamp_level", lamp_level)
 		glass.set_shader_parameter("tv_color", Vector3(tv_color.r, tv_color.g, tv_color.b))
 		glass.set_shader_parameter("tv_level", tv_level)
+		glass.set_shader_parameter("tv_at", Vector2(hx - 0.95, hz + 0.55))
+		glass.set_shader_parameter("person", Vector4(person.x, person.y,
+			person_shade * night, world.cottage_window.y + 0.75))
 	if world.window_light != null:
 		var light := Color(1.0, 0.70, 0.34) * lamp_level
 		light += tv_color * (tv_level * 0.35)
