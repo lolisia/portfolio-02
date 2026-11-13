@@ -99,6 +99,10 @@ func _initialize() -> void:
 				failures.append("leaf litter mask missing")
 		if world.boxes.is_empty():
 			failures.append("oriented collision boxes missing")
+		var house_palette: Array = world.HOUSE_WOOD
+		if house_palette.size() != 4 or not "#815133" in house_palette \
+				or not "#aa7650" in house_palette:
+			failures.append("coop/shed wood palette wrong")
 		if world.bodies.size() < 7:
 			failures.append("dynamic walker bodies missing")
 		var inside_push: Vector2 = world.resolve_body(Vector2(-1.0, -2.5), 0.2, null)

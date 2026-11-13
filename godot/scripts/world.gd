@@ -78,6 +78,7 @@ const GREENS_LIGHT := ["#8fa553", "#9cb35c", "#a9b660", "#88a14f"]
 const GREENS_DARK := ["#7d9447", "#8ba14a", "#90a451", "#76903f"]
 const BARK_COLORS := ["#55412b", "#655034", "#493c2d"]
 const TIMBER := ["#9c6a44", "#a9764b", "#8d5d3c", "#b27e54", "#a06c46", "#956540"]
+const HOUSE_WOOD := ["#815133", "#986342", "#70432e", "#aa7650"]
 const SHAKES := ["#7b5a43", "#6d4e3a", "#866550", "#5f4434", "#8a6a52", "#735240", "#6a5342"]
 const TURF_GREENS := ["#536e37", "#718a40", "#98aa58", "#899d4c", "#647f3b"]
 const SEASON_TINTS := [
@@ -910,7 +911,7 @@ func _house_parts(coop: bool) -> void:
 			if coop and i >= 3 and i <= 5:
 				continue
 			b.part("wood", -w * 0.5 + (i + 0.5) * w / 9.0, h * 0.5 + 0.2, d * 0.5 + (0.085 if coop else 0.02),
-				w / 9.0 - 0.016, h, 0.05, b.pick(TIMBER))
+				w / 9.0 - 0.016, h, 0.05, b.pick(HOUSE_WOOD))
 		for x in [-w * 0.5, 0.0, w * 0.5]:
 			for z in [-d * 0.5, d * 0.5]:
 				if coop and x == 0.0 and z > 0.0:
@@ -927,10 +928,10 @@ func _house_parts(coop: bool) -> void:
 		else:
 			b.part("wood", 0.0, 0.87, front + 0.04, 0.69, 1.36, 0.12, "#53392a")
 			for i in range(4):
-				b.part("wood", -0.24 + i * 0.16, 0.85, front + 0.12, 0.145, 1.23, 0.04, b.pick(TIMBER))
+				b.part("wood", -0.24 + i * 0.16, 0.85, front + 0.12, 0.145, 1.23, 0.04, b.pick(HOUSE_WOOD))
 		for i in range(8):
 			var tread := 0.385 - i * 0.09
-			b.part("wood", 0.0, (tread - 0.42) * 0.5, front + 0.13 + i * 0.14, 0.81, tread + 0.42, 0.14, b.pick(TIMBER))
+			b.part("wood", 0.0, (tread - 0.42) * 0.5, front + 0.13 + i * 0.14, 0.81, tread + 0.42, 0.14, b.pick(HOUSE_WOOD))
 		var span := w * 0.5 + 0.22
 		var pitch := atan(0.60)
 		var base := h + 0.29
@@ -951,7 +952,7 @@ func _house_parts(coop: bool) -> void:
 			for i in range(7):
 				var f := (i + 0.5) / 7.0
 				b.part("wood", 0.0, base + f * span * 0.60, 0.0, d + 0.01,
-					span * 0.60 / 7.0 + 0.01, w * (1.0 - f), b.pick(TIMBER))
+					span * 0.60 / 7.0 + 0.01, w * (1.0 - f), b.pick(HOUSE_WOOD))
 		)
 	)
 
