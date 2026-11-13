@@ -79,6 +79,17 @@ func _initialize() -> void:
 			failures.append("character did not start inside")
 		if absf(float(character.walk_speed) - 0.62) > 0.001:
 			failures.append("character walk speed wrong")
+		if character.toon_materials.is_empty():
+			failures.append("toon character materials missing")
+		else:
+			var toon_material: ShaderMaterial = character.toon_materials[0]
+			if toon_material.shader == null \
+					or not toon_material.shader.resource_path.contains("toon_character"):
+				failures.append("toon shader not applied")
+			if absf(float(toon_material.get_shader_parameter("alpha_cut")) - 0.5) > 0.001:
+				failures.append("toon alpha cut wrong")
+		if character.toon_double_count <= 0:
+			failures.append("double-sided hair material missing")
 		if absf(float(character.world.cottage_door.x) + 1.0) > 0.001:
 			failures.append("cottage door position wrong")
 		if character.gather_spots.size() != 6:

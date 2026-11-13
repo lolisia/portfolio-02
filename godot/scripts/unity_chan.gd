@@ -8,6 +8,8 @@ class_name UnityChan
 const MODEL_PATH := "res://assets/models/unitychan/sd_unitychan.glb"
 const TARGET_HEIGHT := 1.02
 const POND := Vector2(10.7, 6.3)
+const TOON_SHADER = preload("res://shaders/toon_character.gdshader")
+const TOON_DOUBLE_SHADER = preload("res://shaders/toon_character_double.gdshader")
 
 var world: FarmWorld
 var footprints: Footprints
@@ -47,6 +49,9 @@ var task_timer := 0.0
 var task_face := 0.0
 var gather_spots: Array = []
 var shore_spots: Array = []
+var toon_materials: Array[ShaderMaterial] = []
+var toon_double_count := 0
+var _toon_white: ImageTexture
 var time := 0.0
 var stride_left := 0.0
 var foot := 1.0
@@ -79,6 +84,7 @@ func _ready() -> void:
 		skeleton.force_update_all_bone_transforms()
 	_fit_model()
 	_find_face()
+	_apply_toon_materials()
 	_build_fishing_gear()
 	if world != null:
 		paths = FarmPaths.new(world)
@@ -124,6 +130,53 @@ func _find_face() -> void:
 				blend_face = mi
 				blink_index = i
 				return
+
+func _apply_toon_materials() -> void:
+	var white := Image.create(1, 1, false, Image.FORMAT_RGBA8)
+	white.fill(Color.WHITE)
+	_toon_white = ImageTexture.create_from_image(white)
+	toon_materials.clear()
+	toon_double_count = 0
+	for node in model.find_children("*", "MeshInstance3D", true, false):
+		var mi := node as MeshInstance3D
+		var mesh := mi.mesh
+		if mesh == null:
+			continue
+		for surface in range(mesh.get_surface_count()):
+			var source := mi.get_active_material(surface) as StandardMaterial3D
+			var material_name := mi.name.to_lower()
+			var doubles := false
+			var texture: Texture2D = _toon_white
+			var tint := Color.WHITE
+			if source != null:
+				material_name += " " + source.resource_name.to_lower()
+				doubles = ("hair" in material_name or "nol" in material_name
+					or source.cull_mode == BaseMaterial3D.CULL_DISABLED)
+				if source.albedo_texture != null:
+					texture = source.albedo_texture
+				tint = source.albedo_color
+			var toon := ShaderMaterial.new()
+			toon.shader = TOON_DOUBLE_SHADER if doubles else TOON_SHADER
+			toon.set_shader_parameter("albedo_tex", texture)
+			toon.set_shader_parameter("albedo_color", tint)
+			toon.set_shader_parameter("alpha_cut", 0.5)
+			mi.set_surface_override_material(surface, toon)
+			toon_materials.append(toon)
+			if doubles:
+				toon_double_count += 1
+
+func pose_for_shot(at: Vector3, clip: String) -> void:
+	state = "strolling"
+	intent = true
+	position = at
+	model.visible = true
+	if clip == "Standing":
+		mode = "stroll"
+		route.clear()
+		wait = 999.0
+		_play("Standing", 0.2)
+	else:
+		_start_task(clip)
 
 func _build_fishing_gear() -> void:
 	rod = Node3D.new()

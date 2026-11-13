@@ -207,6 +207,10 @@ func _ready() -> void:
 	if "--window" in cli:
 		orbit.max_zoom = 12.0
 		orbit.set_view(Vector3(-0.05, 1.35, -0.95), 0.0, 0.35, 10.0)
+	if "--char" in cli:
+		character.pose_for_shot(Vector3(-1.0, 0.0, 0.2), "Standing")
+		orbit.max_zoom = 12.0
+		orbit.set_view(Vector3(-1.0, 1.9, 0.2), 0.0, 0.35, 10.0)
 
 	ui = GameUI.new()
 	ui.name = "GameUI"
