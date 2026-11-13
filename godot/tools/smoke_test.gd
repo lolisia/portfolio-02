@@ -128,6 +128,31 @@ func _initialize() -> void:
 		elif String(farm_life.chickens[0]["state"]) != "inside" \
 				or bool(farm_life.chickens[0]["group"].visible):
 			failures.append("chickens did not start inside")
+		if farm_life.bird_legs.size() != 2:
+			failures.append("bird legs missing")
+		if String(farm_life.bird_state) != "away" or farm_life.bird.visible:
+			failures.append("bird did not start away")
+		for perch in farm_life.bird_perches:
+			if String(perch.get("kind", "")) == "ridge":
+				failures.append("extra ridge perch still present")
+				break
+		farm_life.wind = 12.0
+		farm_life.bird_state = "perched"
+		farm_life.bird_age = 0.0
+		farm_life._update_bird(0.05)
+		if String(farm_life.bird_state) != "takeoff":
+			failures.append("bird did not leave in strong wind")
+		farm_life.wind = 3.0
+		farm_life.night_level = 0.9
+		farm_life.bird_state = "perched"
+		farm_life.bird_age = 0.0
+		farm_life._update_bird(0.05)
+		if String(farm_life.bird_state) != "takeoff":
+			failures.append("bird did not leave at night")
+		farm_life.night_level = 0.0
+		farm_life.bird_state = "away"
+		farm_life.bird_age = 0.0
+		farm_life.bird.visible = false
 
 	if main.get("footprints") == null:
 		failures.append("footprints layer missing")

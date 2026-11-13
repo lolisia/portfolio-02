@@ -211,6 +211,10 @@ func _ready() -> void:
 		character.pose_for_shot(Vector3(-1.0, 0.0, 0.2), "Standing")
 		orbit.max_zoom = 12.0
 		orbit.set_view(Vector3(-1.0, 1.9, 0.2), 0.0, 0.35, 10.0)
+	if "--bird" in cli:
+		var bird_pos: Vector3 = farm_life.showcase_bird(2)
+		orbit.max_zoom = 12.0
+		orbit.set_view(bird_pos, 0.0, 0.35, 9.0)
 
 	ui = GameUI.new()
 	ui.name = "GameUI"
@@ -637,6 +641,7 @@ func _process(delta: float) -> void:
 		farm_life.hour = clock_hour
 		farm_life.wind = wind
 		farm_life.weather = weather
+		farm_life.season = season
 	if character != null:
 		character.weather = weather
 		character.season = season

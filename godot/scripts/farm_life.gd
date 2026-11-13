@@ -19,19 +19,25 @@ var next_leap := 4.0
 var character
 var bird: Node3D
 var bird_wings: Array = []
-var bird_state := "perched"
-var bird_timer := 5.0
-var bird_from := Vector3.ZERO
-var bird_to := Vector3.ZERO
-var bird_t := 0.0
-var bird_phase := 0.0
-var bird_duration := 2.0
+var bird_legs: Array = []
+var bird_state := "away"
+var bird_age := 0.0
+var bird_duration := 2.5
+var bird_seat := "crown"
+var bird_perch: Dictionary = {}
+var bird_start := Vector3.ZERO
+var bird_end := Vector3.ZERO
+var bird_c1 := Vector3.ZERO
+var bird_c2 := Vector3.ZERO
+var bird_progress := 0.0
 var bird_perches: Array = []
 var rotor_speed := 0.0
 var time := 0.0
 var wind := 3.0
 var hour := 8.5
 var weather := 0
+var season := 1
+var night_level := 0.0
 var water_freeze := 0.0
 
 var sphere: SphereMesh
@@ -293,8 +299,9 @@ func _build_smoke() -> void:
 	add_child(smoke)
 
 func set_night(night: float) -> void:
+	night_level = clampf(night, 0.0, 1.0)
 	if smoke_material != null:
-		var shade := 1.0 - clampf(night, 0.0, 1.0) * 0.72
+		var shade := 1.0 - night_level * 0.72
 		smoke_material.albedo_color = Color(0.58 * shade, 0.58 * shade, 0.55 * shade, 0.42)
 
 func _build_flock() -> void:
@@ -431,18 +438,127 @@ func _build_bird() -> void:
 		_bird_ellipsoid(wing, Color(0.271, 0.243, 0.220), float(s) * 0.295, 0, -0.094, 0.124, 0.021, 0.055)
 		bird_wings.append(wing)
 	bird.scale = Vector3.ONE * 1.35
+	var bird_leg_mesh := CylinderMesh.new()
+	bird_leg_mesh.top_radius = 0.008
+	bird_leg_mesh.bottom_radius = 0.008
+	bird_leg_mesh.height = 0.07
+	bird_leg_mesh.radial_segments = 4
+	bird_leg_mesh.rings = 1
+	var bird_leg_material := StandardMaterial3D.new()
+	bird_leg_material.albedo_color = Color(0.541, 0.416, 0.271)
+	bird_leg_material.roughness = 0.8
+	for side in [-1.0, 1.0]:
+		var leg := Node3D.new()
+		leg.position = Vector3(float(side) * 0.04, 0.07, 0.01)
+		bird.add_child(leg)
+		var shank := MeshInstance3D.new()
+		shank.mesh = bird_leg_mesh
+		shank.material_override = bird_leg_material
+		shank.position.y = -0.035
+		shank.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
+		leg.add_child(shank)
+		bird_legs.append(leg)
 
 	for tree in FarmWorld.TREE_LIST:
 		var x: float = tree[0]
 		var z: float = tree[1]
 		var s: float = tree[2]
-		bird_perches.append(Vector3(x + 0.36 * s, world.height(x, z) + 3.97 * s, z + 0.25 * s))
+		var root := Vector3(x, world.height(x, z), z)
+		var crown := Vector3(x + 0.36 * s, world.height(x, z) + 3.97 * s, z + 0.25 * s)
+		var limb := crown + Vector3(-0.24 * s, -0.55 * s, 0.13 * s)
+		bird_perches.append({
+			"kind": "tree", "crown": crown, "limb": limb, "root": root,
+		})
 	for lamp in world.lamps:
-		var p: Vector3 = lamp.position
-		bird_perches.append(p + Vector3(0, 0.08, 0))
-	bird_perches.append(world.cottage_ridge + Vector3(0, 0.22, 0))
-	bird.position = bird_perches[bird_perches.size() - 1]
-	bird_timer = 6.0
+		var p: Vector3 = lamp.position + Vector3(0, 0.08, 0)
+		bird_perches.append({"kind": "lamp", "crown": p, "limb": p, "root": null})
+	# A6: the web has no farmhouse-ridge perch; keep trees and lanterns only.
+	_choose_bird_perch()
+	bird.position = bird_end
+	bird.visible = false
+	bird_state = "away"
+	bird_age = 0.0
+	bird_duration = 2.5
+
+func _choose_bird_perch() -> void:
+	var trees: Array = []
+	var lamps: Array = []
+	for p in bird_perches:
+		if String(p["kind"]) == "tree":
+			trees.append(p)
+		else:
+			lamps.append(p)
+	var chosen: Dictionary = {}
+	if not trees.is_empty() and (lamps.is_empty() or randf() < 0.5):
+		chosen = trees[randi() % trees.size()]
+	elif not lamps.is_empty():
+		chosen = lamps[randi() % lamps.size()]
+	elif not trees.is_empty():
+		chosen = trees[randi() % trees.size()]
+	bird_perch = chosen
+	bird_seat = "limb" if String(chosen.get("kind", "")) == "tree" \
+		and season == 3 else "crown"
+	bird_end = _bird_seat_position(time)
+
+func _bird_seat_position(seconds: float) -> Vector3:
+	if bird_perch.is_empty():
+		return Vector3.ZERO
+	var seat: Vector3 = bird_perch["limb" if bird_seat == "limb" else "crown"]
+	var root = bird_perch.get("root", null)
+	if root != null:
+		var root_position: Vector3 = root
+		var height_above := maxf(0.0, seat.y - root_position.y)
+		var phase := root_position.x * 0.39 + root_position.z * 0.23
+		var gust := sin(seconds * 1.37 - phase) + 0.42 * sin(seconds * 2.31 - phase * 0.71)
+		var bend := 0.014 * height_above * height_above * gust * (wind / 8.0)
+		seat.x += bend
+		seat.z += bend * 0.36
+	return seat
+
+func showcase_bird(lamp_index: int = 2) -> Vector3:
+	var lamps: Array = []
+	for p in bird_perches:
+		if String(p["kind"]) == "lamp":
+			lamps.append(p)
+	if not lamps.is_empty():
+		bird_perch = lamps[lamp_index % lamps.size()]
+	elif not bird_perches.is_empty():
+		bird_perch = bird_perches[lamp_index % bird_perches.size()]
+	bird_seat = "crown"
+	bird_state = "perched"
+	bird_age = 0.0
+	bird_duration = 999.0
+	bird_end = _bird_seat_position(time)
+	bird.position = bird_end
+	bird.visible = true
+	_bird_fold(1.0)
+	_bird_legs_pose(0.0)
+	return bird.position
+
+func _bird_aim(target: Vector3, pitch_scale: float = 0.5) -> void:
+	var ahead := target - bird.position
+	if ahead.length_squared() < 1e-8:
+		return
+	bird.rotation.y = atan2(ahead.x, ahead.z)
+	bird.rotation.x = -atan2(ahead.y, Vector2(ahead.x, ahead.z).length()) * pitch_scale
+
+func _bird_flap(seconds: float, rate: float, amplitude: float, sweep: float = 0.0) -> void:
+	for i in range(bird_wings.size()):
+		var wing: Node3D = bird_wings[i]
+		var sign := -1.0 if i == 0 else 1.0
+		wing.rotation.y = sign * sweep
+		wing.rotation.z = sign * (0.13 + amplitude * sin(seconds * rate))
+
+func _bird_fold(amount: float) -> void:
+	for i in range(bird_wings.size()):
+		var wing: Node3D = bird_wings[i]
+		var sign := -1.0 if i == 0 else 1.0
+		wing.rotation.z = sign * 0.5 * (1.0 - amount) * (1.0 - amount)
+		wing.rotation.y = sign * 1.2 * amount
+
+func _bird_legs_pose(angle: float) -> void:
+	for leg in bird_legs:
+		(leg as Node3D).rotation.x = angle
 
 func _update_fish(delta: float) -> void:
 	var water_y: float = world.water.position.y
@@ -498,66 +614,121 @@ func _update_fish(delta: float) -> void:
 func _update_bird(delta: float) -> void:
 	if bird == null:
 		return
-	if bird_state == "perched":
-		bird_timer -= delta
-		bird.rotation.x = 0.05 * pow(maxf(0.0, sin(time * 0.7)), 8.0)
-		bird.rotation.z = sin(time * 2.4) * 0.033
-		for i in range(bird_wings.size()):
-			var wing: Node3D = bird_wings[i]
-			wing.rotation.z = lerp(wing.rotation.z, float(-1 if i == 0 else 1) * 0.12, 1.0 - exp(-delta * 5.0))
-		if bird_timer <= 0.0:
-			bird_from = bird.position
-			var next = bird_perches[randi() % bird_perches.size()]
-			if next.distance_to(bird_from) < 0.5 and bird_perches.size() > 1:
-				next = bird_perches[(randi() + 1) % bird_perches.size()]
-			bird_to = next
-			bird_t = 0.0
-			bird_phase = 0.28
-			bird_duration = clampf(bird_from.distance_to(bird_to) * 0.28, 1.6, 4.2)
-			bird_state = "takeoff"
-	elif bird_state == "takeoff":
-		bird_phase = maxf(0.0, bird_phase - delta)
-		var lift := 1.0 - bird_phase / 0.28
-		bird.position = bird_from + Vector3(0.0, -0.03 * sin(lift * PI), 0.0)
-		bird.rotation.x = 0.25 * sin(lift * PI)
-		for i in range(bird_wings.size()):
-			var wing_takeoff: Node3D = bird_wings[i]
-			wing_takeoff.rotation.z = lerp(wing_takeoff.rotation.z,
-				float(-1 if i == 0 else 1) * 0.45, 1.0 - exp(-delta * 18.0))
-		if bird_phase <= 0.001:
-			bird_state = "flying"
-	elif bird_state == "flying":
-		bird_t = minf(1.0, bird_t + delta / bird_duration)
-		var pos := bird_from.lerp(bird_to, bird_t)
-		pos.y += sin(bird_t * PI) * (0.5 + bird_from.distance_to(bird_to) * 0.16)
-		bird.position = pos
-		var ahead := bird_to - bird_from
-		bird.rotation.y = atan2(ahead.x, ahead.z)
-		bird.rotation.x = -sin(bird_t * PI) * 0.45
-		for i in range(bird_wings.size()):
-			var wing2: Node3D = bird_wings[i]
-			wing2.rotation.z = float(-1 if i == 0 else 1) * (0.45 + sin(time * 18.0) * 0.55)
-		if bird_t >= 1.0:
-			bird.position = bird_to
-			bird_state = "landing"
-			bird_phase = 0.7
-	else:
-		# Landing flare: rock forward, then fold the wings and settle.
-		bird_phase = maxf(0.0, bird_phase - delta)
-		var age := 0.7 - bird_phase
-		var settle := clampf(age / 0.7, 0.0, 1.0)
-		bird.position = bird_to + Vector3(0.0,
-			-0.035 * sin(PI * minf(1.0, age / 0.35)) * (1.0 - settle), 0.0)
-		bird.rotation.x = -0.75 * exp(-age * 7.0) * cos(age * 11.0) + 0.12 * sin(PI * settle) * (1.0 - settle)
-		for i in range(bird_wings.size()):
-			var wing_land: Node3D = bird_wings[i]
-			var folded := lerpf(0.45, 0.12, smoothstep(0.0, 0.7, age))
-			wing_land.rotation.z = float(-1 if i == 0 else 1) * folded
-		if bird_phase <= 0.001:
-			bird.position = bird_to
-			bird_state = "perched"
-			bird.rotation.x = 0.0
-			bird_timer = 6.0 + randf() * 8.0
+	var seconds := time
+	bird_age += delta
+	match bird_state:
+		"away":
+			if bird_age >= bird_duration and wind < 10.0 and night_level < 0.8:
+				_choose_bird_perch()
+				_bird_launch_arrival(seconds)
+		"arriving":
+			if wind >= 10.0:
+				_bird_launch_departure()
+			else:
+				var t := clampf(bird_age / maxf(bird_duration, 0.01), 0.0, 1.0)
+				bird_end = _bird_seat_position(seconds)
+				_bird_arrival_position(t)
+				var next := _bird_arrival_point(minf(t + 0.01, 1.0))
+				var flare := smoothstep(0.72, 1.0, t)
+				_bird_aim(next, 0.5 * (1.0 - flare))
+				bird.rotation.x = lerpf(bird.rotation.x, -0.75, flare)
+				var glide := 0.25 if t < 0.72 and sin(seconds * 1.9) > 0.55 else 1.0
+				_bird_flap(seconds, lerpf(24.0, 13.0, flare),
+					lerpf(0.76 * glide, 1.05, flare), -0.35 * flare)
+				_bird_legs_pose(lerpf(1.3, -0.5, flare))
+				if t >= 1.0:
+					bird_state = "landing"
+					bird_age = 0.0
+					bird.position = bird_end
+		"landing":
+			var k := minf(1.0, bird_age / 0.7)
+			bird.position = _bird_seat_position(seconds)
+			bird.position.y -= 0.035 * sin(PI * minf(1.0, bird_age / 0.35)) * (1.0 - k)
+			bird.rotation.x = -0.75 * exp(-bird_age * 7.0) * cos(bird_age * 11.0) \
+				+ 0.12 * sin(PI * k) * (1.0 - k)
+			if bird_age < 0.3:
+				_bird_flap(seconds, 13.0, 0.9 * (1.0 - bird_age / 0.3),
+					-0.35 * (1.0 - bird_age / 0.3))
+			else:
+				_bird_fold(smoothstep(0.3, 0.7, bird_age))
+			_bird_legs_pose(-0.5 * (1.0 - k))
+			if bird_age >= 0.7:
+				bird_state = "perched"
+				bird_age = 0.0
+				bird_duration = 7.0 + randf() * 8.0
+				bird.rotation.x = 0.0
+				_bird_fold(1.0)
+		"perched":
+			bird.position = _bird_seat_position(seconds)
+			_bird_fold(1.0)
+			_bird_legs_pose(0.0)
+			bird.rotation.z = sin(seconds * 2.4) * 0.033
+			bird.rotation.x = 0.05 * pow(maxf(0.0, sin(seconds * 0.7)), 8.0)
+			if wind >= 10.0 or night_level > 0.85 or bird_age >= bird_duration:
+				bird_state = "takeoff"
+				bird_age = 0.0
+		"takeoff":
+			bird.position = _bird_seat_position(seconds)
+			var k := minf(1.0, bird_age / 0.28)
+			bird.position.y -= 0.03 * sin(PI * k)
+			bird.rotation.x = 0.25 * sin(PI * k)
+			_bird_fold(1.0 - smoothstep(0.0, 0.2, bird_age))
+			if bird_age >= 0.28:
+				_bird_launch_departure()
+		"departing":
+			var t := clampf(bird_age / maxf(bird_duration, 0.01), 0.0, 1.0)
+			_bird_departure_position(t)
+			var next := _bird_departure_point(minf(t + 0.012, 1.0))
+			_bird_aim(next, 0.5)
+			bird.rotation.x *= minf(1.0, bird_age / 0.4)
+			_bird_flap(seconds, 24.0, 0.76)
+			_bird_legs_pose(lerpf(0.5, 1.3, minf(1.0, t * 4.0)))
+			if t >= 1.0:
+				bird_state = "away"
+				bird_age = 0.0
+				bird_duration = 9.0 + randf() * 13.0
+				bird.visible = false
+				_choose_bird_perch()
+
+func _bird_launch_arrival(seconds: float) -> void:
+	bird_start = Vector3(-18.0, 10.0, -11.0)
+	bird_end = _bird_seat_position(seconds)
+	bird_c1 = bird_start.lerp(bird_end, 0.35)
+	bird_c1.y += 3.2
+	var ahead := Vector3(bird_end.x - bird_start.x, 0.0, bird_end.z - bird_start.z).normalized()
+	bird_c2 = bird_end + ahead * -1.6
+	bird_c2.y += 1.1
+	bird.position = bird_start
+	bird.visible = true
+	bird_state = "arriving"
+	bird_age = 0.0
+	bird_duration = 5.2
+
+func _bird_arrival_point(t: float) -> Vector3:
+	var u := 1.0 - pow(1.0 - clampf(t, 0.0, 1.0), 1.7)
+	var v := 1.0 - u
+	return bird_start * (v * v * v) + bird_c1 * (3.0 * v * v * u) \
+		+ bird_c2 * (3.0 * v * u * u) + bird_end * (u * u * u)
+
+func _bird_arrival_position(t: float) -> void:
+	bird.position = _bird_arrival_point(t)
+
+func _bird_launch_departure() -> void:
+	bird_start = bird.position
+	bird_end = Vector3(21.0 + randf() * 6.0, 10.0 + randf() * 4.0, 4.0 + randf() * 12.0)
+	bird_state = "departing"
+	bird_age = 0.0
+	bird_duration = 2.5 if wind >= 10.0 else 4.6
+	bird.visible = true
+
+func _bird_departure_point(t: float) -> Vector3:
+	var u := clampf(t, 0.0, 1.0)
+	var point := bird_start.lerp(bird_end, u * u * (1.6 - 0.6 * u))
+	point.y += sin(u * PI) * 2.2 + u * 0.4
+	return point
+
+func _bird_departure_position(t: float) -> void:
+	bird.position = _bird_departure_point(t)
 
 ## Walker discs for the turf trample shader: one per visible chicken.
 func tramplers() -> Array:
