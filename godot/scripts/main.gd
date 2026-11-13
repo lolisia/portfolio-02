@@ -59,6 +59,8 @@ const WEATHER_DENSITY := [1.0, 1.0, 1.0, 3.8, 1.4, 2.4]
 var weather_weights: Array[float] = [1.0, 0.0, 0.0, 0.0, 0.0, 0.0]
 var weather_coverage := 0.0
 var weather_density := 1.0
+var season_tint_current := Vector3.ONE
+var winter_current := 0.0
 var season := 1
 var wet := 0.0
 var snow_depth := 0.0
@@ -342,6 +344,7 @@ func _ready() -> void:
 	if "--shadowdebug" in cli:
 		shadow_debug = true
 	_snap_weather_blend()
+	_snap_season_blend()
 	var shot_index := cli.find("--shot")
 	if shot_index >= 0 and shot_index + 1 < cli.size():
 		var shot_delay := 0.0
@@ -526,6 +529,23 @@ func _snap_weather_blend() -> void:
 	snow_fx = weather_weights[4] + weather_weights[5]
 	storm_fx = weather_weights[5]
 
+func _snap_season_blend() -> void:
+	if world == null:
+		return
+	season_tint_current = world.SEASON_TINTS[clampi(season, 0, 3)]
+	winter_current = 1.0 if season == 3 else 0.0
+	world.set_season_blend(season_tint_current, winter_current)
+
+func _update_season_blend(delta: float) -> void:
+	# Web seasons.js: foliageTint lerps at 2.6 and winterBare at 1.6.
+	if world == null:
+		return
+	var target: Vector3 = world.SEASON_TINTS[clampi(season, 0, 3)]
+	season_tint_current = season_tint_current.lerp(target, 1.0 - exp(-delta * 2.6))
+	winter_current = lerpf(winter_current, 1.0 if season == 3 else 0.0,
+		1.0 - exp(-delta * 1.6))
+	world.set_season_blend(season_tint_current, winter_current)
+
 func _update_weather_blend(delta: float) -> void:
 	# Web parity (src/weather.js): all six weights ease toward the target with
 	# k = 1 - e^(-0.85 dt), so coverage/density/rain/snow/storm change together
@@ -600,6 +620,7 @@ func _process(delta: float) -> void:
 		character.season = season
 
 	_update_weather_blend(delta)
+	_update_season_blend(delta)
 	# Web atmosphere.soak(): rain eases wetness in at .5/s and it dries at
 	# .035/s; fog no longer wets the ground.
 	if rain_fx > wet:

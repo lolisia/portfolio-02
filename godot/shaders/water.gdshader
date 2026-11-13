@@ -1,8 +1,8 @@
 shader_type spatial;
 render_mode blend_mix, depth_draw_always, cull_disabled, diffuse_burley, specular_schlick_ggx;
 
-uniform vec4 shallow_color : source_color = vec4(0.055, 0.19, 0.17, 0.62);
-uniform vec4 deep_color : source_color = vec4(0.006, 0.045, 0.085, 0.90);
+uniform vec4 shallow_color : source_color = vec4(0.070, 0.146, 0.132, 0.36);
+uniform vec4 deep_color : source_color = vec4(0.003, 0.020, 0.038, 0.85);
 uniform float wave_strength : hint_range(0.0, 3.0) = 1.0;
 uniform float breeze : hint_range(0.0, 2.0) = 0.4;
 uniform float freeze : hint_range(0.0, 1.0) = 0.0;
@@ -91,17 +91,18 @@ void vertex() {
 	world_pos = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
 	mirror_coord = reflection_projection * (reflection_view * vec4(world_pos, 1.0));
 	vec3 waves = water_waves(world_pos.xz, TIME, breeze);
-	vec2 bank_q = world_pos.xz - vec2(10.0, 6.1);
-	float bank = 1.0 - smoothstep(0.55, 0.98, length(bank_q / vec2(4.5, 3.5)));
+	// bedDepth is in UV2.x (the water mesh carries the real pond floor depth).
+	float bank = smoothstep(0.0, 0.24, UV2.x)
+		* (1.0 - smoothstep(14.45, 15.0, world_pos.x));
 	VERTEX.y += waves.x * bank * wave_strength * (1.0 - freeze);
 }
 
 void fragment() {
-	vec2 p = (world_pos.xz - vec2(10.0, 6.1)) / vec2(4.5, 3.5);
-	float d = clamp(length(p), 0.0, 1.0);
-	float depth_mix = smoothstep(0.20, 1.05, d);
-	ALBEDO = mix(shallow_color.rgb, deep_color.rgb, depth_mix);
-	ALPHA = mix(shallow_color.a, deep_color.a, depth_mix);
+	// Water.js: shallow = exp(-7.5 * bedDepth); the centre is deep and the
+	// banks are shallow (the old ellipse mix had this backwards).
+	float shallow = exp(-7.5 * max(UV2.x, 0.0));
+	ALBEDO = mix(deep_color.rgb, shallow_color.rgb, shallow);
+	ALPHA = mix(deep_color.a, shallow_color.a, shallow);
 	ROUGHNESS = 0.09;
 	METALLIC = 0.0;
 	vec3 waves = water_waves(world_pos.xz, TIME, breeze);

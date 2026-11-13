@@ -105,6 +105,7 @@ func build() -> void:
 	_build_garden_stairs()
 	_build_path_mask()
 	_build_trees()
+	_build_stumps()
 	_build_ground_cover()
 	_build_lamps()
 	b.finish()
@@ -279,16 +280,43 @@ func _build_terrain() -> void:
 	add_child(ground)
 
 func _build_water() -> void:
-	var plane := PlaneMesh.new()
-	plane.size = Vector2(10.0, 9.0)
-	plane.subdivide_width = 24
-	plane.subdivide_depth = 24
+	# Web parity (water.js): a 10×9 grid with a per-vertex bed depth attribute.
+	# The shader uses the real depth instead of an ellipse distance, so the
+	# pond centre is deep and the banks shallow.
+	var cols := 136
+	var rows := 120
+	var vertices := PackedVector3Array()
+	var uvs := PackedVector2Array()
+	var uv2s := PackedVector2Array()
+	var indices := PackedInt32Array()
+	for r in range(rows + 1):
+		for c in range(cols + 1):
+			var u := float(c) / float(cols)
+			var v := float(r) / float(rows)
+			var lx := (u - 0.5) * 10.0
+			var lz := (v - 0.5) * 9.0
+			vertices.append(Vector3(lx, 0.0, lz))
+			uvs.append(Vector2(u, v))
+			uv2s.append(Vector2(WATER_Y - height(10.0 + lx, 6.1 + lz), 0.0))
+	for r in range(rows):
+		for c in range(cols):
+			var i := r * (cols + 1) + c
+			indices.append_array([i, i + cols + 1, i + 1,
+				i + 1, i + cols + 1, i + cols + 2])
+	var arrays := []
+	arrays.resize(Mesh.ARRAY_MAX)
+	arrays[Mesh.ARRAY_VERTEX] = vertices
+	arrays[Mesh.ARRAY_TEX_UV] = uvs
+	arrays[Mesh.ARRAY_TEX_UV2] = uv2s
+	arrays[Mesh.ARRAY_INDEX] = indices
+	var mesh := ArrayMesh.new()
+	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
 	var mat := ShaderMaterial.new()
 	mat.shader = WATER_SHADER
 	mat.set_shader_parameter("breeze", 0.4)
 	water = MeshInstance3D.new()
 	water.name = "Pond"
-	water.mesh = plane
+	water.mesh = mesh
 	water.position = Vector3(10.0, WATER_Y, 6.1)
 	water.material_override = mat
 	water.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
@@ -925,17 +953,17 @@ func _build_vegetable_beds() -> void:
 		var z: float = bed.y
 		var y := height(x, z)
 		b.place(x, y, z, 1.0, 0.0, func() -> void:
-			b.part("wood", 0.0, 0.10, 0.0, 1.32, 0.20, 1.72, "#9a6c47")
-			b.part("soil", 0.0, 0.20, 0.0, 1.12, 0.14, 1.52, "#5e3f2a")
+			b.part("bedFrame", 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, "#9a6c47")
+			b.part("bedSoil", 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, "#6a4630")
 			for row in range(5):
 				for col in range(3):
 					var px := (col - 1) * 0.36 + (b.randf() - 0.5) * 0.04
 					var pz := (row - 2) * 0.30 + (b.randf() - 0.5) * 0.04
-					var s := 0.72 + b.randf() * 0.24
+					var s := 0.80 + b.randf() * 0.35
 					if row % 2 == 0:
-						b.part("cabbage", px, 0.26, pz, s, s, s, b.pick(["#93b65a", "#a3c063", "#86a84f"]), 0.0, b.randf() * TAU, 0.0, 0.2)
+						b.part("cabbage", px, 0.19, pz, s, s, s, b.pick(["#93b65a", "#a3c063", "#86a84f"]), 0.0, b.randf() * TAU, 0.0, 0.2)
 					else:
-						b.part("carrot", px, 0.26, pz, s, s, s, b.pick(["#6f9a3e", "#7ea946"]), 0.0, b.randf() * TAU, 0.0, 0.3)
+						b.part("carrot", px, 0.19, pz, s, s, s, b.pick(["#6f9a3e", "#7ea946"]), 0.0, b.randf() * TAU, 0.0, 0.3)
 		)
 		obstacles.append([x, z, 0.78])
 		veg_beds.append(Vector2(x, z))
@@ -1061,20 +1089,27 @@ func _build_path_mask() -> void:
 	if terrain_material != null:
 		terrain_material.set_shader_parameter("path_mask", path_mask)
 
-func set_surface_state(wet_value: float, snow_value: float, season_value: int) -> void:
-	var winter_value := 1.0 if season_value == 3 else 0.0
-	var tint: Vector3 = SEASON_TINTS[clampi(season_value, 0, 3)]
+func set_surface_state(wet_value: float, snow_value: float, _season_value: int) -> void:
+	# Wet/snow are updated continuously; the season tint/winter blend is owned by
+	# set_season_blend() so the UI season change can lerp over time.
 	if terrain_material != null:
 		terrain_material.set_shader_parameter("wet", wet_value)
 		terrain_material.set_shader_parameter("snow_depth", snow_value)
-		terrain_material.set_shader_parameter("winter", winter_value)
 	for child in get_children():
 		if child is MultiMeshInstance3D:
 			var mat := (child as MultiMeshInstance3D).material_override
 			if mat is ShaderMaterial:
 				mat.set_shader_parameter("wet", wet_value)
 				mat.set_shader_parameter("snow_depth", snow_value)
-				mat.set_shader_parameter("winter", winter_value)
+
+func set_season_blend(tint: Vector3, winter: float) -> void:
+	if terrain_material != null:
+		terrain_material.set_shader_parameter("winter", winter)
+	for child in get_children():
+		if child is MultiMeshInstance3D:
+			var mat := (child as MultiMeshInstance3D).material_override
+			if mat is ShaderMaterial:
+				mat.set_shader_parameter("winter", winter)
 				mat.set_shader_parameter("season_tint", tint)
 
 ## 16 x (x, z, radius, strength) presses written by main.gd. Only the turf /
@@ -1163,6 +1198,18 @@ func tree_canopies() -> Array:
 		# Slight padding covers the random yaw and leaf fringes.
 		result.append([center, size * 1.06])
 	return result
+
+func _build_stumps() -> void:
+	# The web's three stump pairs (world.js: stumpBark/stumpTop at -0.04).
+	for entry in [[-8.5, -4.2], [7.6, 10.4], [-6.0, 8.0]]:
+		var x: float = entry[0]
+		var z: float = entry[1]
+		var angle := b.randf() * TAU
+		b.place(x, height(x, z), z, 1.0, angle, func() -> void:
+			b.part("stumpBark", 0.0, -0.04, 0.0, 1.0, 1.0, 1.0, "#7a5a3a")
+			b.part("stumpTop", 0.0, -0.04, 0.0, 1.0, 1.0, 1.0, "#d1b07a")
+		)
+		obstacles.append([x, z, 0.45])
 
 func _build_ground_cover() -> void:
 	var gx := -14.85

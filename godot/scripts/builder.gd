@@ -161,11 +161,11 @@ func _material_for(kind: String) -> Material:
 		return mat
 	var kind_index := 1
 	match kind:
-		"wood": kind_index = 0
+		"wood", "bedFrame", "stumpBark", "stumpTop": kind_index = 0
 		"stone", "boulder", "leaf": kind_index = 1
 		"clay": kind_index = 2
 		"plaster": kind_index = 3
-		"soil": kind_index = 4
+		"soil", "bedSoil": kind_index = 4
 		"iron": kind_index = 5
 	# Bark, twigs and stump parts use the wood grain rather than the default
 	# stone surface (the web gives them a dedicated rough bark recipe).
