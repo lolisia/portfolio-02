@@ -97,6 +97,11 @@ void fragment() {
 	float hz = fbm((v_world.xz + vec2(0.0, eps)) * 34.0);
 	vec3 bumped = normalize(v_world_normal
 		+ vec3(soil_detail - hx, 0.0, soil_detail - hz) / eps * 0.012);
+	// K8: rain puddles carry a moving capillary wave normal.
+	vec2 ripple_grad = vec2(
+		cos(dot(v_world.xz, vec2(23.0, 17.0)) + TIME * 4.0),
+		cos(dot(v_world.xz, vec2(-19.0, 26.0)) - TIME * 3.5)) * puddle * 0.035;
+	bumped = normalize(bumped + vec3(ripple_grad.x, 0.0, ripple_grad.y));
 	NORMAL = normalize((VIEW_MATRIX * vec4(bumped, 0.0)).xyz);
 
 	// Web surfaces.js winterBare: swap the exposed ground to the #5c3c22
@@ -110,6 +115,9 @@ void fragment() {
 		* smoothstep(0.0, 0.58, up);
 	albedo = mix(albedo, vec3(0.66, 0.75, 0.86), snow_mask);
 	roughness = mix(roughness, 0.94, snow_mask);
+	// K8: sparse crystal glints on the snow cover.
+	float glint = pow(fbm(v_world.xz * 95.0 + vec2(TIME * 0.21)), 16.0);
+	albedo += vec3(0.16, 0.19, 0.22) * glint * snow_mask;
 
 	ALBEDO = albedo;
 	ROUGHNESS = roughness;

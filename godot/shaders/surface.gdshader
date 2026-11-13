@@ -7,6 +7,7 @@ uniform float snow_depth : hint_range(0.0, 1.0) = 0.0;
 uniform float winter : hint_range(0.0, 1.0) = 0.0;
 uniform float cloud_amount : hint_range(0.0, 1.2) = 0.0;
 uniform float cloud_clock = 0.0;
+uniform float water_y = 0.44;
 
 varying vec3 v_world;
 varying vec3 v_world_normal;
@@ -179,6 +180,8 @@ void fragment() {
 			- box_relief(box_uv_pos - vec2(0.0, eps));
 		float relief_depth = surface_kind == 0 ? 0.10
 			: (surface_kind == 1 ? 0.12 : (surface_kind == 2 ? 0.05 : 0.04));
+		// Snow settles over the relief instead of tracing every plank/tile gap.
+		relief_depth *= 1.0 - clamp(snow_depth, 0.0, 1.0) * 0.9;
 		vec3 wn = normalize(v_world_normal);
 		vec3 tangent = normalize(cross(abs(wn.y) < 0.9 ? vec3(0.0, 1.0, 0.0)
 			: vec3(1.0, 0.0, 0.0), wn));
@@ -194,10 +197,29 @@ void fragment() {
 	snow_mask *= 1.0 - 0.35 * abs(v_world_normal.x);
 
 	float wetness = wet * (0.35 + 0.65 * up) * (1.0 - snow_mask);
+	// K8: stone at the waterline keeps a dark wet foot and a low-roughness sheen.
+	float wet_foot = 0.0;
+	if (surface_kind == 1) {
+		wet_foot = 1.0 - smoothstep(0.0, 0.12, abs(v_world.y - water_y));
+		albedo *= 1.0 - 0.26 * wet_foot;
+		roughness = mix(roughness, 0.40, wet_foot * 0.9);
+		if (wetness > 0.01 && up > 0.5) {
+			vec3 wn = normalize(v_world_normal);
+			vec2 rg = vec2(
+				cos(dot(v_world.xz, vec2(21.0, 18.0)) + TIME * 3.4),
+				cos(dot(v_world.xz, vec2(-17.0, 24.0)) - TIME * 2.8))
+				* wetness * 0.018;
+			NORMAL = normalize((VIEW_MATRIX * vec4(
+				normalize(wn + vec3(rg.x, 0.0, rg.y)), 0.0)).xyz);
+		}
+	}
 	albedo = pow(max(albedo, vec3(0.0)), vec3(1.0 + 0.32 * wetness));
 	roughness = mix(roughness, 0.28, wetness);
 	albedo = mix(albedo, vec3(0.66, 0.75, 0.86), snow_mask);
 	roughness = mix(roughness, 0.93, snow_mask);
+	// K8: sparse crystal glints on snow-covered boxes.
+	float snow_glint = pow(fbm3(v_world * 78.0 + vec3(TIME * 0.19)), 16.0);
+	albedo += vec3(0.16, 0.19, 0.22) * snow_glint * snow_mask;
 
 	ALBEDO = albedo;
 	ROUGHNESS = roughness;

@@ -40,6 +40,8 @@ func _initialize() -> void:
 		world.set_cloud_shadow(0.8, 12.0)
 		if absf(float(world.terrain_material.get_shader_parameter("cloud_amount")) - 0.8) > 0.01:
 			failures.append("terrain cloud shadow missing")
+		if not world.terrain_material.shader.code.contains("ripple_grad"):
+			failures.append("rain puddle normal missing")
 		var wood_mmi := world.find_child("wood", true, false) as MultiMeshInstance3D
 		if wood_mmi == null or not (wood_mmi.material_override is ShaderMaterial):
 			failures.append("wood surface material missing")
@@ -47,6 +49,9 @@ func _initialize() -> void:
 			var wood_mat := wood_mmi.material_override as ShaderMaterial
 			if wood_mat.shader == null or not wood_mat.shader.code.contains("box_relief"):
 				failures.append("box UV surface shader missing")
+			if not wood_mat.shader.code.contains("wet_foot") \
+					or not wood_mat.shader.code.contains("snow_glint"):
+				failures.append("wet stone or snow glint detail missing")
 			var wood_mesh: Mesh = wood_mmi.multimesh.mesh
 			var flat_normals := {}
 			for surface in range(wood_mesh.get_surface_count()):
