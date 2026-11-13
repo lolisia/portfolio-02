@@ -6,6 +6,8 @@ uniform float wet : hint_range(0.0, 1.0) = 0.0;
 uniform float snow_depth : hint_range(0.0, 1.0) = 0.0;
 uniform float winter : hint_range(0.0, 1.0) = 0.0;
 uniform vec3 winter_bare_color = vec3(0.36, 0.235, 0.135);
+uniform float cloud_amount : hint_range(0.0, 1.2) = 0.0;
+uniform float cloud_clock = 0.0;
 uniform float water_y = 0.44;
 
 varying vec3 v_world;
@@ -113,4 +115,17 @@ void fragment() {
 	ROUGHNESS = roughness;
 	METALLIC = 0.0;
 	SPECULAR = 0.12;
+}
+
+// K6: web cloud shadows — a drifting noise mask multiplies direct sunlight.
+float cloud_shade(vec3 world_pos) {
+	vec2 wind = vec2(cloud_clock * 0.05, cloud_clock * 0.02);
+	float cover = fbm((world_pos.xz + world_pos.y * vec2(0.25, -0.16)) * 0.55 + wind);
+	return 1.0 - smoothstep(0.31, 0.66, cover) * cloud_amount;
+}
+
+void light() {
+	float shade = LIGHT_IS_DIRECTIONAL ? cloud_shade(v_world) : 1.0;
+	float ndl = max(0.0, dot(NORMAL, LIGHT));
+	DIFFUSE_LIGHT += ndl * ATTENUATION * LIGHT_COLOR * shade / PI;
 }

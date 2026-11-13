@@ -35,6 +35,9 @@ func _initialize() -> void:
 		if bare_color == null or (bare_color as Vector3).distance_to(
 				Vector3(0.36, 0.235, 0.135)) > 0.001:
 			failures.append("winter bare soil color wrong")
+		world.set_cloud_shadow(0.8, 12.0)
+		if absf(float(world.terrain_material.get_shader_parameter("cloud_amount")) - 0.8) > 0.01:
+			failures.append("terrain cloud shadow missing")
 		var flower_mmi := world.find_child("flowerHead", true, false) as MultiMeshInstance3D
 		if flower_mmi != null:
 			var window_z: float = world.cottage_origin.y + float(world.COTTAGE.D) * 0.5 + 0.11

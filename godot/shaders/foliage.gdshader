@@ -9,6 +9,8 @@ uniform float winter : hint_range(0.0, 1.0) = 0.0;
 uniform float evergreen : hint_range(0.0, 1.0) = 0.0;
 uniform float leaf_cut : hint_range(0.0, 2.0) = 0.0;
 uniform float use_vertex_color : hint_range(0.0, 1.0) = 0.0;
+uniform float cloud_amount : hint_range(0.0, 1.2) = 0.0;
+uniform float cloud_clock = 0.0;
 uniform float trample_strength : hint_range(0.0, 1.0) = 0.0;
 uniform vec3 season_tint = vec3(1.0);
 uniform vec4 trample[16];
@@ -165,13 +167,18 @@ void fragment() {
 }
 
 void light() {
+	float shade = LIGHT_IS_DIRECTIONAL
+		? 1.0 - smoothstep(0.31, 0.66,
+			fbm((v_world.xz + v_world.y * vec2(0.25, -0.16)) * 0.55
+				+ vec2(cloud_clock * 0.05, cloud_clock * 0.02))) * cloud_amount
+		: 1.0;
 	float ndl = max(0.0, dot(NORMAL, LIGHT));
-	DIFFUSE_LIGHT += ndl * ATTENUATION * LIGHT_COLOR / PI;
+	DIFFUSE_LIGHT += ndl * ATTENUATION * LIGHT_COLOR * shade / PI;
 	// K5: backlit leaves transmit a warm-green light when the sun is behind
 	// them, matching the web alphaTest foliage term.
 	if (leaf_cut > 0.5) {
 		float back = max(0.0, -dot(NORMAL, LIGHT));
-		DIFFUSE_LIGHT += LIGHT_COLOR * ATTENUATION
+		DIFFUSE_LIGHT += LIGHT_COLOR * ATTENUATION * shade
 			* vec3(0.38, 0.48, 0.16) * (0.12 + 0.88 * back);
 	}
 }

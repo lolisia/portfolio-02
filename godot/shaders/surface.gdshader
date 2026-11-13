@@ -5,6 +5,8 @@ uniform int surface_kind = 1; // 0 wood, 1 stone, 2 clay, 3 plaster, 4 soil, 5 i
 uniform float wet : hint_range(0.0, 1.0) = 0.0;
 uniform float snow_depth : hint_range(0.0, 1.0) = 0.0;
 uniform float winter : hint_range(0.0, 1.0) = 0.0;
+uniform float cloud_amount : hint_range(0.0, 1.2) = 0.0;
+uniform float cloud_clock = 0.0;
 
 varying vec3 v_world;
 varying vec3 v_world_normal;
@@ -109,4 +111,20 @@ void fragment() {
 	ROUGHNESS = roughness;
 	METALLIC = metallic;
 	SPECULAR = 0.18;
+}
+
+// K6: drifting cloud shadows on direct sunlight.
+float cloud_shade(vec3 world_pos) {
+	vec3 wind = vec3(cloud_clock * 0.05, 0.0, cloud_clock * 0.02);
+	float cover = fbm3(vec3(world_pos.x * 0.55, world_pos.y * 0.22,
+		world_pos.z * 0.55) + wind);
+	return 1.0 - smoothstep(0.31, 0.66, cover) * cloud_amount;
+}
+
+void light() {
+	float shade = LIGHT_IS_DIRECTIONAL ? cloud_shade(v_world) : 1.0;
+	float ndl = max(0.0, dot(NORMAL, LIGHT));
+	DIFFUSE_LIGHT += ndl * ATTENUATION * LIGHT_COLOR * shade / PI;
+	float spec = pow(max(0.0, dot(NORMAL, normalize(LIGHT + VIEW))), 24.0);
+	SPECULAR_LIGHT += spec * ATTENUATION * LIGHT_COLOR * shade * 0.18;
 }

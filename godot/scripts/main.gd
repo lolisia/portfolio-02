@@ -728,6 +728,14 @@ func _process(delta: float) -> void:
 				lerpf(0.015, 0.20, low_target), 1.0 - exp(-delta * 0.7))
 			low_mist.visible = quality < 2 and low_target > 0.04 and not compositor_fog
 	_update_atmosphere(daylight)
+	if world != null:
+		# K6: cloudAmount = (.80 - .54·night) × weather ramp, then drift the
+		# noise mask over all sun-lit surface materials.
+		var cloud_night := float(daylight["night"])
+		var cloud_ramp := lerpf(0.85, 1.18, minf(coverage, 1.0)) if coverage <= 1.0 \
+			else lerpf(1.18, 1.22, coverage - 1.0)
+		var cloud_amount := clampf((0.80 - 0.54 * cloud_night) * cloud_ramp, 0.0, 1.2)
+		world.set_cloud_shadow(cloud_amount, float(Time.get_ticks_msec()) / 1000.0)
 	if farm_life != null:
 		farm_life.set_night(float(daylight["night"]))
 	if world != null:

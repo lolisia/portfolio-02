@@ -22,6 +22,7 @@ var meshes: Dictionary = {}
 var ground: MeshInstance3D
 var terrain_material: ShaderMaterial
 var _trample_materials: Array[ShaderMaterial] = []
+var _cloud_materials: Array[ShaderMaterial] = []
 var path_mask: ImageTexture
 var water: MeshInstance3D
 var cascade_materials: Array[ShaderMaterial] = []
@@ -1616,6 +1617,19 @@ func set_wind(wind_ms: float) -> void:
 		var water_mat := water.material_override as ShaderMaterial
 		if water_mat != null:
 			water_mat.set_shader_parameter("breeze", strength)
+
+func set_cloud_shadow(amount: float, clock: float) -> void:
+	if _cloud_materials.is_empty():
+		if terrain_material != null:
+			_cloud_materials.append(terrain_material)
+		for node in find_children("*", "MultiMeshInstance3D", true, false):
+			var mat := (node as MultiMeshInstance3D).material_override
+			if mat is ShaderMaterial and (mat as ShaderMaterial).shader != null \
+				and (mat as ShaderMaterial).shader.code.contains("cloud_amount"):
+				_cloud_materials.append(mat)
+	for mat in _cloud_materials:
+		mat.set_shader_parameter("cloud_amount", amount)
+		mat.set_shader_parameter("cloud_clock", clock)
 
 func walkable(x: float, z: float) -> bool:
 	return wet(x, z) < -0.2 and is_free(x, z, 0.26)
