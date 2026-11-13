@@ -31,6 +31,7 @@ var cascade_width := 3.1
 var cascade_drop := WATER_Y - FLOOR_Y
 var veg_beds: Array = []
 var rose_bushes: Array[Vector2] = []
+var garden_plant_count := 0
 var pond_shore := Vector2(6.9, 4.0)
 var lamps: Array = []
 var window_light: OmniLight3D
@@ -1034,51 +1035,19 @@ func _build_garden_beds() -> void:
 				bw + 0.12, soil + 0.05 - low + 0.2, 0.06, b.pick(TIMBER))
 			b.part("wood", x0 + s * (bw * 0.5 + 0.03), (soil + 0.05 + low - 0.2) * 0.5, z0,
 				0.06, soil + 0.05 - low + 0.2, bd, b.pick(TIMBER))
-		# Flower garden: sunflowers at the back, foxgloves/tulips/lavender in front.
-		var spacing: float = [0.36, 0.20, 0.17, 0.24][cell]
-		var cols := maxi(1, int(round(bw / spacing)))
-		var rows := maxi(1, int(round(bd / spacing)))
-		for row in range(rows):
-			for col in range(cols):
-				var x := x0 + ((float(col) + 0.5) / float(cols) - 0.5) * (bw - 0.18)
-				var z := z0 + ((float(row) + 0.5) / float(rows) - 0.5) * (bd - 0.16)
-				var s := 0.9 + b.randf() * 0.3
-				match cell:
-					0:
-						s = 0.9 + b.randf() * 0.2
-						var a0 := 0.6 + (b.randf() - 0.5) * 0.5
-						b.part("sunflowerStem", x, soil - 0.01, z, s, s, s, "#6f9142", 0.0, a0, 0.0, 0.12)
-						b.part("sunflowerBloom", x, soil - 0.01, z, s, s, s,
-							b.pick(["#ffffff", "#fff3d8", "#ffe2b0"]), 0.0, a0, 0.0, 0.12)
-						b.part("sunflowerDisc", x, soil - 0.01, z, s, s, s,
-							"#4f3114", 0.0, a0, 0.0, 0.12)
-					1:
-						s = 1.0 + b.randf() * 0.4
-						var a1 := b.randf() * TAU
-						b.part("foxgloveStem", x, soil - 0.01, z, s, s, s, "#6b8c45", 0.0, a1, 0.0, 0.22)
-						b.part("foxgloveBloom", x, soil - 0.01, z, s, s, s,
-							b.pick(["#c76aa4", "#e7a6cf", "#f2eef2", "#a676c8", "#d9809a"]), 0.0, a1, 0.0, 0.22)
-					2:
-						s = 0.9 + b.randf() * 0.25
-						var a2 := b.randf() * TAU
-						b.part("tulipStem", x, soil - 0.01, z, s, s, s, "#73964a", 0.0, a2, 0.0, 0.22)
-						b.part("tulipBloom", x, soil - 0.01, z, s, s, s,
-							b.pick(["#e0362f", "#f2c430", "#f08bb0", "#f7f1e6", "#f07a2a", "#b0367a"]), 0.0, a2, 0.0, 0.22)
-					_:
-						s = 0.85 + b.randf() * 0.4
-						var a3 := b.randf() * TAU
-						if b.randf() < 0.7:
-							b.part("lavenderStem", x, soil - 0.01, z, s, s, s, "#7d9468", 0.0, a3, 0.0, 0.30)
-							b.part("lavenderBloom", x, soil - 0.01, z, s, s, s,
-								b.pick(["#8a6cc4", "#9b7fd1", "#7a5fb5"]), 0.0, a3, 0.0, 0.30)
-						else:
-							for i in range(3):
-								var fx := x + (b.randf() - 0.5) * 0.14
-								var fz := z + (b.randf() - 0.5) * 0.14
-								var fs := 0.55 + b.randf() * 0.3
-								b.part("flowerStem", fx, soil - 0.01, fz, fs, fs, fs, "#6f8f45", 0.0, b.randf() * TAU, 0.0, 0.22)
-								b.part("flowerHead", fx, soil - 0.01, fz, fs, fs, fs,
-									b.pick(["#f4f1e4", "#f2d25a"]), 0.0, b.randf() * TAU, 0.0, 0.22)
+		# Flower garden: web planting loop starts at step*0.6 and jitters each
+		# plant by ±step*0.175 (G3), rather than a regular grid.
+		var step: float = [0.36, 0.20, 0.17, 0.24][cell]
+		var a := -bw * 0.5 + step * 0.6
+		while a < bw * 0.5 - step * 0.4:
+			var c := -bd * 0.5 + step * 0.6
+			while c < bd * 0.5 - step * 0.4:
+				var x := x0 + a + (b.randf() - 0.5) * step * 0.35
+				var z := z0 + c + (b.randf() - 0.5) * step * 0.35
+				_plant_garden_cell(cell, x, z, soil - 0.01)
+				garden_plant_count += 1
+				c += step
+			a += step
 		# A per-cell obstacle for the bed frame.
 		obstacles.append([x0, z0, 0.8])
 	# Rose bushes at the four garden corners (web: cx ± (bw+gap/2+.42),
@@ -1106,6 +1075,45 @@ func _build_garden_beds() -> void:
 			bw * 2.0 / 8.0, 0.06, gap, b.pick(["#c9b994", "#bfb18e", "#d2c4a0"]))
 		path_points.append(Vector2(cx, cz + f * bd * 2.0))
 		path_points.append(Vector2(cx + f * bw * 2.0, cz))
+
+func _plant_garden_cell(cell: int, x: float, z: float, y: float) -> void:
+	var s := 0.9 + b.randf() * 0.3
+	match cell:
+		0:
+			s = 0.9 + b.randf() * 0.2
+			var a0 := 0.6 + (b.randf() - 0.5) * 0.5
+			b.part("sunflowerStem", x, y, z, s, s, s, "#6f9142", 0.0, a0, 0.0, 0.12)
+			b.part("sunflowerBloom", x, y, z, s, s, s,
+				b.pick(["#ffffff", "#fff3d8", "#ffe2b0"]), 0.0, a0, 0.0, 0.12)
+			b.part("sunflowerDisc", x, y, z, s, s, s,
+				"#4f3114", 0.0, a0, 0.0, 0.12)
+		1:
+			s = 1.0 + b.randf() * 0.4
+			var a1 := b.randf() * TAU
+			b.part("foxgloveStem", x, y, z, s, s, s, "#6b8c45", 0.0, a1, 0.0, 0.22)
+			b.part("foxgloveBloom", x, y, z, s, s, s,
+				b.pick(["#c76aa4", "#e7a6cf", "#f2eef2", "#a676c8", "#d9809a"]), 0.0, a1, 0.0, 0.22)
+		2:
+			s = 0.9 + b.randf() * 0.25
+			var a2 := b.randf() * TAU
+			b.part("tulipStem", x, y, z, s, s, s, "#73964a", 0.0, a2, 0.0, 0.22)
+			b.part("tulipBloom", x, y, z, s, s, s,
+				b.pick(["#e0362f", "#f2c430", "#f08bb0", "#f7f1e6", "#f07a2a", "#b0367a"]), 0.0, a2, 0.0, 0.22)
+		_:
+			s = 0.85 + b.randf() * 0.4
+			var a3 := b.randf() * TAU
+			if b.randf() < 0.7:
+				b.part("lavenderStem", x, y, z, s, s, s, "#7d9468", 0.0, a3, 0.0, 0.30)
+				b.part("lavenderBloom", x, y, z, s, s, s,
+					b.pick(["#8a6cc4", "#9b7fd1", "#7a5fb5"]), 0.0, a3, 0.0, 0.30)
+			else:
+				for i in range(3):
+					var fx := x + (b.randf() - 0.5) * 0.14
+					var fz := z + (b.randf() - 0.5) * 0.14
+					var fs := 0.55 + b.randf() * 0.3
+					b.part("flowerStem", fx, y, fz, fs, fs, fs, "#6f8f45", 0.0, b.randf() * TAU, 0.0, 0.22)
+					b.part("flowerHead", fx, y, fz, fs, fs, fs,
+						b.pick(["#f4f1e4", "#f2d25a"]), 0.0, b.randf() * TAU, 0.0, 0.22)
 
 func _build_vegetable_beds() -> void:
 	# The original places four beds: two by the cottage and two on the far

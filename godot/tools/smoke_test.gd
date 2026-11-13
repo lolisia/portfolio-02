@@ -40,6 +40,8 @@ func _initialize() -> void:
 						or absf(absf(rose_offset.y) - 0.83) > 0.06:
 					failures.append("rose bush not at a garden corner")
 					break
+		if world.garden_plant_count != 86:
+			failures.append("garden planting count wrong: " + str(world.garden_plant_count))
 		if world.boxes.is_empty():
 			failures.append("oriented collision boxes missing")
 		if world.bodies.size() < 7:
