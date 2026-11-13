@@ -28,6 +28,8 @@ var wind := 3.0
 var water_freeze := 0.0
 
 var walk_speed := 0.62
+var turn_rate := 6.0
+var task_turn_rate := 4.0
 var pace := 0.0
 var state := "inside"
 var intent := false
@@ -597,7 +599,7 @@ func _walk_route(delta: float, speed: float = 0.62) -> void:
 		return
 	var running := pace > 1.1
 	_track_feet(start.distance_to(Vector2(position.x, position.z)), running)
-	rotation.y = lerp_angle(rotation.y, atan2(direction.x, direction.y), 1.0 - exp(-delta * 7.0))
+	rotation.y = lerp_angle(rotation.y, atan2(direction.x, direction.y), 1.0 - exp(-delta * turn_rate))
 	_play("Running" if running else "Walking", 0.25)
 	if animation != null:
 		animation.speed_scale = pace / (1.7 if running else 0.62)
@@ -662,7 +664,7 @@ func _start_task(type: String) -> void:
 func _update_task(delta: float) -> void:
 	task_timer -= delta
 	if task_type in ["gather", "fish", "salute"]:
-		rotation.y = lerp_angle(rotation.y, task_face, 1.0 - exp(-delta * 4.0))
+		rotation.y = lerp_angle(rotation.y, task_face, 1.0 - exp(-delta * task_turn_rate))
 	if task_timer > 0.0:
 		if task_type == "fish" and task_phase >= 1:
 			_update_fishing_gear()

@@ -79,6 +79,9 @@ func _initialize() -> void:
 			failures.append("character did not start inside")
 		if absf(float(character.walk_speed) - 0.62) > 0.001:
 			failures.append("character walk speed wrong")
+		if absf(float(character.turn_rate) - 6.0) > 0.001 \
+				or absf(float(character.task_turn_rate) - 4.0) > 0.001:
+			failures.append("character turn rate wrong")
 		if character.toon_materials.is_empty():
 			failures.append("toon character materials missing")
 		else:
