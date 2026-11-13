@@ -296,7 +296,7 @@ Godot의 사용자 인자는 `--` 뒤에 전달합니다.
 - 비 수면 파문 링 + 지면 물보라 링, 지붕 충돌 박스로 비/눈이 실내로 들어가지 않음.
 
 **남은 일**
-1. 폭포 foam/vapor 디테일.
+1. ~~폭포 foam/vapor 디테일~~ — 화이트 폼/베이스 스프레이 강화 완료.
 2. 바람/눈보라 파티클의 세밀한 방향/속도 튜닝.
 3. 비가 나무 캐노피를 통과하지 않도록 충돌 확장(선택).
 
@@ -421,7 +421,7 @@ Godot의 사용자 인자는 `--` 뒤에 전달합니다.
 - Windows Desktop export preset 준비 (`export_presets.cfg`), 앱 버전 0.1.0.
 - 이 환경에는 export 템플릿과 Android SDK가 없어 실제 패키징은 실패:
   `export_templates/4.7.2.stable.mono/windows_release_x86_64.exe` 없음.
-- 1280×720 High `--house` `--bench 600`: 약 3.0ms/frame (RTX 3080, 반사 2프레임 갱신/288p + 레이마칭 안개/광선 포함).
+- 1280×720 High `--house` `--bench 600`: 약 3.19ms/frame (RTX 3080, 반사 2프레임 갱신/288p + 레이마칭 안개/광선 포함).
 - 360×640 Mobile 렌더러 UI/패널 캡처 및 `--shot` 확인.
 
 **남은 일**
