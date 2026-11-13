@@ -109,8 +109,8 @@ func _initialize() -> void:
 	else:
 		if weather.ripples == null or weather.ripple_mesh.instance_count < 160:
 			failures.append("rain impact layer missing")
-		if weather.find_children("*", "GPUParticlesCollisionBox3D", true, false).size() < 3:
-			failures.append("rain roof collisions missing")
+		if weather.find_children("*", "GPUParticlesCollisionBox3D", true, false).size() < 30:
+			failures.append("rain canopy collisions missing")
 
 	if failures.is_empty():
 		print("SMOKE PASS: world, tasks, garden, footprints, porch stand, night, seasons, quality, shafts, rain collisions, compositor shaders")

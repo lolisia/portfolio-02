@@ -105,6 +105,15 @@ func _build_roof_collisions() -> void:
 		box.size = entry[1]
 		box.position = entry[0]
 		add_child(box)
+	# Canopies stop rain/snow from falling through the tree crowns. The boxes
+	# come from the actual foliage mesh AABBs and follow the tree list.
+	if world != null:
+		for entry in world.tree_canopies():
+			var canopy := GPUParticlesCollisionBox3D.new()
+			canopy.name = "CanopyCollision"
+			canopy.size = entry[1]
+			canopy.position = entry[0]
+			add_child(canopy)
 
 func _soft_texture() -> ImageTexture:
 	var image := Image.create(64, 64, false, Image.FORMAT_RGBA8)

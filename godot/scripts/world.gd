@@ -958,6 +958,32 @@ func _build_trees() -> void:
 			b.part(kind + "Leaves", x, y, z, s, s, s, b.pick(palette), 0.0, angle, 0.0, 0.014)
 		obstacles.append([x, z, 0.58 * s])
 
+func tree_canopies() -> Array:
+	# World-space AABBs for the tree canopies, used by the rain/snow collision
+	# pass. The meshes are authored base-at-origin in nature.glb.
+	var result: Array = []
+	var oak_a: Mesh = meshes.get("oakALeaves")
+	var oak_b: Mesh = meshes.get("oakBLeaves")
+	var pine: Mesh = meshes.get("pineANeedles")
+	for i in range(TREE_LIST.size()):
+		var item: Array = TREE_LIST[i]
+		var x: float = item[0]
+		var z: float = item[1]
+		var s: float = item[2]
+		var is_pine := i in PINE_INDICES
+		var mesh: Mesh = pine if is_pine else (oak_a if oak_a != null else oak_b)
+		if mesh == null:
+			continue
+		var aabb := mesh.get_aabb()
+		if not is_pine and oak_a != null and oak_b != null:
+			aabb = aabb.merge(oak_b.get_aabb())
+		var center := Vector3(x, height(x, z)
+			+ (aabb.position.y + aabb.size.y * 0.5) * s, z)
+		var size := aabb.size * s
+		# Slight padding covers the random yaw and leaf fringes.
+		result.append([center, size * 1.06])
+	return result
+
 func _build_ground_cover() -> void:
 	var gx := -14.85
 	while gx < 14.9:

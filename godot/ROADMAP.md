@@ -293,12 +293,12 @@ Godot의 사용자 인자는 `--` 뒤에 전달합니다.
 - 계절 foliage tint (봄 연둣빛, 가을 주황, 겨울 청회색).
 - 비/눈이 그치면 입자 수가 서서히 줄어드는 것 확인.
 - 비/눈 파티클이 바람 방향으로 흐르고, 눈보라에는 횡방향 돌풍과 turbulence flutter 적용.
-- 비 수면 파문 링 + 지면 물보라 링, 지붕 충돌 박스로 비/눈이 실내로 들어가지 않음.
+- 비 수면 파문 링 + 지면 물보라 링, 지붕·수목 캐노피 충돌 박스로 비/눈이 실내/수관 아래로 들어가지 않음.
 
 **남은 일**
 1. ~~폭포 foam/vapor 디테일~~ — 화이트 폼/베이스 스프레이 강화 완료.
 2. ~~바람/눈보라 파티클의 세밀한 방향/속도 튜닝~~ — 원본 rain.js/seasons.js의 풍향 drift·눈보라 crosswind·flutter 포팅.
-3. 비가 나무 캐노피를 통과하지 않도록 충돌 확장(선택).
+3. ~~비가 나무 캐노피를 통과하지 않도록 충돌 확장~~ — 수목 31개의 foliage AABB 기반 `GPUParticlesCollisionBox3D` 추가.
 
 **파일**
 - `scripts/weather_fx.gd`
@@ -423,6 +423,7 @@ Godot의 사용자 인자는 `--` 뒤에 전달합니다.
   `export_templates/4.7.2.stable.mono/windows_release_x86_64.exe` 없음.
 - 1280×720 High `--house` `--bench 600`: 약 3.18ms/frame (정지 태양), 3.46ms/frame (`--auto`, 태양 이동) (RTX 3080, 반사 2프레임 갱신/288p + 레이마칭 안개/광선 + 1024² sun shadow pass 포함).
 - 1280×720 High `--winter --storm --house` `--bench 600`: 약 2.86ms/frame (350 fps, 눈 파티클 포함).
+- 1280×720 High `--rain --house` `--bench 600`: 약 3.19ms/frame (313 fps, 수목 캐노피 충돌 포함).
 - 360×640 Mobile 렌더러 UI/패널 캡처 및 `--shot` 확인.
 
 **남은 일**
@@ -458,7 +459,7 @@ Godot의 사용자 인자는 `--` 뒤에 전달합니다.
   - 연못 결빙은 `water.gdshader`의 `freeze` uniform; `main.gd`의 `water_freeze`와 함께 조정.
   - 비 파문은 연못 수면에만 생성(지면 물보라는 아직 없음).
 - **비/눈**
-  - 지붕 충돌은 `GPUParticlesCollisionBox3D` 3개(농가/닭장/헛간)로 근사; 나무 캐노피/지형 충돌은 없음.
+  - 지붕 충돌은 `GPUParticlesCollisionBox3D` 3개(농가/닭장/헛간), 수목 캐노피는 foliage 메시 AABB 기반 31개로 근사; 지형 충돌은 없음.
   - 지면 물보라는 수면과 같은 링 데칼을 지면에 배치한 근사.
   - 폭포 foam/vapor는 spray 파티클 + 셰이더로 근사.
 - **야간**
