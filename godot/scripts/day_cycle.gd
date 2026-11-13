@@ -15,7 +15,7 @@ func setup(p_sun: DirectionalLight3D, p_fill: DirectionalLight3D, p_env: Environ
 	sky_material = p_sky
 	world = p_world
 
-func apply(hour: float, weather: int = 0, season: int = 1,
+func apply(hour: float, weather: int = 0, _season: int = 1,
 		coverage_value: float = -1.0) -> void:
 	var t := Daylight.evaluate(hour)
 	var night: float = t["night"]
@@ -60,20 +60,8 @@ func apply(hour: float, weather: int = 0, season: int = 1,
 		Color(0.22, 0.25, 0.25), overcast * 0.5)
 	var fog_color: Color = Daylight.color_at(Daylight.FOG_SCATTER, t["from"], t["to"], t["f"])
 
-	if season == 3:
-		top_color = top_color.lerp(Color(0.62, 0.70, 0.80), 0.34)
-		horizon_color = horizon_color.lerp(Color(0.78, 0.83, 0.88), 0.38)
-		ground_color = ground_color.lerp(Color(0.62, 0.68, 0.72), 0.30)
-		fog_color = fog_color.lerp(Color(0.68, 0.76, 0.82), 0.36)
-		sun.light_color = sun.light_color.lerp(Color(0.82, 0.88, 1.0), 0.38)
-		sun_energy *= 0.84
-	elif season == 2:
-		top_color = top_color.lerp(Color(0.84, 0.74, 0.58), 0.12)
-		horizon_color = horizon_color.lerp(Color(0.94, 0.74, 0.50), 0.14)
-		fog_color = fog_color.lerp(Color(0.58, 0.48, 0.38), 0.18)
-	elif season == 0:
-		top_color = top_color.lerp(Color(0.62, 0.78, 0.86), 0.08)
-		fog_color = fog_color.lerp(Color(0.56, 0.68, 0.62), 0.10)
+	# L9(X): the web has no season-specific sky/fog tint; season changes only
+	# foliageTint and winterBare. Keep the time-of-day palette untouched.
 
 	sun.light_energy = sun_energy
 	sky_material.sky_top_color = top_color
@@ -95,7 +83,7 @@ func apply(hour: float, weather: int = 0, season: int = 1,
 	env.fog_enabled = true
 	env.fog_light_color = fog_color
 	env.fog_light_energy = 0.35
-	env.fog_density = (0.0025 + 0.008 * night) * (1.0 + overcast * 0.8) * (1.25 if season == 3 else 1.0)
+	env.fog_density = (0.0025 + 0.008 * night) * (1.0 + overcast * 0.8)
 	env.fog_sky_affect = 0.18
 	env.fog_aerial_perspective = 0.2
 	env.glow_enabled = true
@@ -104,15 +92,9 @@ func apply(hour: float, weather: int = 0, season: int = 1,
 	env.glow_hdr_threshold = lerp(1.05, 0.35, night)
 	env.tonemap_mode = Environment.TONE_MAPPER_ACES
 	env.tonemap_exposure = 1.14
-	env.adjustment_enabled = true
-	env.adjustment_saturation = 1.06 + 0.16 * golden - 0.12 * overcast
-	env.adjustment_contrast = 1.02 + 0.04 * overcast
-	env.adjustment_brightness = 1.0 - 0.08 * overcast
-	if season == 3:
-		env.adjustment_saturation *= 0.78
-		env.adjustment_brightness *= 0.95
-	elif season == 2:
-		env.adjustment_saturation *= 1.06
+	# L9(X): the web grades only in the composite pass; no Environment
+	# adjustment saturation/contrast/brightness or seasonal sky tint.
+	env.adjustment_enabled = false
 
 	if world != null:
 		world.set_night(night)
