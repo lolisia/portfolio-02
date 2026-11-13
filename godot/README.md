@@ -57,8 +57,6 @@ Godot 4.7 프로젝트. 원본 Three.js 디오라마(`../src`)를 PC/모바일 �
 ## 아직 남은 작업
 
 - 커스텀 sun shadow depth pass의 해상도/바이어스 튜닝(768², Forward+ 전용)
-- 물 반사 디테일(선택)
-- 농가 주변 계단/먼 꽃정원 디테일(선택)
 - 모바일 실기기 프로파일링(중급 Android), 적응형 해상도, safe area
 - export 템플릿/Android SDK가 이 환경에 없어 패키징 미검증 (Windows preset은 준비됨, `export_presets.cfg`)
 

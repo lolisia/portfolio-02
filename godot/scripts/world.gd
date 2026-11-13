@@ -785,7 +785,9 @@ func _build_garden_beds() -> void:
 		path_points.append(Vector2(cx + f * bw * 2.0, cz))
 
 func _build_vegetable_beds() -> void:
-	for bed in [Vector2(1.1, 3.3), Vector2(2.7, 3.3)]:
+	# The original places four beds: two by the cottage and two on the far
+	# slope behind the flower garden.
+	for bed in [Vector2(1.1, 3.3), Vector2(2.7, 3.3), Vector2(-7.0, -9.5), Vector2(-5.45, -9.5)]:
 		var x: float = bed.x
 		var z: float = bed.y
 		var y := height(x, z)
