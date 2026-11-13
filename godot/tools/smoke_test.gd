@@ -56,6 +56,16 @@ func _initialize() -> void:
 		failures.append("season particles missing")
 	if main.get("quality_manager") == null:
 		failures.append("quality manager missing")
+	else:
+		var quality_manager = main.get("quality_manager")
+		quality_manager.apply(2)
+		if world != null:
+			for entry in world.lamps:
+				var lamp_light: OmniLight3D = entry["light"]
+				if lamp_light != null and lamp_light.shadow_enabled:
+					failures.append("low quality kept lantern shadows")
+					break
+		quality_manager.apply(0)
 	var ui = main.get("ui")
 	if ui == null or ui.get("horizon_preview") == null:
 		failures.append("motion preview missing")

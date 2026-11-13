@@ -45,6 +45,13 @@ func apply(level: int) -> void:
 			else DirectionalLight3D.SHADOW_PARALLEL_2_SPLITS)
 		sun.directional_shadow_max_distance = 80.0 if high else (65.0 if not low else 50.0)
 		sun.shadow_blur = 1.0 if high else 0.7
+	if world != null:
+		# Five shadow-casting lanterns dominate the shadow budget at night;
+		# only the High preset keeps them.
+		for entry in world.lamps:
+			var lamp_light: OmniLight3D = entry["light"]
+			if lamp_light != null:
+				lamp_light.shadow_enabled = high
 	if viewport != null:
 		viewport.msaa_3d = (Viewport.MSAA_4X if high else (Viewport.MSAA_2X if not low else Viewport.MSAA_DISABLED))
 		viewport.scaling_3d_scale = 1.0 if high else (0.85 if not low else 0.72)
