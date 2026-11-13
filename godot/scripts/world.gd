@@ -33,6 +33,9 @@ var window_glass_material: StandardMaterial3D
 var cottage_window := Vector3.ZERO
 var cottage_ridge := Vector3.ZERO
 var cottage_chimney := Vector3.ZERO
+var cottage_origin := Vector2(-1.0, -2.5)
+var cottage_drop := 0.12
+var cottage_steps := 1
 var door_leaf: Node3D
 var door_target_open := false
 var obstacles: Array = []
@@ -141,7 +144,24 @@ func height(x: float, z: float) -> float:
 	return ground_y + (flight_y0 + (flight_y1 - flight_y0) * clampf(along / flight.len, 0.0, 1.0) - ground_y) * reach
 
 func stand(x: float, z: float) -> float:
-	return height(x, z)
+	# Faithful port of src/world.js stand(): the porch deck and its steps are
+	# raised walking surfaces; everywhere else is the terrain.
+	var ground := height(x, z)
+	var lx := x - cottage_origin.x
+	var lz := z - cottage_origin.y
+	var w: float = COTTAGE.W
+	var d: float = COTTAGE.D
+	var p: float = COTTAGE.P
+	var f: float = COTTAGE.F
+	var run_distance: float = COTTAGE.run
+	var house_y := height(cottage_origin.x, cottage_origin.y)
+	if absf(lx) < w * 0.5 and lz > d * 0.5 and lz < d * 0.5 + p:
+		return house_y + f
+	var k := int(floor((lz - d * 0.5 - p) / run_distance)) + 1
+	if absf(lx) < 0.5 and k >= 1 and k <= cottage_steps:
+		return maxf(ground, house_y + f
+			- float(k) * cottage_drop / float(cottage_steps + 1))
+	return ground
 
 ## Height of the snow cover above the bare terrain. Mirrors the lift applied
 ## in shaders/terrain.gdshader and src/seasons.js.
@@ -417,6 +437,9 @@ func _build_cottage(cx: float, cz: float, rot: float) -> void:
 	var gy := height(cx, cz)
 	var porch_z := cz + COTTAGE.D * 0.5 + COTTAGE.P
 	var drop: float = maxf(0.12, gy + COTTAGE.F - height(cx, porch_z + 0.35))
+	cottage_origin = Vector2(cx, cz)
+	cottage_drop = drop
+	cottage_steps = _cottage_steps(drop)
 	b.place(cx, gy, cz, 1.0, rot, func() -> void:
 		_cottage_parts(drop)
 	)

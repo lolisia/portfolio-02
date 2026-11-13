@@ -29,6 +29,16 @@ func _initialize() -> void:
 			failures.append("snow surface does not rise")
 		if not world.meshes.has("tulipBloom"):
 			failures.append("procedural garden asset missing")
+		var house_y: float = world.height(-1.0, -2.5)
+		var deck_y: float = world.stand(-1.0, -0.4)
+		var step_y: float = world.stand(-1.0, 0.30)
+		var beside_y: float = world.stand(-4.0, -0.4)
+		if absf(deck_y - (house_y + float(world.COTTAGE.F))) > 0.02:
+			failures.append("porch deck stand height wrong")
+		if step_y >= deck_y - 0.02:
+			failures.append("porch step is not below the deck")
+		if absf(beside_y - world.height(-4.0, -0.4)) > 0.001:
+			failures.append("off-deck stand height changed")
 
 	var character = main.get("character")
 	if character == null:
@@ -72,7 +82,7 @@ func _initialize() -> void:
 			failures.append("rain roof collisions missing")
 
 	if failures.is_empty():
-		print("SMOKE PASS: world, tasks, garden, footprints, night, seasons, quality, shafts, rain collisions, compositor shaders")
+		print("SMOKE PASS: world, tasks, garden, footprints, porch stand, night, seasons, quality, shafts, rain collisions, compositor shaders")
 		quit(0)
 	else:
 		for failure in failures:
