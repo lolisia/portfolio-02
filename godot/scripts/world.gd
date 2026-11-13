@@ -33,6 +33,7 @@ var veg_beds: Array = []
 var rose_bushes: Array[Vector2] = []
 var garden_plant_count := 0
 var gravel_slab_count := 0
+var wildflower_clusters := 0
 var pond_shore := Vector2(6.9, 4.0)
 var lamps: Array = []
 var window_light: OmniLight3D
@@ -1417,11 +1418,29 @@ func _build_ground_cover() -> void:
 		if not clear(x, z):
 			continue
 		if i % 4 == 0:
-			var s := 0.6 + b.randf() * 0.76
-			var turn := b.randf() * TAU
-			var color: String = String(b.pick(["#ed8d48", "#d55a3e", "#e7c464", "#e9e2c4", "#a1a6c6", "#e58fae"]))
-			b.part("flowerStem", x, height(x, z) - 0.01, z, s, s, s, "#6f8f45", 0.0, turn, 0.0, 0.25)
-			b.part("flowerHead", x, height(x, z) - 0.01, z, s, s, s, color, 0.0, turn, 0.0, 0.25)
+			# M3: kit.flowers() is a single-colour cluster of 7 blooms plus
+			# three grass tufts, not one flower per scatter point.
+			var flower_color: String = String(b.pick(
+				["#ed8d48", "#d55a3e", "#e7c464", "#e9e2c4", "#a1a6c6", "#e58fae"]))
+			b.place(x, height(x, z) - 0.01, z, 1.0, 0.0, func() -> void:
+				for j in range(7):
+					var fx := (b.randf() - 0.5) * 0.8
+					var fz := (b.randf() - 0.5) * 0.76
+					var fs := 0.75 + b.randf() * 0.6
+					var turn := b.randf() * TAU
+					b.part("flowerStem", fx, 0.0, fz, fs, fs, fs, "#6f8f45",
+						0.0, turn, 0.0, 0.25)
+					b.part("flowerHead", fx, 0.0, fz, fs, fs, fs, flower_color,
+						0.0, turn, 0.0, 0.25)
+				for j in range(3):
+					var tuft_x := (b.randf() - 0.5) * 0.7
+					var tuft_z := (b.randf() - 0.5) * 0.7
+					var gs := 0.45 + b.randf() * 0.3
+					var gkind: String = ["grass0", "grass1", "grass2"][b.rng.randi_range(0, 2)]
+					b.part(gkind, tuft_x, 0.0, tuft_z, gs, gs, gs, "#86a24c",
+						0.0, b.randf() * TAU, 0.0, 0.25)
+			)
+			wildflower_clusters += 1
 		elif i % 5 == 0:
 			for j in range(5):
 				var a := x + (b.randf() - 0.5) * 0.75

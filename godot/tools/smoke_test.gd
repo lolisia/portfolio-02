@@ -85,6 +85,8 @@ func _initialize() -> void:
 			failures.append("sunflowerDisc node still present")
 		if world.path_mask == null or world.path_mask.get_width() != 1024:
 			failures.append("ground mask is not 1024")
+		if world.wildflower_clusters <= 0:
+			failures.append("wildflower clusters missing")
 		elif not world.path_points.is_empty():
 			var ground_image: Image = world.path_mask.get_image()
 			var path_point: Vector2 = world.path_points[0]
