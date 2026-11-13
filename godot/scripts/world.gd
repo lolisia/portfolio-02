@@ -625,23 +625,52 @@ func _cottage_parts(drop: float) -> void:
 	# Stone plinth and ground skirt.
 	b.part("stone", 0.0, F * 0.5 - 0.2, 0.0, W + 0.1, F + 0.4, D + 0.1, "#7a7262")
 	b.part("stone", 0.0, (F - 0.21 - 0.45) * 0.5, D * 0.5 + 0.13 + (P - 0.13) * 0.5,
-		W - 0.12, F - 0.21 + 0.45, P - 0.3, "#2e241b")
+		W - 0.12, F - 0.21 + 0.45, P - 0.3, "#3a281c")
+	# H7: two rows of random-length foundation stones on the x± and z− faces.
+	for face in [["x", 1.0], ["x", -1.0], ["z", -1.0]]:
+		var axis: String = face[0]
+		var side: float = face[1]
+		for stone_y in [0.1, 0.3]:
+			var run_len := D if axis == "x" else W
+			var cursor := -run_len * 0.5 + 0.03 + (0.12 if stone_y > 0.2 else 0.0)
+			while cursor < run_len * 0.5 - 0.1:
+				var stone_len := minf(0.28 + b.randf() * 0.26,
+					run_len * 0.5 - 0.03 - cursor)
+				var center := cursor + stone_len * 0.5
+				var color := String(b.pick(["#8b8371", "#7a7364", "#958d79", "#6f6a5d"]))
+				if axis == "x":
+					b.part("stone", side * (W * 0.5 + 0.07), stone_y, center,
+						0.06, 0.18, stone_len - 0.025, color)
+				else:
+					b.part("stone", center, stone_y, side * (D * 0.5 + 0.07),
+						stone_len - 0.025, 0.18, 0.06, color)
+				cursor += stone_len
 
 	# Wall core.
 	b.part("wood", 0.0, F + (H + knee) * 0.5, 0.0, W - 0.12, H + knee, D - 0.12, core)
 
-	# Horizontal siding, butt-jointed at a random point on each face.
+	# H8: horizontal cladding, each course butt-jointed at a random point.
 	# Web order: x faces use the full H+knee with 10 courses, z faces use H
 	# with 8 courses.
 	for s in [-1.0, 1.0]:
+		var x_len := D - 0.14
 		for k in range(10):
 			var y := F + (k + 0.5) * (H + knee) / 10.0
-			b.part("wood", float(s) * (W * 0.5 - 0.03), y, 0.0, 0.06,
-				(H + knee) / 10.0 - 0.016, D - 0.14, b.pick(TIMBER))
+			var cut_x := -x_len * 0.5 + x_len * (0.3 + 0.4 * b.randf())
+			for segment in [[-x_len * 0.5, cut_x], [cut_x, x_len * 0.5]]:
+				var a: float = segment[0]
+				var bb: float = segment[1]
+				b.part("wood", float(s) * (W * 0.5 - 0.03), y, (a + bb) * 0.5,
+					0.06, (H + knee) / 10.0 - 0.016, bb - a - 0.012, b.pick(TIMBER))
+		var z_len := W - 0.14
 		for k in range(8):
 			var y2 := F + (k + 0.5) * H / 8.0
-			b.part("wood", 0.0, y2, float(s) * (D * 0.5 - 0.03), W - 0.14,
-				H / 8.0 - 0.016, 0.06, b.pick(TIMBER))
+			var cut_z := -z_len * 0.5 + z_len * (0.3 + 0.4 * b.randf())
+			for segment in [[-z_len * 0.5, cut_z], [cut_z, z_len * 0.5]]:
+				var a2: float = segment[0]
+				var b2: float = segment[1]
+				b.part("wood", (a2 + b2) * 0.5, y2, float(s) * (D * 0.5 - 0.03),
+					b2 - a2 - 0.012, H / 8.0 - 0.016, 0.06, b.pick(TIMBER))
 
 	# Corner posts and belt bands.
 	for x in [-W * 0.5, W * 0.5]:
