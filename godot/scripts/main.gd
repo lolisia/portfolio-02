@@ -54,6 +54,11 @@ var hour := 8.5
 var hour_target := 8.5
 var wind := 3.0
 var weather := 0
+const WEATHER_COVERAGE := [0.0, 1.0, 2.0, 1.0, 1.0, 2.0]
+const WEATHER_DENSITY := [1.0, 1.0, 1.0, 3.8, 1.4, 2.4]
+var weather_weights: Array[float] = [1.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+var weather_coverage := 0.0
+var weather_density := 1.0
 var season := 1
 var wet := 0.0
 var snow_depth := 0.0
@@ -336,6 +341,7 @@ func _ready() -> void:
 		use_shadow_depth = false
 	if "--shadowdebug" in cli:
 		shadow_debug = true
+	_snap_weather_blend()
 	var shot_index := cli.find("--shot")
 	if shot_index >= 0 and shot_index + 1 < cli.size():
 		_capture_screenshot(String(cli[shot_index + 1]))
@@ -505,6 +511,38 @@ func _setup_lights() -> void:
 	fill.look_at_from_position(Vector3(12.0, 19.0, 17.0), Vector3.ZERO, Vector3.UP)
 	add_child(fill)
 
+func _snap_weather_blend() -> void:
+	for i in range(6):
+		weather_weights[i] = 1.0 if i == weather else 0.0
+	weather_coverage = float(WEATHER_COVERAGE[clampi(weather, 0, 5)])
+	weather_density = float(WEATHER_DENSITY[clampi(weather, 0, 5)])
+	rain_fx = weather_weights[2]
+	snow_fx = weather_weights[4] + weather_weights[5]
+	storm_fx = weather_weights[5]
+
+func _update_weather_blend(delta: float) -> void:
+	# Web parity (src/weather.js): all six weights ease toward the target with
+	# k = 1 - e^(-0.85 dt), so coverage/density/rain/snow/storm change together
+	# instead of snapping when the dropdown changes.
+	var k := 1.0 - exp(-maxf(delta, 0.0) * 0.85)
+	var difference := 0.0
+	for i in range(6):
+		var wanted := 1.0 if i == weather else 0.0
+		weather_weights[i] += (wanted - weather_weights[i]) * k
+		difference = maxf(difference, absf(wanted - weather_weights[i]))
+	if difference < 0.0005:
+		for i in range(6):
+			weather_weights[i] = 0.0
+		weather_weights[weather] = 1.0
+	weather_coverage = 0.0
+	weather_density = 0.0
+	for i in range(6):
+		weather_coverage += weather_weights[i] * float(WEATHER_COVERAGE[i])
+		weather_density += weather_weights[i] * float(WEATHER_DENSITY[i])
+	rain_fx = weather_weights[2]
+	snow_fx = weather_weights[4] + weather_weights[5]
+	storm_fx = weather_weights[5]
+
 func _process(delta: float) -> void:
 	if _bench_target > 0:
 		_bench_frames += 1
@@ -555,19 +593,28 @@ func _process(delta: float) -> void:
 		character.weather = weather
 		character.season = season
 
-	var wet_target := 1.0 if weather == 2 else (0.65 if weather == 3 else 0.0)
-	wet = lerpf(wet, wet_target, 1.0 - exp(-delta * 0.8))
-	var snow_target := 1.0 if season == 3 or weather >= 4 else 0.0
-	var snow_speed := 0.55 if season == 3 else 1.1
-	snow_depth = lerpf(snow_depth, snow_target, 1.0 - exp(-delta * snow_speed))
+	_update_weather_blend(delta)
+	# Web atmosphere.soak(): rain eases wetness in at .5/s and it dries at
+	# .035/s; fog no longer wets the ground.
+	if rain_fx > wet:
+		wet += (rain_fx - wet) * (1.0 - exp(-delta * 0.5))
+	else:
+		wet = maxf(rain_fx, wet - delta * 0.035)
+	# Web seasons.js snow cover: accumulate while snowing, thaw per season
+	# (rain melts fastest); winter damps toward a full cover.
+	var thaw := float([0.14, 0.24, 0.09, 0.002][clampi(season, 0, 3)])
+	var melt := lerpf(thaw, maxf(thaw, 0.3), rain_fx)
+	var snow_rate := snow_fx * (0.016 + 0.017 * storm_fx) - (1.0 - snow_fx) * melt
+	snow_depth = clampf(snow_depth + delta * snow_rate, 0.0, 1.0)
+	if season == 3:
+		snow_depth = lerpf(snow_depth, 1.0, 1.0 - exp(-delta * 1.25))
+		if snow_depth > 0.995:
+			snow_depth = 1.0
 	if absf(wet - _surface_wet) > 0.002 or absf(snow_depth - _surface_snow) > 0.002:
 		world.set_surface_state(wet, snow_depth, season)
 		_surface_wet = wet
 		_surface_snow = snow_depth
 
-	rain_fx = lerpf(rain_fx, 1.0 if weather == 2 else 0.0, 1.0 - exp(-delta * 1.4))
-	snow_fx = lerpf(snow_fx, 1.0 if weather >= 4 else 0.0, 1.0 - exp(-delta * 1.4))
-	storm_fx = lerpf(storm_fx, 1.0 if weather == 5 else 0.0, 1.0 - exp(-delta * 1.4))
 	if weather_fx != null:
 		weather_fx.wind = wind
 		weather_fx.set_intensity(rain_fx, snow_fx, storm_fx, delta)
@@ -589,7 +636,7 @@ func _process(delta: float) -> void:
 	_update_trample(delta)
 
 	var daylight := Daylight.evaluate(hour)
-	var coverage: float = [0.0, 1.0, 2.0, 1.0, 1.0, 2.0][clampi(weather, 0, 5)]
+	var coverage := weather_coverage
 	var overcast: float = clampf(coverage * 0.42, 0.0, 0.88)
 	if high_end_rendering and mist_material != null:
 		var golden := float(daylight["golden"])
@@ -670,8 +717,8 @@ func _process(delta: float) -> void:
 func _update_atmosphere(daylight: Dictionary) -> void:
 	if atmosphere_effect == null or orbit == null:
 		return
-	var coverage: float = [0.0, 1.0, 2.0, 1.0, 1.0, 2.0][clampi(weather, 0, 5)]
-	var density_scale: float = [1.0, 1.0, 1.0, 3.8, 1.4, 2.4][clampi(weather, 0, 5)]
+	var coverage := weather_coverage
+	var density_scale := weather_density
 	var from_index := int(daylight["from"])
 	var to_index := int(daylight["to"])
 	var blend := float(daylight["f"])

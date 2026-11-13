@@ -144,9 +144,30 @@ func _initialize() -> void:
 			failures.append("rain impact layer missing")
 		if weather.find_children("*", "GPUParticlesCollisionBox3D", true, false).size() < 30:
 			failures.append("rain canopy collisions missing")
+	var cascade = world.get("cascade_fx") if world != null else null
+	if cascade == null:
+		failures.append("cascade FX missing")
+	else:
+		if cascade.drop_multimesh == null or cascade.drop_multimesh.instance_count != 900:
+			failures.append("cascade droplet count wrong")
+		if cascade.vapor.size() != 24:
+			failures.append("cascade vapour count wrong")
+		if cascade.foam == null:
+			failures.append("cascade foam missing")
+		if not FileAccess.file_exists("res://shaders/cascade_foam.gdshader"):
+			failures.append("cascade foam shader missing")
+	# The six weather weights must ease, not snap, when the dropdown changes.
+	var cover_before := float(main.get("weather_coverage"))
+	main._on_weather_changed(2)
+	await process_frame
+	var cover_after := float(main.get("weather_coverage"))
+	if cover_after <= cover_before or cover_after >= 1.9:
+		failures.append("weather blend snapped")
+	main._on_weather_changed(0)
+	main._snap_weather_blend()
 
 	if failures.is_empty():
-		print("SMOKE PASS: world, tasks, garden, footprints, porch stand, night, seasons, quality, shafts, rain collisions, compositor shaders")
+		print("SMOKE PASS: world, tasks, garden, footprints, porch stand, night, seasons, quality, shafts, rain collisions, compositor shaders, weather blend, cascade FX")
 		quit(0)
 	else:
 		for failure in failures:
