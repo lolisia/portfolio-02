@@ -75,7 +75,7 @@ float shadow_visibility(vec3 p) {
 	}
 	float stored = texture(sun_shadow, suv).r * params.shadow_up.w;
 	float actual = dot(rel, params.shadow_forward.xyz);
-	return smoothstep(-0.18, 0.04, stored - actual);
+	return smoothstep(-0.12, 0.03, stored - actual);
 }
 
 void main() {

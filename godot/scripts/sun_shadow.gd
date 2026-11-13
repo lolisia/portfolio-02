@@ -8,8 +8,8 @@ class_name SunShadow
 
 const ShadowCaptureEffectScript = preload("res://scripts/shadow_capture.gd")
 
-const SHADOW_SIZE := 768
-const SHADOW_EXTENT := 44.0
+const SHADOW_SIZE := 1024
+const SHADOW_EXTENT := 40.0
 const CAMERA_DISTANCE := 60.0
 const CAMERA_FAR := 120.0
 
@@ -17,12 +17,16 @@ var viewport: SubViewport
 var camera: Camera3D
 var compositor: Compositor
 var capture: ShadowCaptureEffectScript
+var active := true
+var _last_direction := Vector3.ZERO
+var _has_direction := false
+var _post_draw_connected := false
 
 func setup(world: World3D) -> void:
 	viewport = SubViewport.new()
 	viewport.name = "SunShadowViewport"
 	viewport.size = Vector2i(SHADOW_SIZE, SHADOW_SIZE)
-	viewport.render_target_update_mode = SubViewport.UPDATE_ALWAYS
+	viewport.render_target_update_mode = SubViewport.UPDATE_DISABLED
 	viewport.msaa_3d = Viewport.MSAA_DISABLED
 	viewport.use_hdr_2d = true
 	viewport.transparent_bg = false
@@ -65,14 +69,39 @@ func set_sun(direction: Vector3) -> void:
 	var target := Vector3(0.0, 1.0, 0.0)
 	camera.position = target + dir * CAMERA_DISTANCE
 	camera.look_at(target, Vector3.UP)
+	# The shadow map only depends on the sun direction, not the orbit camera.
+	# Refresh it only when the sun has moved enough to matter.
+	if not _has_direction or _last_direction.dot(dir) < 0.999998:
+		_last_direction = dir
+		_has_direction = true
+		_request_update()
+
+func _request_update() -> void:
+	if not active or viewport == null:
+		return
+	viewport.render_target_update_mode = SubViewport.UPDATE_ALWAYS
+	if not _post_draw_connected:
+		_post_draw_connected = true
+		RenderingServer.frame_post_draw.connect(_on_post_draw)
+
+func _on_post_draw() -> void:
+	_post_draw_connected = false
+	RenderingServer.frame_post_draw.disconnect(_on_post_draw)
+	if viewport != null:
+		viewport.render_target_update_mode = SubViewport.UPDATE_DISABLED
 
 func capture_rid() -> RID:
 	return capture.capture_rid if capture != null else RID()
 
 func set_active(enabled: bool) -> void:
-	if viewport != null:
-		viewport.render_target_update_mode = (
-			SubViewport.UPDATE_ALWAYS if enabled else SubViewport.UPDATE_DISABLED)
+	active = enabled
+	if viewport == null:
+		return
+	if enabled:
+		_has_direction = false
+		_request_update()
+	else:
+		viewport.render_target_update_mode = SubViewport.UPDATE_DISABLED
 
 func shutdown() -> void:
 	if capture != null:

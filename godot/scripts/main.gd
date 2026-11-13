@@ -272,6 +272,10 @@ func _ready() -> void:
 		hour = 6.4
 		hour_target = 6.4
 		_apply_time(true)
+	if "--auto" in cli:
+		auto_time = true
+		auto_start = hour
+		auto_elapsed = 0.0
 	if "--sunrise" in cli:
 		orbit.set_view(Vector3(0.0, 1.0, 0.0), 1.57, 0.35, 1.0)
 	if "--gather" in cli:
