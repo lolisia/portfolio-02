@@ -787,20 +787,7 @@ func _cottage_parts(drop: float) -> void:
 	_door(0.0, F + 0.12, D * 0.5, 0.74, 1.3, true)
 	for x in [-0.95, 0.95]:
 		_window(x, F + 0.95, D * 0.5)
-	# Window flower boxes with red/orange blooms, as on the reference façade.
-	for x in [-0.95, 0.95]:
-		var box_y := F + 0.50
-		var box_z := D * 0.5 + 0.11
-		b.part("wood", x, box_y, box_z, 0.64, 0.16, 0.21, "#6b4a30")
-		b.part("soil", x, box_y + 0.09, box_z, 0.56, 0.035, 0.16, "#3a2a1c")
-		for j in range(4):
-			var fx := float(x) + (float(j) - 1.5) * 0.15
-			var stem_h := 0.13 + b.randf() * 0.08
-			b.part("flowerStem", fx, box_y + 0.10 + stem_h * 0.5, box_z,
-				0.085, stem_h, 0.085, "#5f8a3f", 0.0, b.randf() * TAU, 0.0, 0.18)
-			b.part("flowerHead", fx, box_y + 0.15 + stem_h, box_z,
-				0.17, 0.15, 0.17, b.pick(["#d8443a", "#e8634a", "#e7c464"]),
-				0.0, b.randf() * TAU, 0.0, 0.22)
+	# H12/X: the web façade has no window flower boxes; keep the windows bare.
 	for z in [-0.65, 0.75]:
 		b.place(W * 0.5, 0.0, z, 1.0, PI * 0.5, func() -> void:
 			_window(0.0, F + 0.95, 0.0)

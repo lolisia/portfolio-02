@@ -35,6 +35,16 @@ func _initialize() -> void:
 		if bare_color == null or (bare_color as Vector3).distance_to(
 				Vector3(0.36, 0.235, 0.135)) > 0.001:
 			failures.append("winter bare soil color wrong")
+		var flower_mmi := world.find_child("flowerHead", true, false) as MultiMeshInstance3D
+		if flower_mmi != null:
+			var window_z: float = world.cottage_origin.y + float(world.COTTAGE.D) * 0.5 + 0.11
+			for i in range(flower_mmi.multimesh.instance_count):
+				var flower_pos := flower_mmi.multimesh.get_instance_transform(i).origin
+				if absf(flower_pos.z - window_z) < 0.15 \
+						and (absf(flower_pos.x - (world.cottage_origin.x - 0.95)) < 0.12
+							or absf(flower_pos.x - (world.cottage_origin.x + 0.95)) < 0.12):
+					failures.append("window flower box still present")
+					break
 		if world.rose_bushes.size() != 4:
 			failures.append("rose bush count wrong")
 		else:
