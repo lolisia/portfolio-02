@@ -1,0 +1,14 @@
+[remap]
+
+importer="glsl"
+type="RDShaderFile"
+uid="uid://k4sbsn14bgte"
+path="res://.godot/imported/atmosphere_shafts.glsl-943d306845ffa248a63b4dee19a040bf.res"
+
+[deps]
+
+source_file="res://shaders/atmosphere_shafts.glsl"
+dest_files=["res://.godot/imported/atmosphere_shafts.glsl-943d306845ffa248a63b4dee19a040bf.res"]
+
+[params]
+

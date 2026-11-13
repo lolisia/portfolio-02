@@ -1,0 +1,14 @@
+[remap]
+
+importer="glsl"
+type="RDShaderFile"
+uid="uid://cvoflgx1qi5rg"
+path="res://.godot/imported/shadow_capture.glsl-c9955721db6867cd4d4150e01523f174.res"
+
+[deps]
+
+source_file="res://shaders/shadow_capture.glsl"
+dest_files=["res://.godot/imported/shadow_capture.glsl-c9955721db6867cd4d4150e01523f174.res"]
+
+[params]
+
