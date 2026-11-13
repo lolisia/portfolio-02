@@ -484,9 +484,9 @@ Godot의 사용자 인자는 `--` 뒤에 전달합니다.
 
 ## 5. 다음 세션 이어서 할 일 (추천 순서)
 
-1. **Sun shadow map 샘플링** (P1 후속)
-   - CompositorEffect API에서 직접 접근 불가 → 별도 shadow depth SubViewport 등 대안 검토
-   - 현재는 화면공간 depth-mask 근사로 아침 숲 빛줄기/램프 안개 구현 완료
+1. **커스텀 sun shadow pass 튜닝** (P1 후속)
+   - 768² 섀도 해상도/바이어스/갱신 주기 미세 조정
+   - `--noshadow` 폴백과 Mobile/Low 비활성 경로 검증
 2. **모바일 품질/프로파일링** (P6)
    - High/Medium/Low 실기기 검증, 해상도 스케일/그림자/파티클 예산
    - safe area, 적응형 해상도
