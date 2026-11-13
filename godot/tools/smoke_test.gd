@@ -29,6 +29,8 @@ func _initialize() -> void:
 			failures.append("snow surface does not rise")
 		if not world.meshes.has("tulipBloom"):
 			failures.append("procedural garden asset missing")
+		if world.window_glass_material == null:
+			failures.append("window interior material missing")
 		var house_y: float = world.height(-1.0, -2.5)
 		var deck_y: float = world.stand(-1.0, -0.4)
 		var step_y: float = world.stand(-1.0, 0.30)

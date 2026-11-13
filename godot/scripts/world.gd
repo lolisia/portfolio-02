@@ -29,7 +29,7 @@ var pond_shore := Vector2(6.9, 4.0)
 var lamps: Array = []
 var window_light: OmniLight3D
 var lamp_glass_material: StandardMaterial3D
-var window_glass_material: StandardMaterial3D
+var window_glass_material: ShaderMaterial
 var cottage_window := Vector3.ZERO
 var cottage_ridge := Vector3.ZERO
 var cottage_chimney := Vector3.ZERO
@@ -1157,8 +1157,11 @@ func _collect_materials() -> void:
 			var mat := mmi.material_override
 			if mmi.name == "lampglass" and mat is StandardMaterial3D:
 				lamp_glass_material = mat
-			if mmi.name == "glass" and mat is StandardMaterial3D:
-				window_glass_material = mat
+			if mmi.name == "glass":
+				var glass := ShaderMaterial.new()
+				glass.shader = preload("res://shaders/window_interior.gdshader")
+				mmi.material_override = glass
+				window_glass_material = glass
 			var name := String(mmi.name)
 			if mat is ShaderMaterial and (name.begins_with("turf") or name.begins_with("grass")):
 				_trample_materials.append(mat)

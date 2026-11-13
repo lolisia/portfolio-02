@@ -449,11 +449,12 @@ func _update_interior(delta: float, night: float) -> void:
 	var glow := warm.lerp(reading, lamp_tint * 0.5)
 	var near := 1.0 - smoothstep(0.2, 0.8, absf(person.y - (hz + float(cottage.D) * 0.5)))
 	if world.window_glass_material != null:
-		var glass_glow := glow.lerp(tv_color, tv_level * 0.25)
-		world.window_glass_material.emission = glass_glow
-		world.window_glass_material.emission_energy_multiplier = 0.025 + night * 2.5 * lamp_level
-		world.window_glass_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-		world.window_glass_material.albedo_color = Color(1.0, 1.0, 1.0, 0.42)
+		var glass := world.window_glass_material
+		glass.set_shader_parameter("night", night)
+		glass.set_shader_parameter("lamp_color", Vector3(glow.r, glow.g, glow.b))
+		glass.set_shader_parameter("lamp_level", lamp_level)
+		glass.set_shader_parameter("tv_color", Vector3(tv_color.r, tv_color.g, tv_color.b))
+		glass.set_shader_parameter("tv_level", tv_level)
 	if world.window_light != null:
 		var light := Color(1.0, 0.70, 0.34) * lamp_level
 		light += tv_color * (tv_level * 0.35)

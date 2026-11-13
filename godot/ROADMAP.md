@@ -182,6 +182,7 @@ Godot의 사용자 인자는 `--` 뒤에 전달합니다.
 | `shaders/stars.gdshader` | 별 dome additive |
 | `shaders/atmosphere_shafts.glsl` | 하프레스 안개·광선 레이마칭 compute |
 | `shaders/atmosphere_composite.glsl` | 안개/광선 full-res 합성 compute |
+| `shaders/window_interior.gdshader` | 창문 안쪽 실내(가구/커튼/램프/TV) |
 | `shaders/water.gdshader` | 물결/반사/색, 겨울 결빙 |
 | `shaders/waterfall.gdshader` | 폭포 |
 | `shaders/post_process.gdshader` | 화면 후처리 |
@@ -322,15 +323,15 @@ Godot의 사용자 인자는 `--` 뒤에 전달합니다.
 - 물고기: 수면 위로 점프(포물선 + 회전) + 입수/이수 물보라, 결빙 시 숨김.
 - 램프: 랜턴별 플리커/험, 글래스 emissive, additive 후광.
 - 풍향계: 청동 수탉 실루엣/허브 디테일 추가.
-- 실내: 창문/TV 컬러 플리커, 사람이 지나갈 때 창문 광량 감소, 창문 앞 사람 실루엣 쿼드.
+- 실내: 창문/TV 컬러 플리커, 사람이 지나갈 때 창문 광량 감소, 창문 앞 사람 실루엣 쿼드, 창문 안쪽 `window_interior` 실내(가구/커튼/램프/TV) 셰이더.
 - 반딧불/나방: 밤/계절/날씨 조건부.
 - 꽃정원: 절차적 꽃 메시로 튤립·라벤더·해바라기·폭스글러브·장미 구현.
 - 농가 좌우 울타리(기둥/레일)와 충돌체 추가.
-- 농가 주변 계단/먼 꽃정원 디테일은 아직 부분.
+- 농가 주변 계단/먼 꽃정원 디테일 완료.
 
 **남은 일**
 1. ~~농가 주변 계단/먼 꽃정원 디테일~~ — 원본의 4개 밭(근/원거리)과 꽃정원·장미·계단 배치 완료.
-2. 실내 실제 방/가구 메시는 원본에도 없음(창문 셰이더/실루엣) — 선택 사항.
+2. ~~실내 실제 방/가구~~ — 창문 안쪽을 `window_interior` 셰이더로 가구/커튼/램프/TV 표현. 실제 방 메시는 원본에도 없음.
 
 **파일**
 - `scripts/farm_life.gd`
@@ -354,13 +355,13 @@ Godot의 사용자 인자는 `--` 뒤에 전달합니다.
 - `scripts/farm_paths.gd`: 0.6 타일 격자 그래프, `closest`, A* `route` 포팅.
 - 태스크/산책 경로를 A*로 생성; 낚시/수확/경례 목적지까지 장애물을 피해 이동.
 - 경례 후 문을 열고 실내 위치로 이동해 4.5초 숨은 뒤, 문 앞으로 돌아와 다시 보임.
-- 실내 공간/가구는 없고 캐릭터 숨김으로 처리.
+- 창문 안쪽은 `window_interior` 셰이더로 가구/커튼/램프/TV를 표현; 실제 실내 공간 이동은 숨김 처리.
 - `--fishnear --fishtest`에서 연못까지 이동 후 낚시 상태 진입 확인.
 - `--pathdebug`로 A* 노드/엣지와 캐릭터의 현재 경로를 3D 오버레이로 표시.
 - 포치/계단 전용 그래프 체인과 `world.is_on_porch()`로 경례 시 데크까지 이동하며, y는 `world.stand()`를 사용.
 
 **남은 일**
-1. 실내 방/가구는 원본에도 실제 메시가 없어 창문 연출로 유지 — 선택.
+1. ~~실내 방/가구~~ — `window_interior` 창문 셰이더로 가구/커튼/램프/TV 표현 완료.
 2. ~~경로 캐시/그래프 디버그 시각화~~ — `--pathdebug`로 노드/엣지(초록)와 현재 경로(주황) 표시.
 3. ~~`stand()` 높이(데크/계단)와 경로 그래프 연동 정밀화~~ — 포치 체인·`is_on_porch`·경례 데크 목적지·스모크 라우팅 검사 완료.
 4. ~~태스크 반복 시 장기 안정성 테스트~~ — 60초 시뮬레이션 + 20초 경례 시퀀스 오류 없음.
@@ -483,7 +484,7 @@ Godot의 사용자 인자는 `--` 뒤에 전달합니다.
   - Unity-chan은 PNG 변환본 사용.
   - 원본 `public/`은 참고용; Godot 프로젝트에 복사된 에셋을 수정해야 함.
 - **개발 프리셋**
-  - `--house`, `--pond`, `--door`, `--fishtest`, `--fishnear`, `--gathernear`, `--falls`, `--porch`, `--bench`, `--auto`, `--storm`, `--pathdebug`, `--noshadow`, `--shadowdebug` 등은 개발용.
+  - `--house`, `--pond`, `--door`, `--fishtest`, `--fishnear`, `--gathernear`, `--falls`, `--porch`, `--window`, `--bench`, `--auto`, `--storm`, `--pathdebug`, `--noshadow`, `--shadowdebug` 등은 개발용.
   - 최종 빌드에서 제거하거나 유지 여부 결정.
 
 ---
