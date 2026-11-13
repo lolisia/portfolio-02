@@ -1470,25 +1470,8 @@ func _build_ground_cover() -> void:
 				b.pick(["#6f8d40", "#7e9949", "#8b9f4f"]), 0.0, turn, 0.0, 0.05)
 			obstacles.append([x, z, 0.42 * s3])
 
-	# Dense wildflower drifts across the meadow, matching the reference's
-	# spring/summer flower carpet. Clustered instead of evenly sprinkled.
-	for i in range(220):
-		var cx := b.randf() * 27.0 - 13.5
-		var cz := b.randf() * 27.0 - 13.5
-		if not clear(cx, cz):
-			continue
-		for j in range(4 + b.rng.randi_range(0, 3)):
-			var x := cx + (b.randf() - 0.5) * 1.15
-			var z := cz + (b.randf() - 0.5) * 1.15
-			if not clear(x, z):
-				continue
-			var s := 0.58 + b.randf() * 0.78
-			var turn := b.randf() * TAU
-			var color := String(b.pick(["#ed8d48", "#d55a3e", "#e7c464", "#e9e2c4",
-				"#a1a6c6", "#e58fae", "#c94b3a", "#f2f0e0"]))
-			var y := height(x, z) - 0.01
-			b.part("flowerStem", x, y, z, s, s, s, "#6f8f45", 0.0, turn, 0.0, 0.25)
-			b.part("flowerHead", x, y, z, s, s, s, color, 0.0, turn, 0.0, 0.25)
+	# M4(X): the web has no separate wildflower drifts; the 440-point scatter
+	# above (a single-colour cluster every fourth point) is the only source.
 
 	# Shallow gravel and reeds around the pond.
 	for i in range(850):
