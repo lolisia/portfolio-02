@@ -168,6 +168,8 @@ func _ready() -> void:
 		cli.append(arg)
 	if "--house" in cli:
 		orbit.set_view(Vector3(-1.0, 1.6, -1.2), 0.6747, 0.438, 3.0)
+	if "--coop" in cli:
+		orbit.set_view(Vector3(2.25, 1.7, -1.6), 0.0, 0.438, 3.3)
 	if "--char" in cli:
 		orbit.set_view(Vector3(-1.0, 0.65, 0.85), 0.0, 1.05, 7.0)
 	if "--char2" in cli:

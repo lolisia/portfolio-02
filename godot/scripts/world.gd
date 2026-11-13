@@ -414,17 +414,20 @@ func _window(x: float, y: float, z: float, w: float = 0.62, h: float = 0.74, shu
 			for f in [-0.3, 0.3]:
 				b.part("wood", sx, y + f * h, z + 0.06, 0.24, 0.06, 0.02, "#5d6847")
 
-func _door(x: float, y0: float, z: float, w: float = 0.74, h: float = 1.3) -> void:
+func _door(x: float, y0: float, z: float, w: float = 0.74, h: float = 1.3,
+		has_leaf: bool = false) -> void:
 	b.part("wood", x, y0 + h * 0.5, z + 0.005, w, h, 0.01, "#211811")
-	for i in range(5):
-		b.part("wood", x - w * 0.5 + (i + 0.5) * w / 5.0, y0 + h * 0.5, z + 0.03,
-			w / 5.0 - 0.012, h - 0.02, 0.04, b.pick(["#6a432b", "#73492f", "#5f3c27"]))
-	for f in [0.22, 0.78]:
-		b.part("wood", x, y0 + h * f, z + 0.06, w - 0.08, 0.08, 0.02, "#4e3322")
+	if not has_leaf:
+		for i in range(5):
+			b.part("wood", x - w * 0.5 + (i + 0.5) * w / 5.0, y0 + h * 0.5, z + 0.03,
+				w / 5.0 - 0.012, h - 0.02, 0.04, b.pick(["#6a432b", "#73492f", "#5f3c27"]))
+		for f in [0.22, 0.78]:
+			b.part("wood", x, y0 + h * f, z + 0.06, w - 0.08, 0.08, 0.02, "#4e3322")
 	for s in [-1.0, 1.0]:
 		b.part("wood", x + s * (w * 0.5 + 0.05), y0 + (h + 0.08) * 0.5, z + 0.045, 0.1, h + 0.08, 0.09, "#563a27")
 	b.part("wood", x, y0 + h + 0.08, z + 0.05, w + 0.22, 0.1, 0.1, "#563a27")
-	b.part("iron", x + w * 0.5 - 0.12, y0 + h * 0.5, z + 0.075, 0.04, 0.1, 0.04, "#2f2a24")
+	if not has_leaf:
+		b.part("iron", x + w * 0.5 - 0.12, y0 + h * 0.5, z + 0.075, 0.04, 0.1, 0.04, "#2f2a24")
 
 func _railing(ax: float, az: float, bx: float, bz: float, y: float, rail_h: float = 0.55, end_post: bool = true) -> void:
 	var length := sqrt((bx - ax) * (bx - ax) + (bz - az) * (bz - az))
@@ -488,15 +491,17 @@ func _cottage_parts(drop: float) -> void:
 	b.part("wood", 0.0, F + (H + knee) * 0.5, 0.0, W - 0.12, H + knee, D - 0.12, core)
 
 	# Horizontal siding, butt-jointed at a random point on each face.
+	# Web order: x faces use the full H+knee with 10 courses, z faces use H
+	# with 8 courses.
 	for s in [-1.0, 1.0]:
 		for k in range(10):
 			var y := F + (k + 0.5) * (H + knee) / 10.0
-			var col: String = String(b.pick(TIMBER))
-			b.part("wood", 0.0, y, float(s) * (D * 0.5 - 0.03), W - 0.14, (H + knee) / 10.0 - 0.016, 0.06, col)
+			b.part("wood", float(s) * (W * 0.5 - 0.03), y, 0.0, 0.06,
+				(H + knee) / 10.0 - 0.016, D - 0.14, b.pick(TIMBER))
 		for k in range(8):
 			var y2 := F + (k + 0.5) * H / 8.0
-			var col2: String = String(b.pick(TIMBER))
-			b.part("wood", float(s) * (W * 0.5 - 0.03), y2, 0.0, 0.06, H / 8.0 - 0.016, D - 0.14, col2)
+			b.part("wood", 0.0, y2, float(s) * (D * 0.5 - 0.03), W - 0.14,
+				H / 8.0 - 0.016, 0.06, b.pick(TIMBER))
 
 	# Corner posts and belt bands.
 	for x in [-W * 0.5, W * 0.5]:
@@ -506,7 +511,7 @@ func _cottage_parts(drop: float) -> void:
 	b.part("wood", 0.0, top + 0.07, 0.0, W + 0.26, 0.14, D + 0.26, trim)
 
 	# Front door and windows.
-	_door(0.0, F + 0.12, D * 0.5)
+	_door(0.0, F + 0.12, D * 0.5, 0.74, 1.3, true)
 	for x in [-0.95, 0.95]:
 		_window(x, F + 0.95, D * 0.5)
 	# Window flower boxes with red/orange blooms, as on the reference façade.
@@ -594,8 +599,8 @@ func _cottage_parts(drop: float) -> void:
 		var cw := lz / cols
 		for j in range(rows):
 			var t := (j + 0.6) / rows
-			var x: float = float(s) * t * span
-			var y := E + (1.0 - t) * span * slope + 0.085
+			var x: float = float(s) * t * span + float(s) * sin(pitch) * 0.085
+			var y := E + (1.0 - t) * span * slope + cos(pitch) * 0.085
 			var shift := cw * 0.5 if j % 2 else 0.0
 			for i in range(cols + 1):
 				var a := maxf(z_back, z_back + i * cw - shift)
@@ -604,11 +609,16 @@ func _cottage_parts(drop: float) -> void:
 					continue
 				b.part("clay", x, y, (a + b2) * 0.5, step * 1.42, 0.035, b2 - a - 0.018 - b.randf() * 0.02,
 					b.pick(SHAKES), 0.0, 0.0, rz + s * 0.075)
-		b.part("clay", s * 0.11, E + 0.135, zc, 0.26, 0.05, lz + 0.06, "#3a281c", 0.0, 0.0, rz)
+		# Eave strip near the ridge (web: at(.11/span,.135)), offset along
+		# the roof normal instead of sitting at the eave height.
+		var eave_x := float(s) * 0.11 + float(s) * sin(pitch) * 0.135
+		var eave_y := E + span * slope - 0.11 * slope + cos(pitch) * 0.135
+		b.part("clay", eave_x, eave_y, zc, 0.26, 0.05, lz + 0.06, "#3a281c", 0.0, 0.0, rz)
+		# Barge boards at mid-slope (web: at(.5,.03)).
+		var barge_x := float(s) * 0.5 * span + float(s) * sin(pitch) * 0.03
+		var barge_y := E + 0.5 * span * slope + cos(pitch) * 0.03
 		for z in [z_front + 0.03, z_back - 0.03]:
-			b.part("wood", s * 0.5 * span, E + 0.03, z, L + 0.02, 0.2, 0.06, trim, 0.0, 0.0, rz)
-	# Ridge cap.
-	b.part("clay", 0.0, E + span * slope + 0.09, zc, 0.28, 0.1, lz + 0.12, "#7b5a43")
+			b.part("wood", barge_x, barge_y, z, L + 0.02, 0.2, 0.06, trim, 0.0, 0.0, rz)
 
 	# Chimney.
 	var ch_top := E + span * slope + 0.35
@@ -664,21 +674,25 @@ func _house_parts(coop: bool) -> void:
 		var span := w * 0.5 + 0.22
 		var pitch := atan(0.60)
 		var base := h + 0.29
-		for side in [-1.0, 1.0]:
-			var angle: float = float(side) * pitch
-			b.part("clay", 0.0, base + span * 0.60 * 0.5, side * span * 0.5,
-				d + 0.48, 0.16, span * sqrt(1.0 + 0.60 * 0.60), "#793f2e", 0.0, 0.0, angle)
-			for j in range(5):
-				for i in range(8):
-					var t := (j + 0.5) / 5.0
-					b.part("clay", (i + 0.5 - 4.0) * (d + 0.4) / 8.0,
-						base + (1.0 - t) * span * 0.60 + 0.105, side * t * span,
-						(d + 0.4) / 8.0 - 0.012, 0.08, span / 5.0 * 1.19,
-						b.pick(["#a64e35", "#b45739", "#aa5137", "#c06b45", "#98432f", "#b96141"]),
-						0.0, 0.0, angle - side * 0.06)
-		for i in range(7):
-			var f := (i + 0.5) / 7.0
-			b.part("wood", 0.0, base + f * span * 0.60, 0.0, d + 0.01, span * 0.60 / 7.0 + 0.01, w * (1.0 - f), b.pick(TIMBER))
+		b.place(0.0, 0.0, 0.0, 1.0, PI * 0.5, func() -> void:
+			for side in [-1.0, 1.0]:
+				var angle: float = float(side) * pitch
+				b.part("clay", 0.0, base + span * 0.60 * 0.5, side * span * 0.5,
+					d + 0.48, 0.16, span * sqrt(1.0 + 0.60 * 0.60), "#793f2e",
+					angle, 0.0, 0.0)
+				for j in range(5):
+					for i in range(8):
+						var t := (j + 0.5) / 5.0
+						b.part("clay", (i + 0.5 - 4.0) * (d + 0.4) / 8.0,
+							base + (1.0 - t) * span * 0.60 + 0.105, side * t * span,
+							(d + 0.4) / 8.0 - 0.012, 0.08, span / 5.0 * 1.19,
+							b.pick(["#a64e35", "#b45739", "#aa5137", "#c06b45", "#98432f", "#b96141"]),
+							angle - float(side) * 0.06, 0.0, 0.0)
+			for i in range(7):
+				var f := (i + 0.5) / 7.0
+				b.part("wood", 0.0, base + f * span * 0.60, 0.0, d + 0.01,
+					span * 0.60 / 7.0 + 0.01, w * (1.0 - f), b.pick(TIMBER))
+		)
 	)
 
 func _build_coop(cx: float, cz: float, rot: float) -> void:
