@@ -26,23 +26,8 @@ void fragment() {
 	vec2 lens_uv = clamp(uv - dir * edge * lens_strength, vec2(0.001), vec2(0.999));
 
 	vec3 color = texture(screen_tex, lens_uv).rgb;
-	float inside = 1.0 - smoothstep(-0.008, 0.0, sd);
-	if (inside > 0.01) {
-		// Frosted glass: a small screen-space blur behind the panel, like the
-		// original panel's backdrop-filter.
-		vec2 texel = 1.0 / max(viewport_size, vec2(1.0));
-		vec3 blurred = vec3(0.0);
-		float total = 0.0;
-		for (int y = -1; y <= 1; y++) {
-			for (int x = -1; x <= 1; x++) {
-				float weight = exp(-float(x * x + y * y) * 0.55);
-				vec2 offset = vec2(float(x), float(y)) * texel * 3.0;
-				blurred += texture(screen_tex, clamp(lens_uv + offset, vec2(0.001), vec2(0.999))).rgb * weight;
-				total += weight;
-			}
-		}
-		color = mix(color, blurred / max(total, 0.0001), inside * 0.78);
-	}
+	// I15: web composite only refracts at the panel bevel; it has no frosted
+	// blur behind the transparent panel.
 	float center_lum = dot(color, vec3(0.2126, 0.7152, 0.0722));
 	if (shaft_strength > 0.001 && sun_uv.x > -5.0) {
 		// Screen-space light shafts: march toward the sun through a bright-pass
