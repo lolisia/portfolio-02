@@ -56,6 +56,15 @@ func _initialize() -> void:
 		failures.append("season particles missing")
 	if main.get("quality_manager") == null:
 		failures.append("quality manager missing")
+	var ui = main.get("ui")
+	if ui == null or ui.get("horizon_preview") == null:
+		failures.append("motion preview missing")
+	else:
+		ui.set_reduced_motion(true)
+		if not ui.horizon_preview.reduced_motion or not ui.wind_preview.reduced_motion \
+				or not ui.weather_preview.reduced_motion:
+			failures.append("reduced motion not applied")
+		ui.set_reduced_motion(false)
 	if not FileAccess.file_exists("res://shaders/atmosphere_shafts.glsl"):
 		failures.append("atmosphere shaft shader missing")
 	if not FileAccess.file_exists("res://shaders/atmosphere_composite.glsl"):

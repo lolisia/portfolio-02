@@ -14,6 +14,7 @@ const LIGHT := Color(0.72, 0.79, 0.76)
 const SUN := Color(0.77, 0.65, 0.43)
 
 var mode := MODE_HORIZON
+var reduced_motion := false
 var hour := 8.5
 var hour_target := 8.5
 var wind := 3.0
@@ -48,7 +49,7 @@ func set_weather(index: int) -> void:
 func _process(delta: float) -> void:
 	if not is_visible_in_tree():
 		return
-	var k := 1.0 - exp(-delta * 5.0)
+	var k := 1.0 if reduced_motion else 1.0 - exp(-delta * 5.0)
 	var diff := fposmod(hour_target - hour + 12.0, 24.0) - 12.0
 	hour = fposmod(hour + diff * k, 24.0)
 	wind = lerpf(wind, wind_target, k)
@@ -58,7 +59,8 @@ func _process(delta: float) -> void:
 	snow = lerpf(snow, 1.0 if weather >= 4 else 0.0, k)
 	fog = lerpf(fog, 1.0 if weather == 3 else 0.0, k)
 	storm = lerpf(storm, 1.0 if weather == 5 else 0.0, k)
-	phase += delta * wind * 0.32
+	if not reduced_motion:
+		phase += delta * wind * 0.32
 	queue_redraw()
 
 func _draw() -> void:
@@ -112,8 +114,9 @@ func _draw_wind() -> void:
 	draw_circle(Vector2(cx, h * 0.80), w * 0.13, Color(0.50, 0.60, 0.58, 0.20))
 	draw_line(Vector2(cx, h * 0.80), hub, DEEP, maxf(2.0, w * 0.018), true)
 	var cups: Array = []
+	var t := 0.0 if reduced_motion else phase
 	for i in range(3):
-		var angle := phase * 1.8 + float(i) * TAU / 3.0
+		var angle := t * 1.8 + float(i) * TAU / 3.0
 		cups.append({
 			"x": cx + w * 0.34 * cos(angle),
 			"y": hub.y + h * 0.13 * sin(angle),
@@ -130,18 +133,19 @@ func _draw_wind() -> void:
 func _draw_weather() -> void:
 	var w := size.x
 	var h := size.y
+	var t := 0.0 if reduced_motion else phase
 	var sun_pos := Vector2(w * (0.40 - cloud * 0.16), h * (0.40 - cloud * 0.08))
 	draw_circle(sun_pos, minf(w, h) * 0.26, Color(SUN, 0.10 * (1.0 - cloud * 0.3)))
 	draw_circle(sun_pos, minf(w, h) * 0.16, Color(SUN, (1.0 - cloud * 0.45)))
 	if cloud > 0.01:
-		var drift := sin(phase * 0.35) * w * 0.02
+		var drift := sin(t * 0.35) * w * 0.02
 		_draw_cloud(Vector2(w * 0.54 + drift, h * 0.44), w * 0.032, Color(0.62, 0.71, 0.69, 0.55 * cloud))
 		_draw_cloud(Vector2(w * 0.67 + drift, h * 0.38), w * 0.040, Color(0.80, 0.86, 0.84, 0.70 * cloud))
 	var power := rain + snow
 	var ice := snow / maxf(power, 0.001)
 	if power > 0.01:
 		for i in range(10):
-			var f := fposmod(phase * (0.65 - 0.4 * ice + storm * 0.5) + float(i) * 0.618, 1.0)
+			var f := fposmod(t * (0.65 - 0.4 * ice + storm * 0.5) + float(i) * 0.618, 1.0)
 			var x := w * 0.30 + fposmod(float(i) * 31.0, 65.0) / 220.0 * w - f * (5.0 + storm * 21.0) * w / 220.0
 			var y := h * 0.62 + f * h * 0.28
 			var alpha := power * minf(1.0, minf(f * 7.0, (1.0 - f) * 5.0)) * 0.8
@@ -152,7 +156,7 @@ func _draw_weather() -> void:
 	if fog > 0.01:
 		for i in range(3):
 			var alpha2 := fog * (0.7 - i * 0.12)
-			var offset := sin(phase * 0.35 + i) * w * 0.03
+			var offset := sin(t * 0.35 + i) * w * 0.03
 			draw_line(Vector2(w * 0.26 + offset + i * w * 0.03, h * (0.66 + i * 0.09)),
 				Vector2(w * 0.74 + offset - i * w * 0.04, h * (0.66 + i * 0.09)),
 				Color(LIGHT, alpha2), 3.0, true)

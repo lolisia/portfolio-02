@@ -69,7 +69,7 @@ func _ready() -> void:
 	_fit_model()
 	_find_face()
 	_build_fishing_gear()
-	position.y = world.height(position.x, position.z) if world != null else 0.0
+	position.y = world.stand(position.x, position.z) if world != null else 0.0
 	if world != null:
 		paths = FarmPaths.new(world)
 	_play("Standing", 0.0)
@@ -176,7 +176,7 @@ func _process(delta: float) -> void:
 		_walk_route(delta)
 
 	if world != null:
-		position.y = world.height(position.x, position.z)
+		position.y = world.stand(position.x, position.z)
 	_update_fishing_gear()
 
 	if blend_face != null and blink_index >= 0:

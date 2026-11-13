@@ -396,7 +396,7 @@ Godot의 사용자 인자는 `--` 뒤에 전달합니다.
    - 중급 Android 우선.
    - 발열/배터리/프레임 측정.
 2. 그림자/파티클 적응형 예산.
-3. 프리뷰 모션 감소(prefers-reduced-motion) 옵션.
+3. ~~프리뷰 모션 감소(prefers-reduced-motion)~~ — 패널 체크박스로 미리보기 모션 정지 구현.
 
 **파일**
 - `scripts/game_ui.gd`

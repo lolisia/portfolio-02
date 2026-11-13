@@ -8,6 +8,7 @@ signal season_changed(index: int)
 signal auto_toggled(enabled: bool)
 signal reset_requested
 signal quality_changed(index: int)
+signal reduced_motion_changed(enabled: bool)
 
 const MotionPreviewScript = preload("res://scripts/motion_preview.gd")
 
@@ -16,6 +17,7 @@ var wind_slider: HSlider
 var time_value: Label
 var wind_value: Label
 var auto_check: CheckBox
+var motion_check: CheckBox
 var weather_option: OptionButton
 var season_option: OptionButton
 var quality_option: OptionButton
@@ -144,6 +146,11 @@ func _ready() -> void:
 	auto_check.button_pressed = false
 	body.add_child(auto_check)
 
+	motion_check = CheckBox.new()
+	motion_check.text = "모션 감소 (미리보기 정지)"
+	motion_check.button_pressed = false
+	body.add_child(motion_check)
+
 	# Wind row.
 	var wind_row := HBoxContainer.new()
 	wind_row.add_theme_constant_override("separation", 12)
@@ -243,6 +250,7 @@ func _ready() -> void:
 	time_slider.value_changed.connect(_on_time_changed)
 	wind_slider.value_changed.connect(_on_wind_changed)
 	auto_check.toggled.connect(func(on: bool) -> void: auto_toggled.emit(on))
+	motion_check.toggled.connect(func(on: bool) -> void: set_reduced_motion(on))
 	weather_option.item_selected.connect(func(index: int) -> void:
 		weather_preview.set_weather(index)
 		weather_changed.emit(index))
@@ -252,6 +260,7 @@ func _ready() -> void:
 	time_slider.custom_minimum_size = Vector2(0, 28)
 	wind_slider.custom_minimum_size = Vector2(0, 28)
 	auto_check.custom_minimum_size = Vector2(0, 30)
+	motion_check.custom_minimum_size = Vector2(0, 30)
 	get_viewport().size_changed.connect(_apply_responsive_layout)
 	_apply_responsive_layout()
 	horizon_preview.set_time(time_slider.value)
@@ -347,6 +356,17 @@ func set_auto(enabled: bool) -> void:
 
 func is_auto() -> bool:
 	return auto_check.button_pressed
+
+func set_reduced_motion(enabled: bool) -> void:
+	if motion_check != null and motion_check.button_pressed != enabled:
+		motion_check.set_pressed_no_signal(enabled)
+	for preview in [horizon_preview, wind_preview, weather_preview]:
+		if preview != null:
+			preview.reduced_motion = enabled
+	reduced_motion_changed.emit(enabled)
+
+func is_reduced_motion() -> bool:
+	return motion_check != null and motion_check.button_pressed
 
 func is_panel_open() -> bool:
 	return body_control != null and body_control.visible
