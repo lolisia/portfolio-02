@@ -296,6 +296,8 @@ func _ready() -> void:
 		day_cycle.apply(hour, weather, season)
 		weather_fx.set_weather(weather)
 	if "--panel" in cli:
+		ui.set_panel_open(true, true)
+	if "--panel-fold" in cli:
 		ui.set_panel_open(true)
 	if "--night" in cli:
 		hour = 22.0

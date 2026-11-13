@@ -29,6 +29,7 @@ var wind_preview: MotionPreviewScript
 var weather_preview: MotionPreviewScript
 var panel_control: PanelContainer
 var body_control: VBoxContainer
+var body_clip: Control
 var toggle_button: Button
 var toggle_action: Label
 var bottom_box: VBoxContainer
@@ -44,6 +45,9 @@ var reduced_motion := false
 var quality_index := 0
 var weather_index := 0
 var season_index := 1
+var panel_open := false
+var full_body_height := 0.0
+var _panel_tween: Tween
 var _syncing := false
 var _bold_font: FontVariation
 
@@ -132,7 +136,7 @@ func _ready() -> void:
 	toggle_button.add_theme_font_size_override("font_size", 12)
 	toggle_button.add_theme_font_override("font", _bold_font)
 	toggle_button.pressed.connect(func() -> void:
-		set_panel_open(not body_control.visible)
+		set_panel_open(not panel_open)
 	)
 	outer.add_child(toggle_button)
 	toggle_action = Label.new()
@@ -145,10 +149,19 @@ func _ready() -> void:
 	toggle_action.offset_right = -22
 	toggle_button.add_child(toggle_action)
 
+	body_clip = Control.new()
+	body_clip.name = "PanelBodyClip"
+	body_clip.clip_contents = true
+	body_clip.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	body_clip.custom_minimum_size = Vector2(0, 0)
+	body_clip.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	outer.add_child(body_clip)
 	body_control = VBoxContainer.new()
+	body_control.name = "PanelBody"
 	body_control.add_theme_constant_override("separation", 0)
 	body_control.visible = false
-	outer.add_child(body_control)
+	body_clip.add_child(body_control)
+	body_clip.resized.connect(_layout_body)
 
 	_build_time_row()
 	_build_wind_row()
@@ -164,6 +177,7 @@ func _ready() -> void:
 	auto_check.toggled.connect(func(on: bool) -> void: auto_toggled.emit(on))
 	get_viewport().size_changed.connect(_apply_responsive_layout)
 	_apply_responsive_layout()
+	_refresh_body_height()
 	horizon_preview.set_time(time_slider.value)
 	wind_preview.set_wind(wind_slider.value)
 	weather_preview.set_weather(weather_index)
@@ -500,6 +514,7 @@ func _apply_responsive_layout() -> void:
 		credit_label.grow_vertical = Control.GROW_DIRECTION_BEGIN
 	_update_time_thumb()
 	_update_wind_thumb()
+	_refresh_body_height()
 
 func _on_time_changed(value: float) -> void:
 	if not _syncing:
@@ -560,7 +575,7 @@ func is_reduced_motion() -> bool:
 	return reduced_motion
 
 func is_panel_open() -> bool:
-	return body_control != null and body_control.visible
+	return panel_open
 
 func get_time() -> float:
 	return time_slider.value
@@ -584,17 +599,64 @@ func set_quality(index: int) -> void:
 func get_quality() -> int:
 	return quality_index
 
-func set_panel_open(open: bool) -> void:
-	if body_control == null:
+func set_panel_open(open: bool, instant: bool = false) -> void:
+	if body_control == null or body_clip == null:
 		return
-	body_control.visible = open
+	panel_open = open
 	toggle_action.text = "접기  ▴" if open else "펼치기  ▾"
+	if _panel_tween != null and _panel_tween.is_valid():
+		_panel_tween.kill()
+	_refresh_body_height()
+	if instant:
+		body_control.visible = open
+		body_control.modulate.a = 1.0 if open else 0.0
+		body_clip.custom_minimum_size.y = full_body_height if open else 0.0
+		_layout_body()
+		return
 	if open:
+		body_control.visible = true
 		body_control.modulate.a = 0.0
-		var tween := create_tween()
-		tween.tween_property(body_control, "modulate:a", 1.0, 0.30)
+		body_clip.custom_minimum_size.y = 0.0
+		_layout_body()
 	else:
-		body_control.modulate.a = 1.0
+		if body_clip.custom_minimum_size.y <= 0.01:
+			body_control.visible = false
+			return
+	_panel_tween = create_tween()
+	_panel_tween.set_parallel(true)
+	_panel_tween.tween_property(body_clip, "custom_minimum_size:y",
+		full_body_height if open else 0.0, 0.42) \
+		.set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+	_panel_tween.tween_property(body_control, "modulate:a",
+		1.0 if open else 0.0, 0.30) \
+		.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
+	if not open:
+		_panel_tween.chain().tween_callback(func() -> void:
+			body_control.visible = false
+		)
+
+func _refresh_body_height() -> void:
+	if body_control == null or body_clip == null:
+		return
+	full_body_height = body_control.get_combined_minimum_size().y
+	if panel_open:
+		body_clip.custom_minimum_size.y = full_body_height
+	_layout_body()
+
+func _layout_body() -> void:
+	if body_control == null or body_clip == null:
+		return
+	body_control.position = Vector2.ZERO
+	body_control.size = Vector2(body_clip.size.x,
+		maxf(full_body_height, body_clip.size.y))
+
+func _unhandled_input(event: InputEvent) -> void:
+	if not panel_open:
+		return
+	if event is InputEventKey and event.pressed and not event.echo \
+			and event.keycode == KEY_ESCAPE:
+		set_panel_open(false)
+		get_viewport().set_input_as_handled()
 
 func get_panel_rect() -> Rect2:
 	if panel_control == null:

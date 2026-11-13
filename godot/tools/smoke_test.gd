@@ -135,6 +135,25 @@ func _initialize() -> void:
 				or not ui.weather_preview.reduced_motion:
 			failures.append("reduced motion not applied")
 		ui.set_reduced_motion(false)
+		ui.set_panel_open(true, true)
+		if not ui.is_panel_open() or float(ui.full_body_height) <= 10.0:
+			failures.append("panel did not open")
+		var full_body: float = float(ui.full_body_height)
+		ui.set_panel_open(false, true)
+		if ui.is_panel_open():
+			failures.append("panel did not close")
+		ui.set_panel_open(true)
+		await create_timer(0.15).timeout
+		var mid_body := float(ui.body_clip.custom_minimum_size.y)
+		if mid_body <= 0.0 or mid_body >= full_body:
+			failures.append("panel fold did not animate")
+		var escape := InputEventKey.new()
+		escape.pressed = true
+		escape.keycode = KEY_ESCAPE
+		ui._unhandled_input(escape)
+		if ui.is_panel_open():
+			failures.append("Escape did not close the panel")
+		ui.set_panel_open(false, true)
 	if not FileAccess.file_exists("res://shaders/atmosphere_shafts.glsl"):
 		failures.append("atmosphere shaft shader missing")
 	if not FileAccess.file_exists("res://shaders/atmosphere_composite.glsl"):
@@ -178,6 +197,7 @@ func _initialize() -> void:
 	# The six weather weights must ease, not snap, when the dropdown changes.
 	var cover_before := float(main.get("weather_coverage"))
 	main._on_weather_changed(2)
+	await process_frame
 	await process_frame
 	var cover_after := float(main.get("weather_coverage"))
 	if cover_after <= cover_before or cover_after >= 1.9:
