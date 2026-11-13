@@ -80,6 +80,13 @@ func _initialize() -> void:
 						or absf(absf(rose_offset.y) - 0.83) > 0.06:
 					failures.append("rose bush not at a garden corner")
 					break
+		var reflection = main.get("water_reflection")
+		if reflection != null:
+			if reflection.pond_east - reflection.pond_west < 8.0 \
+					or reflection.pond_south - reflection.pond_north < 6.0:
+				failures.append("pond reflection crop bounds wrong")
+			if int(reflection.resolution_height) != 512:
+				failures.append("pond reflection crop resolution wrong")
 		if world.garden_plant_count != 86:
 			failures.append("garden planting count wrong: " + str(world.garden_plant_count))
 		if world.gravel_slab_count != 20:
