@@ -21,6 +21,10 @@ var ripple_items: Array = []
 var ripple_cursor := 0
 var ripple_accum := 0.0
 var ground_accum := 0.0
+var water_material: ShaderMaterial
+var water_impacts: Array = []
+var water_time := 0.0
+var impact_cursor := 0
 const RIPPLE_CAPACITY := 160
 
 func _ready() -> void:
@@ -42,6 +46,26 @@ func _ready() -> void:
 		snow_process.collision_mode = ParticleProcessMaterial.COLLISION_HIDE_ON_CONTACT
 	_build_roof_collisions()
 	_build_ripples()
+	_setup_water_impacts()
+
+func _setup_water_impacts() -> void:
+	if world == null or world.water == null:
+		return
+	water_material = world.water.material_override as ShaderMaterial
+	if water_material == null:
+		return
+	water_impacts.clear()
+	for i in range(18):
+		water_impacts.append(Vector4(0.0, 0.0, -100.0, 0.0))
+	water_material.set_shader_parameter("impacts", water_impacts)
+	water_material.set_shader_parameter("sim_time", 0.0)
+
+func _water_impact(x: float, z: float, power: float) -> void:
+	if water_material == null:
+		return
+	water_impacts[impact_cursor] = Vector4(x, z, water_time, power)
+	impact_cursor = (impact_cursor + 1) % 18
+	water_material.set_shader_parameter("impacts", water_impacts)
 
 func _make_particles(label: String, amount: int, lifetime: float, vmin: float, vmax: float,
 		color: Color, quad_size: Vector2) -> GPUParticles3D:
@@ -166,21 +190,20 @@ func _place_ripple(index: int, item: Dictionary) -> void:
 func _update_ripples(delta: float) -> void:
 	if world == null:
 		return
+	water_time += delta
+	if water_material != null:
+		water_material.set_shader_parameter("sim_time", water_time)
 	ripple_accum += delta * (7.0 + 26.0 * rain_level) * quality_scale
 	while ripple_accum >= 1.0:
 		ripple_accum -= 1.0
-		if rain_level <= 0.02:
+		if rain_level <= 0.02 or water_material == null:
 			continue
 		for attempt in range(16):
 			var x := randf_range(6.8, 13.9)
 			var z := randf_range(3.2, 9.2)
 			if world.height(x, z) >= world.water.position.y - 0.08:
 				continue
-			var index := ripple_cursor
-			ripple_cursor = (ripple_cursor + 1) % RIPPLE_CAPACITY
-			var item := {"x": x, "z": z, "life": 0.0, "scale": randf_range(0.10, 0.22)}
-			ripple_items[index] = item
-			_place_ripple(index, item)
+			_water_impact(x, z, 0.12)
 			break
 	ground_accum += delta * (4.0 + 16.0 * rain_level) * quality_scale
 	while ground_accum >= 1.0:
@@ -253,7 +276,13 @@ func set_weather(weather: int) -> void:
 		1.0 if weather == 5 else 0.0)
 
 func splash(x: float, z: float) -> void:
-	if world == null or ripple_mesh == null:
+	if world == null:
+		return
+	if water_material != null and world.height(x, z) < world.water.position.y - 0.04:
+		# E8: the web routes fish/rain splashes into the pond shader's impacts.
+		_water_impact(x, z, 0.26)
+		return
+	if ripple_mesh == null:
 		return
 	var index := ripple_cursor
 	ripple_cursor = (ripple_cursor + 1) % RIPPLE_CAPACITY

@@ -11,6 +11,8 @@ uniform sampler2D reflection_tex : filter_linear;
 uniform mat4 reflection_projection;
 uniform mat4 reflection_view;
 uniform float reflection_strength : hint_range(0.0, 1.0) = 0.0;
+uniform vec4 impacts[18];
+uniform float sim_time = 0.0;
 
 varying vec3 world_pos;
 varying vec4 mirror_coord;
@@ -110,6 +112,19 @@ void fragment() {
 	vec3 fine = pond_noise_d(world_pos.xz * vec2(23.0, 18.0)
 		+ vec2(-1.1, 0.75) * TIME);
 	slope += fine.yz * 0.024 * breeze;
+	// E8: 18 rain/fish impacts perturb the normal like water.js, instead of
+	// drawing separate ring decals on the pond surface.
+	for (int i = 0; i < 18; i++) {
+		float age = sim_time - impacts[i].z;
+		if (age >= 0.0 && age < 1.2) {
+			vec2 delta = world_pos.xz - impacts[i].xy;
+			float r = length(delta);
+			float crest = r - age * 0.78;
+			float pulse = sin(crest * 57.0) * exp(-abs(crest) * 22.0)
+				* (1.0 - smoothstep(0.0, 1.2, age));
+			slope += delta / max(0.016, r) * pulse * impacts[i].w;
+		}
+	}
 	slope *= (1.0 - freeze) * wave_strength;
 	vec3 world_normal = normalize(vec3(-slope.x, 1.0, -slope.y));
 	NORMAL = normalize((VIEW_MATRIX * vec4(world_normal, 0.0)).xyz);

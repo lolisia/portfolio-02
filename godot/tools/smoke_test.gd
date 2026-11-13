@@ -437,6 +437,14 @@ func _initialize() -> void:
 			failures.append("rain impact layer missing")
 		if weather.find_children("*", "GPUParticlesCollisionBox3D", true, false).size() < 30:
 			failures.append("rain canopy collisions missing")
+		if weather.water_material == null or weather.water_impacts.size() != 18:
+			failures.append("pond impact uniforms missing")
+		else:
+			weather.splash(10.7, 6.3)
+			var impact: Vector4 = weather.water_impacts[
+				(weather.impact_cursor + 17) % 18]
+			if impact.w <= 0.0 or absf(impact.x - 10.7) > 0.01:
+				failures.append("fish splash did not reach the pond shader")
 	var cascade = world.get("cascade_fx") if world != null else null
 	if cascade == null:
 		failures.append("cascade FX missing")
