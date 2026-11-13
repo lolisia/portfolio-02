@@ -53,6 +53,7 @@ var world_environment: WorldEnvironment
 var hour := 8.5
 var hour_target := 8.5
 var wind := 3.0
+var wind_target := 3.0
 var weather := 0
 const WEATHER_COVERAGE := [0.0, 1.0, 2.0, 1.0, 1.0, 2.0]
 const WEATHER_DENSITY := [1.0, 1.0, 1.0, 3.8, 1.4, 2.4]
@@ -68,7 +69,7 @@ var _surface_wet := -1.0
 var _surface_snow := -1.0
 var auto_time := false
 var auto_start := 8.5
-var auto_elapsed := 0.0
+var auto_origin_ms := 0
 var _wind_applied := -1.0
 var _last_apply_hour := -999.0
 var rain_fx := 0.0
@@ -238,7 +239,7 @@ func _ready() -> void:
 	_surface_snow = 0.0
 	_wind_applied = wind
 	weather_fx.set_weather(weather)
-	farm_life.hour = hour
+	farm_life.hour = fposmod(hour, 24.0)
 	farm_life.wind = wind
 	farm_life.weather = weather
 
@@ -310,8 +311,8 @@ func _ready() -> void:
 		_apply_time(true)
 	if "--auto" in cli:
 		auto_time = true
-		auto_start = hour
-		auto_elapsed = 0.0
+		auto_start = fposmod(hour, 24.0)
+		auto_origin_ms = Time.get_ticks_msec()
 	if "--sunrise" in cli:
 		orbit.set_view(Vector3(0.0, 1.0, 0.0), 1.57, 0.35, 1.0)
 	if "--gather" in cli:
@@ -581,19 +582,34 @@ func _process(delta: float) -> void:
 			get_tree().quit()
 			return
 	if auto_time:
-		auto_elapsed += delta
-		hour = fposmod(auto_start + auto_elapsed * 24.0 / 120.0, 24.0)
-		hour_target = hour
-		ui.set_time_value(hour)
-		_apply_time(false)
-	elif absf(hour - hour_target) > 0.001:
-		hour = lerpf(hour, hour_target, 1.0 - exp(-delta * 10.0))
-		if absf(hour - hour_target) < 0.002:
+		var elapsed := maxf(0.0, float(Time.get_ticks_msec() - auto_origin_ms))
+		var minutes := int(floor(fposmod(auto_start * 60.0 + elapsed * 1440.0 / 120000.0,
+			1440.0) + 1e-7)) % 1440
+		var target := float(minutes) / 60.0
+		if absf(target - hour_target) > 0.0001:
+			hour_target = target
+			ui.set_time_target(target)
+	var speed := 10.0 if auto_time else 3.2
+	var dh := hour_target - hour
+	if auto_time and dh < -12.0:
+		# Auto clock wraps forward through midnight instead of sliding back.
+		hour -= 24.0
+		dh += 24.0
+	if absf(dh) > 0.0001:
+		hour += dh * (1.0 - exp(-delta * speed))
+		if absf(hour_target - hour) < 0.002:
 			hour = hour_target
 		_apply_time(false)
-	if absf(_wind_applied - wind) > 0.001:
+	if absf(wind_target - wind) > 0.001:
+		wind = lerpf(wind, wind_target, 1.0 - exp(-delta * 1.6))
+		if absf(wind_target - wind) < 0.01:
+			wind = wind_target
 		world.set_wind(wind)
 		_wind_applied = wind
+	if ui != null:
+		ui.set_time_display(hour)
+		ui.set_wind_display(wind)
+	var clock_hour := fposmod(hour, 24.0)
 
 	_update_view_framing(delta)
 	if OS.has_feature("mobile"):
@@ -612,7 +628,7 @@ func _process(delta: float) -> void:
 				_apply_render_scale()
 
 	if farm_life != null:
-		farm_life.hour = hour
+		farm_life.hour = clock_hour
 		farm_life.wind = wind
 		farm_life.weather = weather
 	if character != null:
@@ -655,7 +671,7 @@ func _process(delta: float) -> void:
 	if farm_life != null:
 		farm_life.water_freeze = water_freeze
 	if character != null:
-		character.hour = hour
+		character.hour = clock_hour
 		character.wind = wind
 		character.water_freeze = water_freeze
 
@@ -823,16 +839,12 @@ func _apply_time(force: bool) -> void:
 		env.glow_enabled = false
 
 func _on_time_changed(value: float) -> void:
-	hour = value
 	hour_target = value
-	auto_start = value
-	auto_elapsed = 0.0
-	_apply_time(true)
+	auto_start = fposmod(value, 24.0)
+	auto_origin_ms = Time.get_ticks_msec()
 
 func _on_wind_changed(value: float) -> void:
-	wind = value
-	world.set_wind(wind)
-	_wind_applied = wind
+	wind_target = value
 
 func _on_weather_changed(index: int) -> void:
 	weather = index
@@ -847,8 +859,8 @@ func _on_season_changed(index: int) -> void:
 
 func _on_auto_toggled(enabled: bool) -> void:
 	auto_time = enabled
-	auto_start = hour
-	auto_elapsed = 0.0
+	auto_start = fposmod(hour_target, 24.0)
+	auto_origin_ms = Time.get_ticks_msec()
 
 func _on_reset_requested() -> void:
 	orbit.reset_view()

@@ -16,6 +16,10 @@ const SEASON_NAMES := ["봄", "여름", "가을", "겨울"]
 
 var time_slider: HSlider
 var wind_slider: HSlider
+var time_thumb: Panel
+var wind_thumb: Panel
+var time_display := 8.5
+var wind_display := 3.0
 var time_value: Label
 var wind_value: Label
 var auto_check: CheckBox
@@ -186,6 +190,9 @@ func _build_time_row() -> void:
 	caption.add_child(time_value)
 	time_slider = _new_slider(0.0, 24.0, 1.0 / 60.0, 8.5)
 	left.add_child(time_slider)
+	time_thumb = _new_thumb()
+	time_slider.add_child(time_thumb)
+	time_slider.resized.connect(_update_time_thumb)
 	auto_check = CheckBox.new()
 	auto_check.text = "시간 자동 진행"
 	auto_check.custom_minimum_size = Vector2(0, 22)
@@ -226,6 +233,9 @@ func _build_wind_row() -> void:
 	caption.add_child(wind_value)
 	wind_slider = _new_slider(0.0, 16.0, 0.5, 3.0)
 	left.add_child(wind_slider)
+	wind_thumb = _new_thumb()
+	wind_slider.add_child(wind_thumb)
+	wind_slider.resized.connect(_update_wind_thumb)
 	wind_preview = MotionPreviewScript.new()
 	wind_preview.mode = 1
 	_add_preview(row, wind_preview)
@@ -338,24 +348,45 @@ func _new_slider(minimum: float, maximum: float, step: float, initial: float) ->
 	slider.add_theme_stylebox_override("slider", track)
 	slider.add_theme_stylebox_override("grabber_area", fill)
 	slider.add_theme_stylebox_override("grabber_area_highlight", fill)
-	slider.add_theme_icon_override("grabber", _grabber_texture())
-	slider.add_theme_icon_override("grabber_highlight", _grabber_texture())
+	# The native grabber is hidden; a separate Panel glides over the track so
+	# the thumb follows the shown value rather than the slider target (I8).
+	slider.add_theme_icon_override("grabber", _empty_texture())
+	slider.add_theme_icon_override("grabber_highlight", _empty_texture())
 	return slider
 
-func _grabber_texture() -> ImageTexture:
-	var image := Image.create(15, 15, false, Image.FORMAT_RGBA8)
-	for y in range(15):
-		for x in range(15):
-			var dx := float(x) - 7.0
-			var dy := float(y) - 7.0
-			var r := sqrt(dx * dx + dy * dy)
-			if r > 5.4:
-				image.set_pixel(x, y, Color(0, 0, 0, 0))
-			elif r > 3.3:
-				image.set_pixel(x, y, Color(1, 1, 1, 1))
-			else:
-				image.set_pixel(x, y, Color(1, 1, 1, 0.24))
+func _empty_texture() -> ImageTexture:
+	var image := Image.create(1, 1, false, Image.FORMAT_RGBA8)
+	image.set_pixel(0, 0, Color(0, 0, 0, 0))
 	return ImageTexture.create_from_image(image)
+
+func _new_thumb() -> Panel:
+	var thumb := Panel.new()
+	thumb.custom_minimum_size = Vector2(11, 11)
+	thumb.size = Vector2(11, 11)
+	thumb.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var style := StyleBoxFlat.new()
+	style.bg_color = Color(1, 1, 1, 0.22)
+	style.border_color = Color(1, 1, 1, 1)
+	style.set_border_width_all(2)
+	style.set_corner_radius_all(6)
+	thumb.add_theme_stylebox_override("panel", style)
+	return thumb
+
+func _update_time_thumb() -> void:
+	if time_thumb == null or time_slider == null:
+		return
+	var t := clampf(fposmod(time_display, 24.0) / 24.0, 0.0, 1.0)
+	var span := maxf(time_slider.size.x - 14.0, 1.0)
+	time_thumb.position = Vector2(7.0 + span * t - 5.5,
+		time_slider.size.y * 0.5 - 5.5)
+
+func _update_wind_thumb() -> void:
+	if wind_thumb == null or wind_slider == null:
+		return
+	var t := clampf(wind_display / 16.0, 0.0, 1.0)
+	var span := maxf(wind_slider.size.x - 14.0, 1.0)
+	wind_thumb.position = Vector2(7.0 + span * t - 5.5,
+		wind_slider.size.y * 0.5 - 5.5)
 
 func _border_style(bg: Color, border: Color, radius: int, pad_x: int, pad_y: int) -> StyleBoxFlat:
 	var style := StyleBoxFlat.new()
@@ -467,36 +498,48 @@ func _apply_responsive_layout() -> void:
 		credit_label.offset_top = -28.0
 		credit_label.offset_bottom = -8.0
 		credit_label.grow_vertical = Control.GROW_DIRECTION_BEGIN
+	_update_time_thumb()
+	_update_wind_thumb()
 
 func _on_time_changed(value: float) -> void:
-	time_value.text = format_hour(value)
-	if horizon_preview != null:
-		horizon_preview.set_time(value)
 	if not _syncing:
 		time_changed.emit(value)
 
 func _on_wind_changed(value: float) -> void:
-	wind_value.text = str(round(value * 10.0) / 10.0) + " m/s"
-	if wind_preview != null:
-		wind_preview.set_wind(value)
 	if not _syncing:
 		wind_changed.emit(value)
 
-func set_time_value(value: float) -> void:
+func set_time_target(value: float) -> void:
 	_syncing = true
 	time_slider.value = value
 	_syncing = false
+
+func set_time_display(value: float) -> void:
+	time_display = fposmod(value, 24.0)
 	time_value.text = format_hour(value)
 	if horizon_preview != null:
 		horizon_preview.set_time(value)
+	_update_time_thumb()
 
-func set_wind_value(value: float) -> void:
+func set_time_value(value: float) -> void:
+	set_time_target(value)
+	set_time_display(value)
+
+func set_wind_target(value: float) -> void:
 	_syncing = true
 	wind_slider.value = value
 	_syncing = false
+
+func set_wind_display(value: float) -> void:
+	wind_display = value
 	wind_value.text = str(round(value * 10.0) / 10.0) + " m/s"
 	if wind_preview != null:
 		wind_preview.set_wind(value)
+	_update_wind_thumb()
+
+func set_wind_value(value: float) -> void:
+	set_wind_target(value)
+	set_wind_display(value)
 
 func set_auto(enabled: bool) -> void:
 	_syncing = true

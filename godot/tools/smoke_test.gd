@@ -185,8 +185,37 @@ func _initialize() -> void:
 	main._on_weather_changed(0)
 	main._snap_weather_blend()
 
+	# I8/I9: the slider targets change immediately, but the shown clock/wind
+	# glide and the auto clock advances in whole minutes.
+	var glide_ui = main.get("ui")
+	main.hour = 8.5
+	main.hour_target = 8.5
+	main.wind = 3.0
+	main.wind_target = 3.0
+	main._on_time_changed(12.0)
+	main._on_wind_changed(9.0)
+	await process_frame
+	await process_frame
+	var hour_after := float(main.get("hour"))
+	var wind_after := float(main.get("wind"))
+	if hour_after <= 8.5 or hour_after >= 12.0:
+		failures.append("hour did not glide")
+	if wind_after <= 3.0 or wind_after >= 9.0:
+		failures.append("wind did not glide")
+	if glide_ui != null and glide_ui.time_value.text == "12:00":
+		failures.append("hour label snapped to target")
+	main._on_auto_toggled(true)
+	var auto_start := float(main.get("hour_target"))
+	await create_timer(0.3).timeout
+	var auto_now := float(main.get("hour_target"))
+	if auto_now <= auto_start:
+		failures.append("auto clock did not advance")
+	if absf(auto_now * 60.0 - round(auto_now * 60.0)) > 0.01:
+		failures.append("auto clock not minute-quantized")
+	main._on_auto_toggled(false)
+
 	if failures.is_empty():
-		print("SMOKE PASS: world, tasks, garden, footprints, porch stand, night, seasons, quality, shafts, rain collisions, compositor shaders, weather blend, cascade FX")
+		print("SMOKE PASS: world, tasks, garden, footprints, porch stand, night, seasons, quality, shafts, rain collisions, compositor shaders, weather blend, cascade FX, UI glide")
 		quit(0)
 	else:
 		for failure in failures:
