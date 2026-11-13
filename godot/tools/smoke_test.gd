@@ -350,6 +350,19 @@ func _initialize() -> void:
 		if yaw_after <= yaw_before + 0.001 or yaw_after >= yaw_before + 0.5:
 			failures.append("orbit damping did not ease")
 		orbit.reset_view()
+	var day_cycle = main.get("day_cycle")
+	var sun = main.get("sun")
+	if day_cycle == null or sun == null:
+		failures.append("day cycle lighting missing")
+	else:
+		day_cycle.apply(12.0, 0, 1, 0.0)
+		var clear_energy := float(sun.light_energy)
+		day_cycle.apply(12.0, 5, 1, 2.0)
+		var storm_energy := float(sun.light_energy)
+		if clear_energy <= 0.0 or storm_energy > clear_energy * 0.30 \
+				or storm_energy < clear_energy * 0.20:
+			failures.append("weather sun dimming curve wrong")
+		main._apply_time(true)
 	if main.get("night_life") == null:
 		failures.append("night life missing")
 	if main.get("seasons_fx") == null:

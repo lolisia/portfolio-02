@@ -15,13 +15,14 @@ func setup(p_sun: DirectionalLight3D, p_fill: DirectionalLight3D, p_env: Environ
 	sky_material = p_sky
 	world = p_world
 
-func apply(hour: float, weather: int = 0, season: int = 1) -> void:
+func apply(hour: float, weather: int = 0, season: int = 1,
+		coverage_value: float = -1.0) -> void:
 	var t := Daylight.evaluate(hour)
 	var night: float = t["night"]
 	var golden: float = t["golden"]
-	var coverage: float = [0.0, 1.0, 2.0, 1.0, 1.0, 2.0][clampi(weather, 0, 5)]
+	var coverage: float = coverage_value if coverage_value >= 0.0 \
+		else [0.0, 1.0, 2.0, 1.0, 1.0, 2.0][clampi(weather, 0, 5)]
 	var overcast := clampf(coverage * 0.42, 0.0, 0.88)
-	var dim := 1.0 - overcast * 0.35
 	var moon: bool = t["direction"].y < 0.0
 
 	var sun_pos: Vector3 = t["direction"] * (33.0 if not moon else -33.0)
@@ -36,14 +37,19 @@ func apply(hour: float, weather: int = 0, season: int = 1) -> void:
 		sun_energy = 0.22 * smoothstep(0.0, 0.24, elevation)
 	else:
 		sun_energy = 1.16 * (1.0 + 1.1 * golden) * smoothstep(-0.02, 0.34, elevation)
-	sun_energy *= lerp(1.0, 0.55, overcast) * dim
+	# L5: web main.js weather curve — clear/cloudy eases to .52, then storm to .25.
+	sun_energy *= lerp(1.0, 0.52, minf(coverage, 1.0)) if coverage <= 1.0 \
+		else lerpf(0.52, 0.25, coverage - 1.0)
 
 	fill.light_color = Color(0.58, 0.73, 0.95)
 	fill.light_energy = (0.16 + 0.10 * (1.0 - night)) * (1.0 - overcast * 0.5)
 
 	var backdrop: Color = Daylight.color_at(Daylight.BACKDROP, t["from"], t["to"], t["f"])
 	var clear := 1.0 - minf(1.0, overcast * 1.1)
-	var dimming := 1.0 - overcast * 0.11
+	# Web dimming: 1→.92 over the first weather step, .92→.68 for a storm.
+	var dimming := lerpf(1.0, 0.92, minf(coverage, 1.0)) if coverage <= 1.0 \
+		else lerpf(0.92, 0.68, coverage - 1.0)
+	backdrop = backdrop.lerp(Color(0.56, 0.62, 0.66), overcast * 0.55)
 	var top_color: Color = backdrop.lerp(
 		Daylight.color_at(Daylight.SKY_BACK_TOP, t["from"], t["to"], t["f"]), 0.60 * clear)
 	var horizon_color: Color = backdrop.lerp(

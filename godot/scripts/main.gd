@@ -856,7 +856,7 @@ func _apply_time(force: bool) -> void:
 	if not force and absf(hour - _last_apply_hour) < 0.0005:
 		return
 	_last_apply_hour = hour
-	day_cycle.apply(hour, weather, season)
+	day_cycle.apply(hour, weather, season, weather_coverage)
 	if quality == 2:
 		env.glow_enabled = false
 
