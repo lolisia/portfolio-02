@@ -36,6 +36,10 @@ var gravel_slab_count := 0
 var wildflower_clusters := 0
 var pond_shore := Vector2(6.9, 4.0)
 var lamps: Array = []
+var lamp_pivots: Array = []
+var lamp_glass_materials: Array[StandardMaterial3D] = []
+var lamp_sway_time := 0.0
+var breeze := 0.375
 var window_light: OmniLight3D
 var lamp_glass_material: StandardMaterial3D
 var window_glass_material: ShaderMaterial
@@ -629,6 +633,15 @@ func _process(delta: float) -> void:
 	if not door_target_open and door_open < 0.06:
 		rebound = 0.025 * sin(door_open / 0.06 * PI)
 	door_leaf.rotation.y = -1.68 * k + rebound
+
+	lamp_sway_time += delta
+	for entry in lamp_pivots:
+		var pivot: Node3D = entry["pivot"]
+		var phase: float = float(entry["phase"])
+		var gust := sin(lamp_sway_time * 1.37 - phase) \
+			+ 0.42 * sin(lamp_sway_time * 2.31 - phase * 0.71)
+		pivot.rotation.z = gust * 0.11 * breeze
+		pivot.rotation.x = 0.037 * breeze * sin(lamp_sway_time * 1.55 - phase)
 
 func _cottage_steps(drop: float) -> int:
 	return maxi(1, int(round(drop / 0.16)))
@@ -1495,21 +1508,22 @@ func _build_ground_cover() -> void:
 				b.part("reed", a, height(a, c) - 0.02, c, 0.7, h * 1.6, 0.7,
 					b.pick(["#768449", "#8c9751", "#516f42"]), 0.0, b.randf() * TAU, 0.0, 0.3)
 
-func _lantern_parts(section: String) -> void:
+func _lantern_parts(section: String, target: DioramaBuilder = null) -> void:
+	var builder: DioramaBuilder = b if target == null else target
 	if section != "pendant":
-		b.part("stone", 0.0, 0.13, 0.0, 0.46, 0.26, 0.43, "#7a7867")
-		b.part("wood", 0.0, 1.27, 0.0, 0.14, 2.36, 0.15, "#865e3e")
-		b.part("wood", 0.24, 2.39, 0.0, 0.65, 0.13, 0.16, "#946b46")
-		b.part("wood", 0.17, 2.15, 0.0, 0.085, 0.55, 0.10, "#684832", 0.0, 0.0, -0.67)
+		builder.part("stone", 0.0, 0.13, 0.0, 0.46, 0.26, 0.43, "#7a7867")
+		builder.part("wood", 0.0, 1.27, 0.0, 0.14, 2.36, 0.15, "#865e3e")
+		builder.part("wood", 0.24, 2.39, 0.0, 0.65, 0.13, 0.16, "#946b46")
+		builder.part("wood", 0.17, 2.15, 0.0, 0.085, 0.55, 0.10, "#684832", 0.0, 0.0, -0.67)
 	if section == "post":
 		return
-	b.part("iron", 0.48, 2.26, 0.0, 0.045, 0.25, 0.05, "#403b32")
-	b.part("iron", 0.48, 2.12, 0.0, 0.39, 0.095, 0.36, "#4d493e")
-	b.part("lampglass", 0.48, 1.90, 0.0, 0.265, 0.35, 0.25, "#f6f2ea")
+	builder.part("iron", 0.48, 2.26, 0.0, 0.045, 0.25, 0.05, "#403b32")
+	builder.part("iron", 0.48, 2.12, 0.0, 0.39, 0.095, 0.36, "#4d493e")
+	builder.part("lampglass", 0.48, 1.90, 0.0, 0.265, 0.35, 0.25, "#f6f2ea")
 	for x in [0.33, 0.63]:
 		for z in [-0.14, 0.14]:
-			b.part("iron", x, 1.90, z, 0.035, 0.38, 0.035, "#453c32")
-	b.part("iron", 0.48, 1.68, 0.0, 0.36, 0.085, 0.33, "#443c32")
+			builder.part("iron", x, 1.90, z, 0.035, 0.38, 0.035, "#453c32")
+	builder.part("iron", 0.48, 1.68, 0.0, 0.36, 0.085, 0.33, "#443c32")
 
 func _build_lamps() -> void:
 	var placements := [
@@ -1527,13 +1541,25 @@ func _build_lamps() -> void:
 		b.place(x, y, z, 1.0, angle, func() -> void:
 			_lantern_parts("post")
 		)
-		b.place(x, y, z, 1.0, angle, func() -> void:
-			_lantern_parts("pendant")
-		)
 		obstacles.append([x, z, 0.2])
+		# M5: the pendant hangs from its own pivot so it can swing with the
+		# breeze; the spotlight travels with it like the web's lantern pivot.
+		var pivot := Node3D.new()
+		pivot.name = "LanternPivot"
+		pivot.position = Vector3(x + 0.48 * cos(angle), y + 2.385,
+			z - 0.48 * sin(angle))
+		pivot.rotation.y = angle
+		add_child(pivot)
+		var pendant := DioramaBuilder.new(pivot, meshes, 7000 + lamps.size() * 131)
+		pendant.place(-0.48, -2.385, 0.0, 1.0, 0.0, func() -> void:
+			_lantern_parts("pendant", pendant)
+		)
+		pendant.finish()
+		var phase := pivot.position.x * 0.39 + pivot.position.z * 0.23
+		lamp_pivots.append({"pivot": pivot, "phase": phase})
 		var light := SpotLight3D.new()
 		light.name = "LanternLight"
-		light.position = Vector3(x + 0.48 * cos(angle), y + 1.90, z - 0.48 * sin(angle))
+		light.position = Vector3(0.0, -0.485, 0.0)
 		light.light_color = Color(1.0, 0.92, 0.80)
 		light.light_energy = 0.0
 		light.spot_range = 8.0
@@ -1543,8 +1569,12 @@ func _build_lamps() -> void:
 		light.rotation_degrees = Vector3(-90.0, 0.0, 0.0)
 		light.shadow_enabled = true
 		light.shadow_bias = 0.04
-		add_child(light)
-		lamps.append({"light": light, "position": light.position})
+		pivot.add_child(light)
+		lamps.append({
+			"light": light,
+			"position": Vector3(x + 0.48 * cos(angle), y + 1.90,
+				z - 0.48 * sin(angle)),
+		})
 
 func _build_extra_lights() -> void:
 	window_light = OmniLight3D.new()
@@ -1558,20 +1588,22 @@ func _build_extra_lights() -> void:
 	add_child(window_light)
 
 func _collect_materials() -> void:
-	for child in get_children():
-		if child is MultiMeshInstance3D:
-			var mmi := child as MultiMeshInstance3D
-			var mat := mmi.material_override
-			if mmi.name == "lampglass" and mat is StandardMaterial3D:
-				lamp_glass_material = mat
-			if mmi.name == "glass":
-				var glass := ShaderMaterial.new()
-				glass.shader = preload("res://shaders/window_interior.gdshader")
-				mmi.material_override = glass
-				window_glass_material = glass
-			var name := String(mmi.name)
-			if mat is ShaderMaterial and (name.begins_with("turf") or name.begins_with("grass")):
-				_trample_materials.append(mat)
+	for node in find_children("*", "MultiMeshInstance3D", true, false):
+		var mmi := node as MultiMeshInstance3D
+		var mat := mmi.material_override
+		if mmi.name == "lampglass" and mat is StandardMaterial3D:
+			var glass_mat := mat as StandardMaterial3D
+			lamp_glass_materials.append(glass_mat)
+			if lamp_glass_material == null:
+				lamp_glass_material = glass_mat
+		if mmi.name == "glass":
+			var glass := ShaderMaterial.new()
+			glass.shader = preload("res://shaders/window_interior.gdshader")
+			mmi.material_override = glass
+			window_glass_material = glass
+		var name := String(mmi.name)
+		if mat is ShaderMaterial and (name.begins_with("turf") or name.begins_with("grass")):
+			_trample_materials.append(mat)
 
 func set_night(night: float) -> void:
 	for entry in lamps:
@@ -1580,11 +1612,12 @@ func set_night(night: float) -> void:
 		light.visible = night > 0.02
 	if window_light != null:
 		window_light.light_energy = night * 2.4
-	if lamp_glass_material != null:
-		lamp_glass_material.emission_energy_multiplier = 0.03 + night * 3.0
+	for glass in lamp_glass_materials:
+		glass.emission_energy_multiplier = 0.03 + night * 3.0
 
 func set_wind(wind_ms: float) -> void:
 	var strength := clampf(wind_ms / 8.0, 0.0, 2.0)
+	breeze = strength
 	for child in get_children():
 		if child is MultiMeshInstance3D:
 			var mat := (child as MultiMeshInstance3D).material_override

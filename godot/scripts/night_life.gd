@@ -300,11 +300,11 @@ func _update_lamps(delta: float, night: float) -> void:
 			if float(lamp["flicker"]) <= 0.0:
 				lamp["level"] = 1.0
 		var light: SpotLight3D = lamp["light"]
-		var hum := 1.0 + 0.025 * sin(time * 47.0 + light.position.x) * sin(time * 3.1)
+		var halo: MeshInstance3D = lamp["halo"]
+		var hum := 1.0 + 0.025 * sin(time * 47.0 + halo.position.x) * sin(time * 3.1)
 		var level: float = float(lamp["level"]) * hum
 		light.light_energy = night * 3.6 * level
 		light.visible = night > 0.02
-		var halo: MeshInstance3D = lamp["halo"]
 		halo.visible = night > 0.01
 		var material: StandardMaterial3D = lamp["material"]
 		var tint := material.albedo_color
@@ -313,8 +313,8 @@ func _update_lamps(delta: float, night: float) -> void:
 		total += level
 		count += 1
 	lamp_glass_average = total / maxf(float(count), 1.0)
-	if world.lamp_glass_material != null:
-		world.lamp_glass_material.emission_energy_multiplier = 0.03 + night * 3.0 * lamp_glass_average
+	for glass in world.lamp_glass_materials:
+		glass.emission_energy_multiplier = 0.03 + night * 3.0 * lamp_glass_average
 
 func _update_moths(delta: float, night: float, weather: int, season: int, wind: float) -> void:
 	var mild := season != 3 and weather in [0, 1, 3] and wind < 8.0

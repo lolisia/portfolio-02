@@ -101,6 +101,27 @@ func _initialize() -> void:
 				failures.append("leaf litter mask missing")
 		if world.boxes.is_empty():
 			failures.append("oriented collision boxes missing")
+		if world.lamp_pivots.size() != 5:
+			failures.append("lantern pivots missing")
+		for lamp_entry in world.lamp_pivots:
+			var lamp_pivot: Node3D = lamp_entry["pivot"]
+			var has_lamp_light := false
+			for child in lamp_pivot.get_children():
+				if child is SpotLight3D:
+					has_lamp_light = true
+			if not has_lamp_light:
+				failures.append("lantern pivot light missing")
+		if world.lamp_glass_materials.size() < 5:
+			failures.append("lantern glass materials missing")
+		world.breeze = 1.0
+		world.lamp_sway_time = 0.0
+		world._process(0.1)
+		var max_lamp_sway := 0.0
+		for lamp_entry in world.lamp_pivots:
+			max_lamp_sway = maxf(max_lamp_sway,
+				absf((lamp_entry["pivot"] as Node3D).rotation.z))
+		if max_lamp_sway < 0.001:
+			failures.append("lantern pivots do not sway")
 		var house_palette: Array = world.HOUSE_WOOD
 		if house_palette.size() != 4 or not "#815133" in house_palette \
 				or not "#aa7650" in house_palette:
