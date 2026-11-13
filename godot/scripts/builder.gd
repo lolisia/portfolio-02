@@ -134,6 +134,9 @@ func _material_for(kind: String) -> Material:
 		# Only low ground cover is flattened by walkers; trees keep their sway.
 		if kind.begins_with("turf") or kind.begins_with("grass"):
 			shader_mat.set_shader_parameter("trample_strength", 1.0)
+		# The web keeps pine needles evergreen in winter.
+		if kind == "pineANeedles":
+			shader_mat.set_shader_parameter("evergreen", 1.0)
 		return shader_mat
 	if kind == "glass" or kind == "lampglass":
 		var mat := StandardMaterial3D.new()
@@ -161,6 +164,11 @@ func _material_for(kind: String) -> Material:
 		"plaster": kind_index = 3
 		"soil": kind_index = 4
 		"iron": kind_index = 5
+	# Bark, twigs and stump parts use the wood grain rather than the default
+	# stone surface (the web gives them a dedicated rough bark recipe).
+	var lower_kind := kind.to_lower()
+	if "bark" in lower_kind or "twig" in lower_kind or lower_kind.begins_with("stump"):
+		kind_index = 0
 	var surface_mat := ShaderMaterial.new()
 	surface_mat.shader = preload("res://shaders/surface.gdshader")
 	surface_mat.set_shader_parameter("surface_kind", kind_index)

@@ -578,6 +578,9 @@ func _process(delta: float) -> void:
 	if absf(water_freeze - _water_freeze_applied) > 0.002:
 		world.set_water_freeze(water_freeze)
 		_water_freeze_applied = water_freeze
+	if weather_fx != null and weather_fx.spray != null:
+		weather_fx.spray.visible = water_freeze < 0.5
+		weather_fx.spray.emitting = water_freeze < 0.5
 	if farm_life != null:
 		farm_life.water_freeze = water_freeze
 

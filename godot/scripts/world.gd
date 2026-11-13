@@ -24,6 +24,7 @@ var terrain_material: ShaderMaterial
 var _trample_materials: Array[ShaderMaterial] = []
 var path_mask: ImageTexture
 var water: MeshInstance3D
+var cascade_materials: Array[ShaderMaterial] = []
 var veg_beds: Array = []
 var pond_shore := Vector2(6.9, 4.0)
 var lamps: Array = []
@@ -301,18 +302,62 @@ func _build_bridge() -> void:
 	)
 
 func _build_cascade() -> void:
-	var plane := PlaneMesh.new()
-	plane.size = Vector2(3.1, 2.95)
-	var mat := ShaderMaterial.new()
-	mat.shader = preload("res://shaders/waterfall.gdshader")
-	var falls := MeshInstance3D.new()
-	falls.name = "Cascade"
-	falls.mesh = plane
-	falls.position = Vector3(15.18, (WATER_Y + FLOOR_Y) * 0.5 - 0.05, 6.1)
-	falls.rotation.y = PI * 0.5
-	falls.material_override = mat
-	falls.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	add_child(falls)
+	cascade_materials.clear()
+	# Two curved, widening curtains instead of a single flat plane. The front
+	# sheet is bright; the back one is darker for depth, like cascade.js.
+	for entry in [[1.0, 0.0, "Cascade"], [0.92, -0.07, "CascadeBack"]]:
+		var width_scale: float = entry[0]
+		var x_offset: float = entry[1]
+		var shade := 1.0 if entry[2] == "Cascade" else 0.62
+		var mat := ShaderMaterial.new()
+		mat.shader = preload("res://shaders/waterfall.gdshader")
+		mat.set_shader_parameter("shade", shade)
+		mat.set_shader_parameter("freeze", 0.0)
+		cascade_materials.append(mat)
+		var falls := MeshInstance3D.new()
+		falls.name = entry[2]
+		falls.mesh = _cascade_curtain(width_scale, x_offset)
+		falls.material_override = mat
+		falls.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		add_child(falls)
+	# Plunge-pool rocks (the web's 7 displaced boulders around the outlet).
+	var rock_color := "#515b56"
+	b.part("boulder", 15.36, FLOOR_Y + 0.10, 6.1, 1.11, 0.34, 0.73, rock_color)
+	b.part("boulder", 15.84, FLOOR_Y + 0.12, 5.25, 0.49, 0.27, 0.57, rock_color)
+	b.part("boulder", 15.68, FLOOR_Y + 0.09, 7.00, 0.62, 0.32, 0.52, rock_color)
+	b.part("boulder", 15.10, FLOOR_Y + 0.12, 4.80, 0.70, 0.30, 0.50, "#5a635d")
+	b.part("boulder", 15.20, FLOOR_Y + 0.10, 7.30, 0.60, 0.28, 0.50, "#4b554f")
+	b.part("boulder", 15.50, FLOOR_Y + 0.08, 5.60, 0.45, 0.24, 0.40, "#5a635d")
+	b.part("boulder", 15.55, FLOOR_Y + 0.08, 6.60, 0.52, 0.24, 0.45, "#4b554f")
+
+func _cascade_curtain(width_scale: float, x_offset: float) -> ArrayMesh:
+	var cols := 24
+	var rows := 30
+	var vertices := PackedVector3Array()
+	var uvs := PackedVector2Array()
+	var indices := PackedInt32Array()
+	for r in range(rows + 1):
+		var v := float(r) / float(rows)
+		for c in range(cols + 1):
+			var u := float(c) / float(cols)
+			var x := 14.78 + 0.38 * pow(v, 1.4) + x_offset
+			var y := WATER_Y - (WATER_Y - (FLOOR_Y + 0.1)) * pow(v, 1.08)
+			var z := 6.1 + (u - 0.5) * (3.1 + 1.2 * v) * width_scale
+			vertices.append(Vector3(x, y, z))
+			uvs.append(Vector2(u, v))
+	for r in range(rows):
+		for c in range(cols):
+			var i := r * (cols + 1) + c
+			indices.append_array([i, i + cols + 1, i + 1,
+				i + 1, i + cols + 1, i + cols + 2])
+	var arrays := []
+	arrays.resize(Mesh.ARRAY_MAX)
+	arrays[Mesh.ARRAY_VERTEX] = vertices
+	arrays[Mesh.ARRAY_TEX_UV] = uvs
+	arrays[Mesh.ARRAY_INDEX] = indices
+	var mesh := ArrayMesh.new()
+	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
+	return mesh
 
 func _build_perimeter() -> void:
 	# Web parity: exposed soil + chipped stone strata follow the terrain height
@@ -977,6 +1022,8 @@ func set_water_freeze(value: float) -> void:
 	var mat := water.material_override as ShaderMaterial
 	if mat != null:
 		mat.set_shader_parameter("freeze", clampf(value, 0.0, 1.0))
+	for cascade_mat in cascade_materials:
+		cascade_mat.set_shader_parameter("freeze", clampf(value, 0.0, 1.0))
 
 func set_quality(level: int) -> void:
 	var factor: float = [1.0, 0.78, 0.50][clampi(level, 0, 2)]

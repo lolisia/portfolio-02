@@ -1,6 +1,9 @@
 shader_type spatial;
 render_mode blend_mix, cull_disabled, depth_draw_never, unshaded;
 
+uniform float shade : hint_range(0.0, 1.5) = 1.0;
+uniform float freeze : hint_range(0.0, 1.0) = 0.0;
+
 float hash(vec2 p) {
 	return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
 }
@@ -37,6 +40,7 @@ void fragment() {
 	float bottom_fade = smoothstep(0.0, 0.035, UV.y);
 	vec3 water = mix(vec3(0.09, 0.28, 0.32), vec3(0.93, 0.98, 0.99), foam);
 	water += vec3(0.05, 0.07, 0.075) * churn;
-	ALBEDO = water;
-	ALPHA = edge * top_fade * bottom_fade * (0.38 + 0.60 * foam);
+	ALBEDO = water * shade;
+	ALPHA = edge * top_fade * bottom_fade * (0.38 + 0.60 * foam)
+		* (1.0 - freeze) * (shade < 0.8 ? 0.82 : 1.0);
 }

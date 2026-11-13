@@ -6,6 +6,7 @@ uniform vec4 base_color : source_color = vec4(1.0);
 uniform float wet : hint_range(0.0, 1.0) = 0.0;
 uniform float snow_depth : hint_range(0.0, 1.0) = 0.0;
 uniform float winter : hint_range(0.0, 1.0) = 0.0;
+uniform float evergreen : hint_range(0.0, 1.0) = 0.0;
 uniform float trample_strength : hint_range(0.0, 1.0) = 0.0;
 uniform vec3 season_tint = vec3(1.0);
 uniform vec4 trample[16];
@@ -111,7 +112,7 @@ void fragment() {
 	SPECULAR = 0.15;
 	ALBEDO = albedo;
 
-	if (winter > 0.5 && hash(v_origin.xz) < winter * 0.95) {
+	if (evergreen < 0.5 && winter > 0.5 && hash(v_origin.xz) < winter * 0.95) {
 		discard;
 	}
 }
