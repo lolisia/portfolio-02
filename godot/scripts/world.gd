@@ -93,6 +93,7 @@ func build() -> void:
 	_build_fences()
 	_build_vegetable_beds()
 	_build_paths()
+	_build_garden_stairs()
 	_build_path_mask()
 	_build_trees()
 	_build_ground_cover()
@@ -314,39 +315,29 @@ func _build_cascade() -> void:
 	add_child(falls)
 
 func _build_perimeter() -> void:
-	var top := 3.1
-	var mid := (top + FLOOR_Y) * 0.5
-	var h := top - FLOOR_Y
-	b.part("stone", 0.0, mid, 15.08, 30.6, h, 0.32, "#4b5354")
-	b.part("stone", 0.0, mid, -15.08, 30.6, h, 0.32, "#454d4f")
-	b.part("stone", -15.08, mid, 0.0, 0.32, h, 30.6, "#454d4f")
-	b.part("stone", 0.0, FLOOR_Y - 0.16, 0.0, 30.6, 0.32, 30.6, "#343b3d")
-	# The +X wall is cut open at the pond outlet so the cascade can leave the island.
-	var outlet_back := 4.25
-	var outlet_front := 7.95
-	for segment in [[-15.0, outlet_back], [outlet_front, 15.0]]:
-		var z0: float = segment[0]
-		var z1: float = segment[1]
-		var length := z1 - z0
-		b.part("stone", 15.08, mid, (z0 + z1) * 0.5, 0.32, h, length, "#4b5354")
-	# A brown earth lip catches the light and separates the diorama top from the rock.
-	b.part("soil", 0.0, 2.94, 15.09, 30.6, 0.36, 0.34, "#6b4a30")
-	b.part("soil", 0.0, 2.94, -15.09, 30.6, 0.36, 0.34, "#66462d")
-	b.part("soil", -15.09, 2.94, 0.0, 0.34, 0.36, 30.6, "#66462d")
-	for segment in [[-15.0, outlet_back], [outlet_front, 15.0]]:
-		var z0: float = segment[0]
-		var z1: float = segment[1]
-		b.part("soil", 15.09, 2.94, (z0 + z1) * 0.5, 0.34, 0.36, z1 - z0, "#6b4a30")
-	for i in range(6):
-		var yy := FLOOR_Y + (i + 0.5) * h / 6.0
-		var col: String = ["#4b5457", "#596162", "#68716d", "#777d75", "#85887b", "#929283"][i]
-		b.part("stone", 0.0, yy, 15.10, 30.62, h / 6.0 + 0.012, 0.34, col)
-		b.part("stone", 0.0, yy, -15.10, 30.62, h / 6.0 + 0.012, 0.34, col)
-		b.part("stone", -15.10, yy, 0.0, 0.34, h / 6.0 + 0.012, 30.62, col)
-		for segment in [[-15.0, outlet_back], [outlet_front, 15.0]]:
-			var z0: float = segment[0]
-			var z1: float = segment[1]
-			b.part("stone", 15.10, yy, (z0 + z1) * 0.5, 0.34, h / 6.0 + 0.012, z1 - z0, col)
+	# Web parity: exposed soil + chipped stone strata follow the terrain height
+	# around all four edges instead of a flat 3.1-high plate wall.
+	var soil_colors := ["#815a3c", "#80583b", "#896346"]
+	var rock_palettes := [
+		["#474f54", "#4d5559"], ["#545d60", "#586165"],
+		["#667070", "#61696a"], ["#737771", "#707571"],
+	]
+	for side in range(4):
+		for i in range(120):
+			var t := (float(i) + 0.5) * 0.25 - 15.0
+			var x := 15.0 if side == 0 else (-15.0 if side == 1 else t)
+			var z := 15.0 if side == 2 else (-15.0 if side == 3 else t)
+			var top := height(x, z)
+			var earth := 0.36 + 0.055 * sin(t)
+			var w := 0.08 if side < 2 else 0.255
+			var d := 0.255 if side < 2 else 0.08
+			b.part("stone", x, top - earth * 0.5 - 0.015, z, w, earth + 0.015, d,
+				String(b.pick(soil_colors)))
+			var rock_h := top - earth - FLOOR_Y
+			for j in range(4):
+				var yy := FLOOR_Y + (float(j) + 0.5) * rock_h / 4.0
+				b.part("stone", x, yy, z, w, rock_h / 4.0 + 0.013, d,
+					String(b.pick(rock_palettes[j])))
 
 func _build_door_leaf(cx: float, gy: float, cz: float, rot: float) -> Node3D:
 	var D: float = COTTAGE.D
@@ -894,6 +885,42 @@ func _build_paths() -> void:
 	_path(-2.0, 0.8, 5.5, 0.82)
 	_path(5.5, 0.82, 10.8, 3.0)
 	_path(1.0, 0.8, 1.0, 2.6)
+
+func _build_garden_stairs() -> void:
+	# Port of src/world.js stairs(): pale treads over dark risers with stepped
+	# cheek walls, following the carved flight grade.
+	var ax: float = flight.ax
+	var az: float = flight.az
+	var ux: float = flight.ux
+	var uz: float = flight.uz
+	var length: float = flight.len
+	var y0 := flight_y0
+	var y1 := flight_y1
+	var count := maxi(4, int(round((y1 - y0) / 0.145)))
+	var rise := (y1 - y0) / float(count)
+	var run := length / float(count)
+	var angle := atan2(ux, uz)
+	var width := 1.0
+	for k in range(count):
+		var at := (float(k) + 0.5) * run
+		var x := ax + ux * at
+		var z := az + uz * at
+		var top := y0 + float(k + 1) * rise
+		var base := y0 + float(k) * rise - 0.2
+		b.place(x, 0.0, z, 1.0, angle, func() -> void:
+			b.part("stone", 0.0, (top - 0.04 + base) * 0.5, 0.0,
+				width - 0.04, top - 0.04 - base, run + 0.02,
+				String(b.pick(["#7f7c6c", "#77756a", "#868272"])))
+			b.part("stone", 0.0, top - 0.025, 0.025, width + 0.02, 0.05, run + 0.06,
+				String(b.pick(["#b3ad94", "#a9a58c", "#bab39a", "#a19e88"])),
+				0.0, (b.randf() - 0.5) * 0.03)
+			for side in [-1.0, 1.0]:
+				b.part("stone", float(side) * (width * 0.5 + 0.08),
+					(top + 0.13 + base) * 0.5, 0.0, 0.16,
+					top + 0.13 - base, run + 0.012,
+					String(b.pick(["#8b8778", "#807d70", "#938e7d"])))
+		)
+		path_points.append(Vector2(x, z))
 
 func _build_path_mask() -> void:
 	var size := 512

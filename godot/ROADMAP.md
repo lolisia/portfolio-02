@@ -484,7 +484,7 @@ Godot의 사용자 인자는 `--` 뒤에 전달합니다.
   - Unity-chan은 PNG 변환본 사용.
   - 원본 `public/`은 참고용; Godot 프로젝트에 복사된 에셋을 수정해야 함.
 - **개발 프리셋**
-  - `--house`, `--pond`, `--door`, `--fishtest`, `--fishnear`, `--gathernear`, `--falls`, `--porch`, `--window`, `--bench`, `--auto`, `--storm`, `--pathdebug`, `--noshadow`, `--shadowdebug` 등은 개발용.
+  - `--house`, `--pond`, `--door`, `--fishtest`, `--fishnear`, `--gathernear`, `--falls`, `--porch`, `--window`, `--stairs`, `--bench`, `--auto`, `--storm`, `--pathdebug`, `--noshadow`, `--shadowdebug` 등은 개발용.
   - 최종 빌드에서 제거하거나 유지 여부 결정.
 
 ---

@@ -4,13 +4,13 @@ extends Camera3D
 ## left-drag orbits, wheel/pinch zooms, touch drag orbits.
 @export var target := Vector3(0.0, 1.0, 0.0)
 @export var distance := 59.6
-@export var min_pitch := 0.35
-@export var max_pitch := 1.18
+@export var min_pitch := 0.3908
+@export var max_pitch := 1.2208
 @export var min_zoom := 0.70
 @export var max_zoom := 3.30
 @export var base_span := 31.5
-@export var rotate_speed := 0.005
-@export var zoom_step := 1.12
+@export var rotate_speed := 1.0
+@export var zoom_step := 1.0526
 
 var yaw := 0.0
 var pitch := 0.0
@@ -33,7 +33,7 @@ func _ready() -> void:
 	var offset := position - target
 	distance = maxf(offset.length(), 1.0)
 	yaw = atan2(offset.x, offset.z)
-	pitch = acos(clampf(offset.y / distance, -1.0, 1.0))
+	pitch = asin(clampf(offset.y / distance, -1.0, 1.0))
 	home_yaw = yaw
 	home_pitch = pitch
 	home_zoom = zoom
@@ -60,7 +60,7 @@ func _unhandled_input(event: InputEvent) -> void:
 			_dragging = mb.pressed
 			_drag_button = mb.button_index
 			if mb.pressed:
-				Input.set_default_cursor_shape(Input.CURSOR_DRAG)
+				Input.set_default_cursor_shape(Input.CURSOR_POINTING_HAND)
 			else:
 				Input.set_default_cursor_shape(Input.CURSOR_ARROW)
 		elif mb.pressed and mb.button_index == MOUSE_BUTTON_WHEEL_UP:
@@ -71,8 +71,9 @@ func _unhandled_input(event: InputEvent) -> void:
 			_apply()
 	elif event is InputEventMouseMotion and _dragging:
 		var motion := event as InputEventMouseMotion
-		yaw -= motion.relative.x * rotate_speed
-		pitch -= motion.relative.y * rotate_speed
+		var rotate_unit := TAU / maxf(get_viewport().get_visible_rect().size.y, 1.0)
+		yaw -= motion.relative.x * rotate_unit * rotate_speed
+		pitch -= motion.relative.y * rotate_unit * rotate_speed
 		_apply()
 	elif event is InputEventScreenTouch:
 		var touch := event as InputEventScreenTouch
@@ -85,8 +86,9 @@ func _unhandled_input(event: InputEvent) -> void:
 		var drag := event as InputEventScreenDrag
 		_touch_points[drag.index] = drag.position
 		if _touch_points.size() == 1:
-			yaw -= drag.relative.x * rotate_speed
-			pitch -= drag.relative.y * rotate_speed
+			var rotate_unit := TAU / maxf(get_viewport().get_visible_rect().size.y, 1.0)
+			yaw -= drag.relative.x * rotate_unit * rotate_speed
+			pitch -= drag.relative.y * rotate_unit * rotate_speed
 			_apply()
 		elif _touch_points.size() >= 2:
 			_update_pinch()

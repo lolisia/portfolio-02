@@ -167,7 +167,7 @@ func _ready() -> void:
 	for arg in OS.get_cmdline_user_args():
 		cli.append(arg)
 	if "--house" in cli:
-		orbit.set_view(Vector3(-1.0, 1.0, 0.1), 0.65, 0.98, 2.6)
+		orbit.set_view(Vector3(-1.0, 1.6, -1.2), 0.6747, 0.438, 3.0)
 	if "--char" in cli:
 		orbit.set_view(Vector3(-1.0, 0.65, 0.85), 0.0, 1.05, 7.0)
 	if "--char2" in cli:
@@ -176,7 +176,7 @@ func _ready() -> void:
 		orbit.max_zoom = 12.0
 		orbit.set_view(Vector3(-0.35, 1.25, 1.0), 1.1, 1.12, 10.0)
 	if "--pond" in cli:
-		orbit.set_view(Vector3(10.8, 0.3, 6.1), 0.7, 0.98, 2.8)
+		orbit.set_view(Vector3(10.2, 0.4, 6.3), 0.0, 0.438, 5.0)
 	if "--pondside" in cli:
 		orbit.set_view(Vector3(8.6, 0.6, 6.0), 1.95, 0.46, 2.3)
 	if "--fishtest" in cli:
@@ -186,9 +186,11 @@ func _ready() -> void:
 	if "--front" in cli:
 		orbit.set_view(Vector3(-1.0, 1.2, -0.4), 0.1, 0.42, 4.0)
 	if "--garden" in cli:
-		orbit.set_view(Vector3(-1.1, 1.6, -7.3), 0.2, 0.95, 4.2)
+		orbit.set_view(Vector3(-1.1, 3.2, -7.65), 0.0, 0.438, 5.0)
+	if "--stairs" in cli:
+		orbit.set_view(Vector3(-5.4, 2.2, -4.4), 0.0, 0.438, 3.0)
 	if "--falls" in cli:
-		orbit.set_view(Vector3(16.2, 0.7, 6.1), 1.62, 0.34, 2.4)
+		orbit.set_view(Vector3(13.4, -0.10, 6.1), 0.965, 0.391, 3.25)
 	if "--porch" in cli:
 		character.position = Vector3(-1.0, 0.0, 0.55)
 		orbit.set_view(Vector3(-1.0, 1.2, 0.3), 0.0, 0.62, 3.0)

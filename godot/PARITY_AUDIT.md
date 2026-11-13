@@ -6,6 +6,12 @@
   (웹 `?view=falls|house|garden|coop`, `?time=night`, `?season=3` ↔ Godot `--falls --house --garden --night --winter --panel`)
 - 우선순위: **P0** 한눈에 보이는 구조적 오류 / **P1** 눈에 띄는 시각·동작 차이 / **P2** 디테일·수치 차이 / **X** 웹에 없는데 Godot에 추가된 것(제거 또는 유지 결정 필요)
 
+## 수정 완료 로그
+
+- **C1–C3**: `pitch`를 극각이 아닌 **고도각**으로 통일(`_ready`에서 `asin`), 피치 제한을 웹 polar 0.35~1.18의 고도 환산값(0.3908~1.2208)으로 수정. 웹 close-up 오프셋 기준으로 `--house/--garden/--pond/--falls` 재조정, `--stairs` 추가.
+- **W1–W4**: 고정 높이 3.1 평판 벽·바닥판·사각 폭포 절개를 제거하고, 웹과 같이 네 변 0.25타일 간격 480개 기둥의 윗면이 `height(x,z)`를 따르게 변경. 기둥별 흙층(0.36+0.055·sin t) + 암석 4층 팔레트 적용.
+- **G1**: `src/world.js`의 `stairs()`를 `_build_garden_stairs()`로 포팅. 어두운 라이저 + 밝은 디딤판 + 계단식 측벽, `path_points`/경로 마스크 반영.
+
 ---
 
 ## 1. 카메라 (`orbit_camera.gd` ↔ `main.js` OrbitControls)
