@@ -25,6 +25,10 @@ var _trample_materials: Array[ShaderMaterial] = []
 var path_mask: ImageTexture
 var water: MeshInstance3D
 var cascade_materials: Array[ShaderMaterial] = []
+var cascade_fx
+var cascade_left := 4.25
+var cascade_width := 3.1
+var cascade_drop := WATER_Y - FLOOR_Y
 var veg_beds: Array = []
 var pond_shore := Vector2(6.9, 4.0)
 var lamps: Array = []
@@ -303,48 +307,91 @@ func _build_bridge() -> void:
 
 func _build_cascade() -> void:
 	cascade_materials.clear()
-	# Two curved, widening curtains instead of a single flat plane. The front
-	# sheet is bright; the back one is darker for depth, like cascade.js.
-	for entry in [[1.0, 0.0, "Cascade"], [0.92, -0.07, "CascadeBack"]]:
-		var width_scale: float = entry[0]
-		var x_offset: float = entry[1]
-		var shade := 1.0 if entry[2] == "Cascade" else 0.62
+	# Find the actual pond outlet exactly like cascade.js: the first and last
+	# z where the terrain at x=15 sits below the water line.
+	var found := false
+	var z := 4.25
+	while z <= 7.95:
+		if height(15.0, z) < WATER_Y - 0.018:
+			if not found:
+				cascade_left = z
+				found = true
+			cascade_width = z - cascade_left
+		z += 0.018
+	if not found:
+		cascade_left = 4.25
+		cascade_width = 3.7
+	# One continuous ballistic curtain in two layers (front bright, back dark),
+	# with 44 columns across the outlet and 56 rows down the arc.
+	for layer in [0.0, 1.0]:
 		var mat := ShaderMaterial.new()
 		mat.shader = preload("res://shaders/waterfall.gdshader")
-		mat.set_shader_parameter("shade", shade)
+		mat.set_shader_parameter("layer", layer)
+		mat.set_shader_parameter("shade", 1.0 if layer < 0.5 else 0.62)
 		mat.set_shader_parameter("freeze", 0.0)
+		mat.set_shader_parameter("breeze", 0.4)
 		cascade_materials.append(mat)
 		var falls := MeshInstance3D.new()
-		falls.name = entry[2]
-		falls.mesh = _cascade_curtain(width_scale, x_offset)
+		falls.name = "Cascade" if layer < 0.5 else "CascadeBack"
+		falls.mesh = _cascade_curtain(layer)
 		falls.material_override = mat
 		falls.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		add_child(falls)
-	# Plunge-pool rocks (the web's 7 displaced boulders around the outlet).
+	# The web's seven displaced boulders around the outlet.
 	var rock_color := "#515b56"
-	b.part("boulder", 15.36, FLOOR_Y + 0.10, 6.1, 1.11, 0.34, 0.73, rock_color)
-	b.part("boulder", 15.84, FLOOR_Y + 0.12, 5.25, 0.49, 0.27, 0.57, rock_color)
-	b.part("boulder", 15.68, FLOOR_Y + 0.09, 7.00, 0.62, 0.32, 0.52, rock_color)
-	b.part("boulder", 15.10, FLOOR_Y + 0.12, 4.80, 0.70, 0.30, 0.50, "#5a635d")
-	b.part("boulder", 15.20, FLOOR_Y + 0.10, 7.30, 0.60, 0.28, 0.50, "#4b554f")
-	b.part("boulder", 15.50, FLOOR_Y + 0.08, 5.60, 0.45, 0.24, 0.40, "#5a635d")
-	b.part("boulder", 15.55, FLOOR_Y + 0.08, 6.60, 0.52, 0.24, 0.45, "#4b554f")
+	var middle := cascade_left + cascade_width * 0.5
+	b.part("boulder", 15.36, FLOOR_Y + 0.08, middle, 1.11, 0.34, cascade_width * 0.73,
+		rock_color, 0.13, 0.08, -0.14)
+	b.part("boulder", 15.84, FLOOR_Y + 0.10, cascade_left + 0.18, 0.49, 0.27, 0.57,
+		rock_color, 0.13, 0.72, -0.14)
+	b.part("boulder", 15.68, FLOOR_Y + 0.07, cascade_left + cascade_width * 0.82,
+		0.62, 0.32, 0.52, rock_color, 0.13, -0.4, -0.14)
+	for entry in [[cascade_left, -1.0], [cascade_left + cascade_width, 1.0]]:
+		var edge_z: float = entry[0]
+		var sign: float = entry[1]
+		b.part("boulder", 14.93, WATER_Y + 0.03, edge_z + sign * 0.12, 0.37, 0.23, 0.32,
+			rock_color, 0.13, sign * 0.6, -0.14)
+		b.part("boulder", 15.10, WATER_Y - 0.31, edge_z + sign * 0.09, 0.28, 0.28, 0.41,
+			rock_color, 0.13, -sign * 0.25, -0.14)
+	# Droplets, foam and vapour from cascade.js.
+	cascade_fx = preload("res://scripts/cascade_fx.gd").new()
+	cascade_fx.name = "CascadeFX"
+	add_child(cascade_fx)
+	cascade_fx.setup(cascade_left, cascade_width, cascade_drop, FLOOR_Y,
+		Callable(self, "cascade_path"))
 
-func _cascade_curtain(width_scale: float, x_offset: float) -> ArrayMesh:
-	var cols := 24
-	var rows := 30
+func cascade_path(across: float, t: float, layer: float) -> Vector3:
+	var a := maxf(0.0, t)
+	var wave := sin(across * 17.3 + layer * 2.1) * 0.5 + sin(across * 5.1 + 1.3) * 0.5
+	var x := 14.76 + 0.24 * minf(1.0, (t + 0.25) * 4.0) + a * (0.78 + 0.05 * wave) \
+		+ 0.08 * a * a + layer * 0.045 * a
+	var y := WATER_Y + 0.012 - cascade_drop * a * a
+	var z := cascade_left + across * cascade_width + a * a * (across - 0.5) * 0.28
+	return Vector3(x, y, z)
+
+func _cascade_curtain(layer: float) -> ArrayMesh:
+	var cols := 44
+	var rows := 56
 	var vertices := PackedVector3Array()
+	var normals := PackedVector3Array()
 	var uvs := PackedVector2Array()
 	var indices := PackedInt32Array()
+	var eps := 0.004
 	for r in range(rows + 1):
-		var v := float(r) / float(rows)
+		var t := -0.25 + 1.25 * float(r) / float(rows)
 		for c in range(cols + 1):
-			var u := float(c) / float(cols)
-			var x := 14.78 + 0.38 * pow(v, 1.4) + x_offset
-			var y := WATER_Y - (WATER_Y - (FLOOR_Y + 0.1)) * pow(v, 1.08)
-			var z := 6.1 + (u - 0.5) * (3.1 + 1.2 * v) * width_scale
-			vertices.append(Vector3(x, y, z))
-			uvs.append(Vector2(u, v))
+			var across := float(c) / float(cols)
+			var p := cascade_path(across, t, layer)
+			vertices.append(p)
+			uvs.append(Vector2(across, t))
+			var du := cascade_path(minf(across + eps, 1.0), t, layer) \
+				- cascade_path(maxf(across - eps, 0.0), t, layer)
+			var dv := cascade_path(across, t + eps, layer) \
+				- cascade_path(across, t - eps, layer)
+			var n := du.cross(dv).normalized()
+			if n.x < 0.0:
+				n = -n
+			normals.append(n)
 	for r in range(rows):
 		for c in range(cols):
 			var i := r * (cols + 1) + c
@@ -353,6 +400,7 @@ func _cascade_curtain(width_scale: float, x_offset: float) -> ArrayMesh:
 	var arrays := []
 	arrays.resize(Mesh.ARRAY_MAX)
 	arrays[Mesh.ARRAY_VERTEX] = vertices
+	arrays[Mesh.ARRAY_NORMAL] = normals
 	arrays[Mesh.ARRAY_TEX_UV] = uvs
 	arrays[Mesh.ARRAY_INDEX] = indices
 	var mesh := ArrayMesh.new()
@@ -1017,6 +1065,8 @@ func set_trample(slots: PackedVector4Array) -> void:
 		mat.set_shader_parameter("trample", slots)
 
 func set_water_freeze(value: float) -> void:
+	if cascade_fx != null:
+		cascade_fx.set_freeze(value)
 	if water == null:
 		return
 	var mat := water.material_override as ShaderMaterial
@@ -1024,6 +1074,13 @@ func set_water_freeze(value: float) -> void:
 		mat.set_shader_parameter("freeze", clampf(value, 0.0, 1.0))
 	for cascade_mat in cascade_materials:
 		cascade_mat.set_shader_parameter("freeze", clampf(value, 0.0, 1.0))
+
+func update_cascade(delta: float, wind: float, light: float) -> void:
+	for cascade_mat in cascade_materials:
+		cascade_mat.set_shader_parameter("light", clampf(light, 0.0, 1.5))
+		cascade_mat.set_shader_parameter("sky_level", clampf(light, 0.0, 1.5))
+	if cascade_fx != null:
+		cascade_fx.update(delta, wind, light)
 
 func set_quality(level: int) -> void:
 	var factor: float = [1.0, 0.78, 0.50][clampi(level, 0, 2)]

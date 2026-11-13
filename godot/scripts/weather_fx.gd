@@ -1,13 +1,12 @@
 extends Node3D
 class_name WeatherFX
 
-## GPU rain/snow and the waterfall spray. Rain and snow fade in with
+## GPU rain/snow and pond ripple decals. Rain and snow fade in with
 ## `set_intensity` so weather changes blend instead of snapping. The particles
 ## are an emitter box over the island; roofs/ground collision is visual-only.
 
 var rain: GPUParticles3D
 var snow: GPUParticles3D
-var spray: GPUParticles3D
 var rain_process: ParticleProcessMaterial
 var snow_process: ParticleProcessMaterial
 var world: FarmWorld
@@ -42,7 +41,6 @@ func _ready() -> void:
 	if snow_process != null:
 		snow_process.collision_mode = ParticleProcessMaterial.COLLISION_HIDE_ON_CONTACT
 	_build_roof_collisions()
-	_build_spray()
 	_build_ripples()
 
 func _make_particles(label: String, amount: int, lifetime: float, vmin: float, vmax: float,
@@ -114,57 +112,6 @@ func _build_roof_collisions() -> void:
 			canopy.size = entry[1]
 			canopy.position = entry[0]
 			add_child(canopy)
-
-func _soft_texture() -> ImageTexture:
-	var image := Image.create(64, 64, false, Image.FORMAT_RGBA8)
-	for y in range(64):
-		for x in range(64):
-			var dx := (float(x) - 31.5) / 31.5
-			var dy := (float(y) - 31.5) / 31.5
-			var a := pow(clampf(1.0 - sqrt(dx * dx + dy * dy), 0.0, 1.0), 2.4)
-			image.set_pixel(x, y, Color(1, 1, 1, a))
-	return ImageTexture.create_from_image(image)
-
-func _build_spray() -> void:
-	spray = GPUParticles3D.new()
-	spray.name = "WaterfallSpray"
-	spray.amount = 120
-	spray.lifetime = 2.4
-	spray.preprocess = 2.4
-	spray.local_coords = false
-	spray.visibility_aabb = AABB(Vector3(-4, -6, -4), Vector3(8, 12, 8))
-	spray.position = Vector3(15.05, 0.18, 6.1)
-
-	var quad := QuadMesh.new()
-	quad.size = Vector2(0.34, 0.34)
-	spray.draw_pass_1 = quad
-
-	var material := StandardMaterial3D.new()
-	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	material.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
-	material.billboard_mode = BaseMaterial3D.BILLBOARD_ENABLED
-	material.billboard_keep_scale = true
-	material.cull_mode = BaseMaterial3D.CULL_DISABLED
-	material.albedo_texture = _soft_texture()
-	material.albedo_color = Color(0.82, 0.91, 0.98, 0.26)
-	quad.material = material
-
-	var process := ParticleProcessMaterial.new()
-	process.emission_shape = ParticleProcessMaterial.EMISSION_SHAPE_BOX
-	process.emission_box_extents = Vector3(0.18, 0.35, 1.25)
-	process.direction = Vector3(0.8, 0.55, 0.0)
-	process.spread = 30.0
-	process.initial_velocity_min = 0.15
-	process.initial_velocity_max = 0.5
-	process.gravity = Vector3(0.0, -0.75, 0.0)
-	process.lifetime_randomness = 0.4
-	process.scale_min = 0.4
-	process.scale_max = 1.1
-	process.angular_velocity_min = -30.0
-	process.angular_velocity_max = 30.0
-	spray.process_material = process
-	add_child(spray)
 
 func _ring_texture() -> ImageTexture:
 	var image := Image.create(64, 64, false, Image.FORMAT_RGBA8)
@@ -298,8 +245,6 @@ func set_intensity(rain_amount: float, snow_amount: float, storm_amount: float, 
 		snow_process.turbulence_influence_max = 0.16 + storm_level * 0.25
 		snow_process.turbulence_noise_speed = Vector3(
 			0.10 + wind * 0.012, 0.05, 0.07 + wind * 0.008)
-	if spray != null:
-		spray.amount_ratio = quality_scale
 	if delta > 0.0:
 		_update_ripples(delta)
 

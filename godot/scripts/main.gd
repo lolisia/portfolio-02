@@ -578,9 +578,6 @@ func _process(delta: float) -> void:
 	if absf(water_freeze - _water_freeze_applied) > 0.002:
 		world.set_water_freeze(water_freeze)
 		_water_freeze_applied = water_freeze
-	if weather_fx != null and weather_fx.spray != null:
-		weather_fx.spray.visible = water_freeze < 0.5
-		weather_fx.spray.emitting = water_freeze < 0.5
 	if farm_life != null:
 		farm_life.water_freeze = water_freeze
 
@@ -615,6 +612,8 @@ func _process(delta: float) -> void:
 				lerpf(0.015, 0.20, low_target), 1.0 - exp(-delta * 0.7))
 			low_mist.visible = quality < 2 and low_target > 0.04 and not compositor_fog
 	_update_atmosphere(daylight)
+	if world != null:
+		world.update_cascade(delta, wind, 1.0 - float(daylight["night"]) * 0.9)
 	if night_life != null:
 		night_life.update(delta, float(daylight["night"]), float(daylight["golden"]),
 			1.0 - minf(1.0, overcast * 1.1), weather, season, wind, orbit.yaw)
