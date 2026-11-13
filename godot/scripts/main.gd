@@ -573,7 +573,9 @@ func _process(delta: float) -> void:
 
 	if footprints != null:
 		footprints.snow_depth = snow_depth
-		footprints.snowfall = 1.0 if weather == 4 else (2.0 if weather == 5 else 0.0)
+		# Match the original: weatherBlend.snow * (1 + weatherBlend.storm).
+		# Using the smoothed fades avoids a hard jump when a storm starts.
+		footprints.snowfall = snow_fx * (1.0 + storm_fx)
 	_update_trample(delta)
 
 	var daylight := Daylight.evaluate(hour)

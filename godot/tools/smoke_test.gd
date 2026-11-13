@@ -58,6 +58,24 @@ func _initialize() -> void:
 		if int(footprints.layers["boot"]["texture_size"]) != 32:
 			failures.append("footprint low texture not applied")
 		footprints.set_quality(0)
+		# Storm snowfall must fill prints faster than calm snow.
+		footprints.snow_depth = 1.0
+		footprints.snowfall = 2.0
+		var boot_next: int = int(footprints.layers["boot"]["next"])
+		footprints.press("boot", -4.0, 4.0, 0.0)
+		var storm_item: Dictionary = footprints.layers["boot"]["items"][boot_next]
+		footprints._process(1.0)
+		var storm_life: float = float(storm_item["life"])
+		footprints.snowfall = 0.0
+		boot_next = int(footprints.layers["boot"]["next"])
+		footprints.press("boot", -3.0, 4.0, 0.0)
+		var calm_item: Dictionary = footprints.layers["boot"]["items"][boot_next]
+		footprints._process(1.0)
+		var calm_life: float = float(calm_item["life"])
+		if not (storm_life < calm_life - 0.02 and storm_life > 0.90):
+			failures.append("snow footprint fill tuning wrong")
+		footprints.snow_depth = 0.0
+		footprints.snowfall = 0.0
 	if main.get("night_life") == null:
 		failures.append("night life missing")
 	if main.get("seasons_fx") == null:
