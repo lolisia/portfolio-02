@@ -408,6 +408,19 @@ func _initialize() -> void:
 		failures.append("night life missing")
 	if main.get("seasons_fx") == null:
 		failures.append("season particles missing")
+	else:
+		var seasons = main.get("seasons_fx")
+		if seasons.petal_items.size() != 155 or seasons.leaf_items.size() != 175:
+			failures.append("season particle counts wrong")
+		if not world.find_children("SpringGround", "MultiMeshInstance3D", true, false).is_empty() \
+				or not world.find_children("AutumnGround", "MultiMeshInstance3D", true, false).is_empty():
+			failures.append("non-web fixed petal ground layer still present")
+		if world.roofs.size() < 3:
+			failures.append("roof landing surfaces missing")
+		seasons.petal_level = 1.0
+		seasons.update(0.1, 0, 4.0)
+		if not seasons.petal_instance.visible:
+			failures.append("spring petals did not activate")
 	if main.get("path_debug") == null:
 		failures.append("path debug missing")
 	if main.get("quality_manager") == null:

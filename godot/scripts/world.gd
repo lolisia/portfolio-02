@@ -35,6 +35,7 @@ var rose_bushes: Array[Vector2] = []
 var garden_plant_count := 0
 var gravel_slab_count := 0
 var wildflower_clusters := 0
+var roofs: Array = []
 var pond_shore := Vector2(6.9, 4.0)
 var lamps: Array = []
 var lamp_pivots: Array = []
@@ -165,6 +166,17 @@ func height(x: float, z: float) -> float:
 	if reach <= 0.0:
 		return ground_y
 	return ground_y + (flight_y0 + (flight_y1 - flight_y0) * clampf(along / flight.len, 0.0, 1.0) - ground_y) * reach
+
+func roof_floor(x: float, z: float) -> float:
+	var y := maxf(WATER_Y, height(x, z))
+	for roof in roofs:
+		var rx: float = roof["rx"]
+		var rz: float = roof["rz"]
+		var dx: float = absf(x - float(roof["x"]))
+		var dz: float = absf(z - float(roof["z"]))
+		if dx < rx and dz < rz:
+			y = maxf(y, float(roof["y"]) + (rx - dx) * float(roof["slope"]))
+	return y
 
 func stand(x: float, z: float) -> float:
 	# Faithful port of src/world.js stand(): the porch deck and its steps are
@@ -722,6 +734,14 @@ func _build_cottage(cx: float, cz: float, rot: float) -> void:
 	var ridge_y: float = gy + COTTAGE.E + span * COTTAGE.slope
 	cottage_ridge = Vector3(cx, ridge_y + 0.12, cz - 0.5)
 	cottage_chimney = Vector3(cx + COTTAGE.chimney.x, ridge_y + 0.58, cz + COTTAGE.chimney.y)
+	var roof_span: float = COTTAGE.W * 0.5 + COTTAGE.over
+	var roof_front: float = COTTAGE.D * 0.5 + COTTAGE.B + 0.28
+	var roof_back: float = -COTTAGE.D * 0.5 - 0.35
+	roofs.append({
+		"x": cx, "z": cz + (roof_front + roof_back) * 0.5,
+		"rx": roof_span, "rz": (roof_front - roof_back) * 0.5,
+		"y": gy + COTTAGE.E, "slope": COTTAGE.slope,
+	})
 
 func _cottage_parts(drop: float) -> void:
 	var W: float = COTTAGE.W
@@ -981,6 +1001,8 @@ func _build_coop(cx: float, cz: float, rot: float) -> void:
 	var ramp := 1.82 * 0.5 + 0.6
 	add_box(cx + sin(rot) * ramp, cz + cos(rot) * ramp,
 		0.86, 1.2, rot, "coop")
+	roofs.append({"x": cx, "z": cz, "rx": 1.10, "rz": 1.1,
+		"y": gy + 2.15, "slope": 0.6})
 
 func _build_shed(cx: float, cz: float, rot: float) -> void:
 	var gy := height(cx, cz)
@@ -992,6 +1014,8 @@ func _build_shed(cx: float, cz: float, rot: float) -> void:
 	var ramp := 1.82 * 0.5 + 0.6
 	add_box(cx + sin(rot) * ramp, cz + cos(rot) * ramp,
 		0.86, 1.2, rot, "")
+	roofs.append({"x": cx, "z": cz, "rx": 1.10, "rz": 1.1,
+		"y": gy + 2.15, "slope": 0.6})
 
 func _build_garden_beds() -> void:
 	var cx := -1.1

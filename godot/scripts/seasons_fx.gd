@@ -1,123 +1,74 @@
 extends Node3D
 class_name SeasonsFX
 
-## Spring cherry petals and autumn leaves. The original uses instanced petal
-## meshes spawned around the trees; this port uses a GPU particle box over the
-## island, which keeps the diorama small and the particle count GPU-cheap.
+## Spring cherry petals and autumn leaves, ported from src/seasons.js. Both are
+## instanced bits that spawn in the tree crowns, tumble on the wind, land on the
+## ground or a roof, rest there for 1.75 s and respawn. Snow stays in WeatherFX.
+
+const PETAL_COUNT := 155
+const LEAF_COUNT := 175
+const REST_TIME := 1.75
+const PETAL_COLORS := [
+	Color(1.0, 0.749, 0.820), Color(1.0, 0.878, 0.894), Color(0.898, 0.639, 0.714),
+]
+const LEAF_COLORS := [
+	Color(0.733, 0.376, 0.169), Color(0.906, 0.604, 0.251),
+	Color(0.659, 0.243, 0.149), Color(0.867, 0.733, 0.337),
+]
 
 var world: FarmWorld
-var petals: GPUParticles3D
-var leaves: GPUParticles3D
+var petal_instance: MultiMeshInstance3D
+var leaf_instance: MultiMeshInstance3D
+var petal_multimesh: MultiMesh
+var leaf_multimesh: MultiMesh
 var petal_material: StandardMaterial3D
 var leaf_material: StandardMaterial3D
+var petal_items: Array = []
+var leaf_items: Array = []
 var petal_level := 0.0
 var leaf_level := 0.0
 var quality_scale := 1.0
-var ground_petals: MultiMeshInstance3D
-var ground_leaves: MultiMeshInstance3D
-var ground_petal_material: StandardMaterial3D
-var ground_leaf_material: StandardMaterial3D
-var petal_process: ParticleProcessMaterial
-var leaf_process: ParticleProcessMaterial
+var time := 0.0
+var rng := RandomNumberGenerator.new()
 
 func setup() -> void:
+	rng.seed = 61837
 	var petal_tex := _petal_texture(false)
 	var leaf_tex := _petal_texture(true)
-	petals = _make_system("SpringPetals", 240, 0.11, petal_tex, Color(1.0, 0.72, 0.80, 1.0))
-	leaves = _make_system("AutumnLeaves", 280, 0.13, leaf_tex, Color(0.92, 0.52, 0.22, 1.0))
-	petal_process = petals.process_material as ParticleProcessMaterial
-	leaf_process = leaves.process_material as ParticleProcessMaterial
-	petals.emitting = false
-	leaves.emitting = false
-	petals.amount_ratio = 0.0
-	leaves.amount_ratio = 0.0
-	ground_petals = _make_ground_layer("SpringGround", petal_tex, Color(1.0, 0.72, 0.80), 160, 0.075)
-	ground_leaves = _make_ground_layer("AutumnGround", leaf_tex, Color(0.90, 0.48, 0.20), 190, 0.095)
-	ground_petal_material = ground_petals.material_override as StandardMaterial3D
-	ground_leaf_material = ground_leaves.material_override as StandardMaterial3D
-	ground_petals.visible = false
-	ground_leaves.visible = false
+	var petals := _build_system("SpringPetals", PETAL_COUNT, petal_tex,
+		Color(1.0, 0.88, 0.92), PETAL_COLORS, 0.105, 0.135)
+	petal_instance = petals["instance"]
+	petal_multimesh = petals["multimesh"]
+	petal_material = petals["material"]
+	petal_items = petals["items"]
+	var leaves := _build_system("AutumnLeaves", LEAF_COUNT, leaf_tex,
+		Color(0.93, 0.70, 0.42), LEAF_COLORS, 0.13, 0.17)
+	leaf_instance = leaves["instance"]
+	leaf_multimesh = leaves["multimesh"]
+	leaf_material = leaves["material"]
+	leaf_items = leaves["items"]
+	petal_instance.visible = false
+	leaf_instance.visible = false
 
-func _make_system(label: String, amount: int, size: float, texture: Texture2D,
-		tint: Color) -> GPUParticles3D:
-	var particles := GPUParticles3D.new()
-	particles.name = label
-	particles.amount = amount
-	particles.lifetime = 9.0
-	particles.preprocess = 9.0
-	particles.local_coords = false
-	particles.visibility_aabb = AABB(Vector3(-18, -4, -18), Vector3(36, 26, 36))
-	particles.position = Vector3(0, 7.0, 0)
-	particles.transform_align = GPUParticles3D.TRANSFORM_ALIGN_Z_BILLBOARD
-
+func _build_system(label: String, count: int, texture: Texture2D, tint: Color,
+		palette: Array, size_x: float, size_y: float) -> Dictionary:
 	var quad := QuadMesh.new()
-	quad.size = Vector2(size, size * 1.25)
-	particles.draw_pass_1 = quad
-
+	quad.size = Vector2(size_x, size_y)
 	var material := StandardMaterial3D.new()
 	material.shading_mode = BaseMaterial3D.SHADING_MODE_PER_PIXEL
 	material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	material.albedo_texture = texture
 	material.albedo_color = tint
-	material.roughness = 0.86
+	material.vertex_color_use_as_albedo = true
+	material.roughness = 0.85
 	material.cull_mode = BaseMaterial3D.CULL_DISABLED
 	quad.material = material
 
-	var process := ParticleProcessMaterial.new()
-	process.emission_shape = ParticleProcessMaterial.EMISSION_SHAPE_BOX
-	process.emission_box_extents = Vector3(14.2, 1.5, 14.2)
-	process.direction = Vector3(0.25, -1.0, 0.1)
-	process.spread = 38.0
-	process.initial_velocity_min = 0.18
-	process.initial_velocity_max = 0.55
-	process.gravity = Vector3(0.18, -0.55, 0.05)
-	process.lifetime_randomness = 0.32
-	process.angular_velocity_min = -160.0
-	process.angular_velocity_max = 160.0
-	process.scale_min = 0.72
-	process.scale_max = 1.25
-	var fade := Gradient.new()
-	fade.set_color(0, Color(1, 1, 1, 0))
-	fade.set_color(1, Color(1, 1, 1, 0))
-	fade.add_point(0.08, Color(1, 1, 1, 1))
-	fade.add_point(0.82, Color(1, 1, 1, 1))
-	var ramp := GradientTexture1D.new()
-	ramp.gradient = fade
-	process.color_ramp = ramp
-	particles.process_material = process
-	add_child(particles)
-	return particles
-
-func _make_ground_layer(label: String, texture: Texture2D, tint: Color,
-		count: int, size: float) -> MultiMeshInstance3D:
-	var plane := PlaneMesh.new()
-	plane.size = Vector2.ONE
-	plane.orientation = PlaneMesh.FACE_Y
-	var material := StandardMaterial3D.new()
-	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	material.albedo_texture = texture
-	material.albedo_color = Color(tint.r, tint.g, tint.b, 0.0)
-	material.cull_mode = BaseMaterial3D.CULL_DISABLED
 	var multimesh := MultiMesh.new()
 	multimesh.transform_format = MultiMesh.TRANSFORM_3D
-	multimesh.mesh = plane
+	multimesh.use_colors = true
+	multimesh.mesh = quad
 	multimesh.instance_count = count
-	for i in range(count):
-		var placed := false
-		for attempt in range(18):
-			var x := randf_range(-13.5, 13.5)
-			var z := randf_range(-13.5, 13.5)
-			if not world.clear(x, z):
-				continue
-			var s := size * (0.7 + randf() * 0.6)
-			var basis := Basis(Vector3.UP, randf() * TAU).scaled(Vector3(s, 1.0, s))
-			multimesh.set_instance_transform(i, Transform3D(basis,
-				Vector3(x, world.height(x, z) + 0.016, z)))
-			placed = true
-			break
-		if not placed:
-			multimesh.set_instance_transform(i, Transform3D(Basis.from_scale(Vector3.ZERO), Vector3(0, -80, 0)))
 	var instance := MultiMeshInstance3D.new()
 	instance.name = label
 	instance.multimesh = multimesh
@@ -126,7 +77,33 @@ func _make_ground_layer(label: String, texture: Texture2D, tint: Color,
 	instance.gi_mode = GeometryInstance3D.GI_MODE_DISABLED
 	instance.custom_aabb = AABB(Vector3(-15, -3, -15), Vector3(30, 30, 30))
 	add_child(instance)
-	return instance
+
+	var items: Array = []
+	for i in range(count):
+		var item := {
+			"phase": rng.randf() * TAU,
+			"rate": 0.7 + rng.randf() * 0.7,
+			"size": (0.7 + rng.randf() * 0.9),
+			"x": 0.0, "y": 0.0, "z": 0.0, "rest": 0.0,
+		}
+		_spawn(item, true)
+		items.append(item)
+		multimesh.set_instance_color(i, palette[i % palette.size()])
+	return {"instance": instance, "multimesh": multimesh,
+		"material": material, "items": items}
+
+func _spawn(item: Dictionary, initial: bool) -> void:
+	var trees := FarmWorld.TREE_LIST
+	var tree: Array = trees[rng.randi_range(0, trees.size() - 1)]
+	var tree_x: float = tree[0]
+	var tree_z: float = tree[1]
+	var tree_scale: float = tree[2]
+	item["x"] = tree_x + (rng.randf() - 0.5) * 2.0
+	item["z"] = tree_z + (rng.randf() - 0.5) * 2.0
+	var base := world.roof_floor(float(item["x"]), float(item["z"])) + 0.035
+	var top := maxf(base + 0.5, world.height(tree_x, tree_z) + 3.7 * tree_scale - 0.25)
+	item["y"] = lerpf(base, top, rng.randf()) if initial else top
+	item["rest"] = 0.0
 
 func _petal_texture(leaf: bool) -> ImageTexture:
 	var image := Image.create(32, 32, false, Image.FORMAT_RGBA8)
@@ -152,27 +129,54 @@ func _petal_texture(leaf: bool) -> ImageTexture:
 			image.set_pixel(x, y, color)
 	return ImageTexture.create_from_image(image)
 
+func _update_system(items: Array, multimesh: MultiMesh, level: float,
+		wind: float, delta: float) -> void:
+	var active := int(round(float(items.size()) * clampf(quality_scale, 0.0, 1.0)))
+	for i in range(items.size()):
+		if i >= active or level <= 0.002:
+			multimesh.set_instance_transform(i,
+				Transform3D(Basis.from_scale(Vector3.ZERO), Vector3(0, -80, 0)))
+			continue
+		var item: Dictionary = items[i]
+		var a: float = float(item["phase"]) + time * float(item["rate"])
+		var base := world.roof_floor(float(item["x"]), float(item["z"])) + 0.035
+		if float(item["y"]) > base:
+			item["x"] = float(item["x"]) + delta * (wind * 0.11 + sin(a) * 0.33)
+			item["z"] = float(item["z"]) + delta * (wind * 0.055 + cos(a * 0.87) * 0.28)
+			item["y"] = float(item["y"]) - delta * float(item["rate"]) * 0.57
+		else:
+			item["y"] = base
+			item["rest"] = float(item["rest"]) + delta
+		if maxf(absf(float(item["x"])), absf(float(item["z"]))) > 15.0 \
+				or float(item["rest"]) > REST_TIME:
+			_spawn(item, false)
+		var size: float = float(item["size"])
+		var basis: Basis
+		if float(item["rest"]) > 0.0:
+			basis = Basis.from_euler(Vector3(-PI * 0.5, 0.0, a * 0.5))
+		else:
+			basis = Basis.from_euler(Vector3(a * 0.88 - PI * 0.5, a * 0.5, sin(a) * 0.9))
+		basis = basis.scaled(Vector3.ONE * size)
+		multimesh.set_instance_transform(i,
+			Transform3D(basis, Vector3(float(item["x"]), float(item["y"]), float(item["z"]))))
+
 func update(delta: float, season: int, wind: float) -> void:
+	time += delta
 	var petal_target := 1.0 if season == 0 else 0.0
 	var leaf_target := 1.0 if season == 2 else 0.0
 	petal_level = lerpf(petal_level, petal_target, 1.0 - exp(-delta * 0.9))
 	leaf_level = lerpf(leaf_level, leaf_target, 1.0 - exp(-delta * 0.9))
-	petals.emitting = petal_level > 0.01
-	leaves.emitting = leaf_level > 0.01
-	petals.amount_ratio = clampf(petal_level * quality_scale, 0.0, 1.0)
-	leaves.amount_ratio = clampf(leaf_level * quality_scale, 0.0, 1.0)
-	if ground_petal_material != null:
-		var petal_tint := ground_petal_material.albedo_color
-		petal_tint.a = petal_level * 0.9
-		ground_petal_material.albedo_color = petal_tint
-		ground_petals.visible = petal_level > 0.02
-	if ground_leaf_material != null:
-		var leaf_tint := ground_leaf_material.albedo_color
-		leaf_tint.a = leaf_level * 0.9
-		ground_leaf_material.albedo_color = leaf_tint
-		ground_leaves.visible = leaf_level > 0.02
-	var drift := wind * 0.055
-	if petal_process != null:
-		petal_process.gravity = Vector3(drift * 0.8, -0.52, drift * 0.35)
-	if leaf_process != null:
-		leaf_process.gravity = Vector3(drift, -0.72, drift * 0.4)
+	if petal_material != null:
+		var petal_tint := petal_material.albedo_color
+		petal_tint.a = petal_level
+		petal_material.albedo_color = petal_tint
+	if leaf_material != null:
+		var leaf_tint := leaf_material.albedo_color
+		leaf_tint.a = leaf_level
+		leaf_material.albedo_color = leaf_tint
+	petal_instance.visible = petal_level > 0.002
+	leaf_instance.visible = leaf_level > 0.002
+	if petal_instance.visible:
+		_update_system(petal_items, petal_multimesh, petal_level, wind, delta)
+	if leaf_instance.visible:
+		_update_system(leaf_items, leaf_multimesh, leaf_level, wind, delta)
