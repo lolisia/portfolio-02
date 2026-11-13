@@ -209,8 +209,8 @@ Godot의 사용자 인자는 `--` 뒤에 전달합니다.
 - 반사 카메라가 물속 지형/암반을 보지 않도록 `surface/terrain/foliage` 셰이더에 하드코딩된 `0.44` 수면 컷이 있음.
 
 **남은 선택 작업**
-1. 여러 카메라 각도/줌에서 반사 방향 최종 확인.
-2. 물보라/물결 노멀 디테일 추가.
+1. ~~여러 카메라 각도/줌에서 반사 방향 최종 확인~~ — `--pond`/`--pondside` 캡처로 확인.
+2. ~~물보라/물결 노멀 디테일~~ — `src/water.js`의 4옥타브 advected wave normal, 바람 기반 slope, slope 반사 왜곡 포팅 완료.
 
 **완료 기준**
 - 연못에 나무/농가/하늘이 자연스럽게 비침. (저각에서 확인)
@@ -438,7 +438,8 @@ Godot의 사용자 인자는 `--` 뒤에 전달합니다.
   - `Camera3D.clip_plane`이 Godot 4.7에 없어 물 아래 지오메트리를 셰이더 `discard`로 제거.
   - `surface/terrain/foliage` 셰이더에 `0.44` 수면 컷이 하드코딩되어 있음 → 수면 높이 변경 시 함께 수정.
   - SubViewport 반사 UV는 상하 뒤집힘 보정(`mirror_uv.y = 1 - y`)이 필요. 수정 완료.
-  - SubViewport가 매 프레임 렌더링됨 → 필요 시 격프레임/해상도 조정.
+  - SubViewport는 2프레임 간격, High 288p/Medium 224p로 갱신.
+  - 반사 텍스처가 HDR이라 `clamp(0..1)`로 화이트아웃을 방지하고, wave slope로 반사 UV를 흔듦.
 - **안개/광선**
   - `FogVolume`과 Environment volumetric fog는 Forward+ 전용.
   - `AtmosphereEffect`는 Forward+ + RGBA16F scene color + single-sample resolved depth가 필요.

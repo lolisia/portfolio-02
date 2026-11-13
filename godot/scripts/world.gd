@@ -259,6 +259,7 @@ func _build_water() -> void:
 	plane.subdivide_depth = 24
 	var mat := ShaderMaterial.new()
 	mat.shader = WATER_SHADER
+	mat.set_shader_parameter("breeze", 0.4)
 	water = MeshInstance3D.new()
 	water.name = "Pond"
 	water.mesh = plane
@@ -1135,6 +1136,10 @@ func set_wind(wind_ms: float) -> void:
 			var mat := (child as MultiMeshInstance3D).material_override
 			if mat is ShaderMaterial:
 				mat.set_shader_parameter("wind_strength", strength)
+	if water != null:
+		var water_mat := water.material_override as ShaderMaterial
+		if water_mat != null:
+			water_mat.set_shader_parameter("breeze", strength)
 
 func walkable(x: float, z: float) -> bool:
 	return wet(x, z) < -0.2 and is_free(x, z, 0.26)

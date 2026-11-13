@@ -4,6 +4,7 @@ render_mode blend_mix, depth_draw_always, cull_disabled, diffuse_burley, specula
 uniform vec4 shallow_color : source_color = vec4(0.055, 0.19, 0.17, 0.62);
 uniform vec4 deep_color : source_color = vec4(0.006, 0.045, 0.085, 0.90);
 uniform float wave_strength : hint_range(0.0, 3.0) = 1.0;
+uniform float breeze : hint_range(0.0, 2.0) = 0.4;
 uniform float freeze : hint_range(0.0, 1.0) = 0.0;
 uniform sampler2D screen_tex : hint_screen_texture, filter_linear;
 uniform sampler2D reflection_tex : filter_linear;
@@ -24,6 +25,43 @@ float pond_noise(vec2 p) {
 	f = f * f * (3.0 - 2.0 * f);
 	return mix(mix(hash21(i), hash21(i + vec2(1.0, 0.0)), f.x),
 		mix(hash21(i + vec2(0.0, 1.0)), hash21(i + vec2(1.0, 1.0)), f.x), f.y);
+}
+
+// Value noise with analytic derivatives, used for the advected wave field.
+vec3 pond_noise_d(vec2 p) {
+	vec2 i = floor(p);
+	vec2 f = fract(p);
+	vec2 u = f * f * f * (f * (f * 6.0 - 15.0) + 10.0);
+	vec2 du = 30.0 * f * f * (f - 1.0) * (f - 1.0);
+	float a = hash21(i);
+	float b = hash21(i + vec2(1.0, 0.0));
+	float c = hash21(i + vec2(0.0, 1.0));
+	float d = hash21(i + vec2(1.0, 1.0));
+	float k = a - b - c + d;
+	return vec3(
+		a + (b - a) * u.x + (c - a) * u.y + k * u.x * u.y - 0.5,
+		du.x * (b - a + k * u.y),
+		du.y * (c - a + k * u.x));
+}
+
+// Port of src/water.js: four rotated, advected noise octaves give finite
+// crests and no single visible wavelength.
+vec3 water_waves(vec2 q, float t, float wind_power) {
+	vec3 total = vec3(0.0);
+	mat2 axes = mat2(vec2(0.86, 0.51), vec2(-0.51, 0.86));
+	float freq = 0.88;
+	float amp = 0.045;
+	for (int i = 0; i < 4; i++) {
+		mat2 m = mat2(vec2(1.0, 0.0), vec2(0.0, 1.48)) * axes * freq;
+		vec3 n = pond_noise_d(m * q + vec2(-0.28, 0.17) * t
+			* (0.7 + 0.24 * float(i)) + vec2(float(i) * 31.71));
+		vec2 rotated = vec2(dot(n.yz, m[0]), dot(n.yz, m[1]));
+		total += amp * vec3(n.x, rotated);
+		axes = axes * mat2(vec2(0.48, 0.877), vec2(-0.877, 0.48));
+		freq *= 2.03;
+		amp *= 0.43;
+	}
+	return total * (0.34 + wind_power * 1.12);
 }
 
 // Distance to the nearest Voronoi edge: narrow lines become ice cracks.
@@ -52,8 +90,10 @@ float voronoi_edge(vec2 p) {
 void vertex() {
 	world_pos = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
 	mirror_coord = reflection_projection * (reflection_view * vec4(world_pos, 1.0));
-	float w = sin(world_pos.x * 2.2 + TIME * 1.3) + sin(world_pos.z * 2.8 - TIME * 1.1);
-	VERTEX.y += w * 0.004 * wave_strength * (1.0 - freeze);
+	vec3 waves = water_waves(world_pos.xz, TIME, breeze);
+	vec2 bank_q = world_pos.xz - vec2(10.0, 6.1);
+	float bank = 1.0 - smoothstep(0.55, 0.98, length(bank_q / vec2(4.5, 3.5)));
+	VERTEX.y += waves.x * bank * wave_strength * (1.0 - freeze);
 }
 
 void fragment() {
@@ -64,10 +104,13 @@ void fragment() {
 	ALPHA = mix(shallow_color.a, deep_color.a, depth_mix);
 	ROUGHNESS = 0.09;
 	METALLIC = 0.0;
-	vec3 world_normal = normalize(vec3(
-		sin(world_pos.x * 4.0 + TIME * 1.8) * 0.035,
-		1.0,
-		cos(world_pos.z * 4.6 - TIME * 1.5) * 0.035));
+	vec3 waves = water_waves(world_pos.xz, TIME, breeze);
+	vec2 slope = waves.yz;
+	vec3 fine = pond_noise_d(world_pos.xz * vec2(23.0, 18.0)
+		+ vec2(-1.1, 0.75) * TIME);
+	slope += fine.yz * 0.024 * breeze;
+	slope *= (1.0 - freeze) * wave_strength;
+	vec3 world_normal = normalize(vec3(-slope.x, 1.0, -slope.y));
 	NORMAL = normalize((VIEW_MATRIX * vec4(world_normal, 0.0)).xyz);
 
 	float ice = smoothstep(0.04, 0.82, freeze);
@@ -80,9 +123,7 @@ void fragment() {
 		ice_color += vec3(0.20, 0.23, 0.23) * frost + crack * 0.11;
 	}
 
-	vec2 ripple = vec2(
-		sin(world_pos.x * 2.1 + TIME * 1.3),
-		cos(world_pos.z * 2.4 - TIME * 1.1)) * 0.006;
+	vec2 ripple = slope * 0.036;
 	vec3 reflected = texture(screen_tex, clamp(SCREEN_UV + ripple, vec2(0.001), vec2(0.999))).rgb;
 	vec2 mirror_uv = mirror_coord.xy / max(mirror_coord.w, 0.0001) * 0.5 + 0.5;
 	// SubViewport textures use a top-left origin while clip space is bottom-left.
@@ -94,7 +135,8 @@ void fragment() {
 	// banks at grazing angles (Schlick, matching the web original's fifth power).
 	float fresnel = 0.03 + 0.97 * pow(1.0 - facing, 5.0);
 	vec3 body = mix(ALBEDO, ice_color, ice);
-	ALBEDO = mix(body, reflected, fresnel * (1.0 - ice * 0.85));
+	ALBEDO = mix(body, clamp(reflected, vec3(0.0), vec3(1.0)),
+		fresnel * (1.0 - ice * 0.85));
 	ALPHA = mix(ALPHA, 0.97, fresnel * 0.55 * (1.0 - ice));
 	ALPHA = mix(ALPHA, 1.0, ice);
 	ROUGHNESS = mix(ROUGHNESS, 0.46, ice);

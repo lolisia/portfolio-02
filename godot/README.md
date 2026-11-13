@@ -40,7 +40,7 @@ Godot 4.7 프로젝트. 원본 Three.js 디오라마(`../src`)를 PC/모바일 �
 - 반응형 UI: 실제 창 크기 기준 content scale, 360px 폭/세로 모드 대응, 터치 타깃, 패널 열림 시 카메라 프레이밍 보정
 - 품질 프리셋: 높음/보통/낮음 (MSAA, 3D 해상도 스케일, SSAO/볼류메트릭, 물 반사, 잔디/파티클 밀도), 모바일 FPS 기반 적응형 해상도
 - 태양/하늘/안개/톤매핑/글로우/SSAO 기본 환경, 원본 backdrop 기반 하늘 그라데이션과 분할 톤(그림자/하이라이트) 그레이드
-- Forward+ 볼류메트릭 미스트(FogVolume)와 **SubViewport 평면 물 반사**(모바일은 화면공간 반사 폴백)
+- Forward+ 볼류메트릭 미스트(FogVolume)와 **SubViewport 평면 물 반사**(모바일은 화면공간 반사 폴백), 4옥타브 advected wave normal·바람 기반 slope·slope 반사 왜곡
 - 표면 셰이더: 나무결·석재·기와·흙 디테일, 절벽 지층, foliage dapple, 젖은 표면, 눈 덮임
 - 봄 벚꽃잎/가을 낙엽 파티클과 지면 레이어, 계절 foliage tint, 겨울 연못 결빙/균열, 폭포 white-water foam·spray, 비 파문
 - 밤 별 dome·달, 램프별 플리커/후광, 램프 주변 나방, 여름밤 반딧불
