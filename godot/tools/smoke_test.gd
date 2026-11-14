@@ -195,6 +195,12 @@ func _initialize() -> void:
 		var inside_push: Vector2 = world.resolve_body(Vector2(-1.0, -2.5), 0.2, null)
 		if inside_push.distance_to(Vector2(-1.0, -2.5)) < 0.5:
 			failures.append("oriented box did not push the walker")
+		# A1: placement circles are not colliders; the porch steps and the
+		# apron in front of them must stay walkable.
+		for step_point in [Vector2(-1.0, -0.59), Vector2(-1.0, 0.6), world.cottage_apron]:
+			var settled: Vector2 = world.resolve_body(step_point, 0.2, {"id": -1, "ignore": "house"})
+			if settled.distance_to(step_point) > 0.02:
+				failures.append("porch/apron point pushed by a collider: %s" % step_point)
 		var body_a: Dictionary = world.add_body(-5.0, -5.0, 0.2, "test")
 		var body_b: Dictionary = world.add_body(-5.1, -5.0, 0.2, "test")
 		var body_push: Vector2 = world.resolve_body(Vector2(-5.05, -5.0), 0.2, body_a)

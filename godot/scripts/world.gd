@@ -59,6 +59,9 @@ var door_target_open := false
 var door_open := 0.0
 var obstacles: Array = []
 var boxes: Array = []
+## Static collision circles [x, z, r, tag] (web colliders.circle). Separate from
+## `obstacles`, which only keeps scenery from being placed on top of itself.
+var circles: Array = []
 var bodies: Array = []
 var path_points: Array[Vector2] = []
 var flight := {
@@ -231,13 +234,30 @@ func is_free(x: float, z: float, pad: float = 0.0) -> bool:
 		var radius: float = obstacle[2]
 		if pow(x - ox, 2.0) + pow(z - oz, 2.0) <= pow(radius + pad, 2.0):
 			return false
-	for box in boxes:
-		if _box_overlap(x, z, pad, box):
-			return false
 	return true
 
 func add_box(x: float, z: float, w: float, d: float, angle: float, tag: String = "") -> void:
 	boxes.append({"x": x, "z": z, "w": w, "d": d, "angle": angle, "tag": tag})
+
+func add_circle(x: float, z: float, radius: float, tag: String = "") -> void:
+	circles.append([x, z, radius, tag])
+
+## Web colliders.blocked(): does a disc of radius r touch any static collider?
+func blocked(x: float, z: float, radius: float = 0.0, skip: String = "") -> bool:
+	for box in boxes:
+		if skip != "" and String(box.get("tag", "")) == skip:
+			continue
+		if _box_overlap(x, z, radius, box):
+			return true
+	for circle in circles:
+		if skip != "" and String(circle[3]) == skip:
+			continue
+		var dx := x - float(circle[0])
+		var dz := z - float(circle[1])
+		var minimum := float(circle[2]) + radius
+		if dx * dx + dz * dz < minimum * minimum:
+			return true
+	return false
 
 func add_body(x: float, z: float, radius: float, kind: String) -> Dictionary:
 	var body := {
@@ -267,8 +287,8 @@ func _box_overlap(x: float, z: float, pad: float, box: Dictionary) -> bool:
 
 func resolve_body(point: Vector2, radius: float, self_body = null) -> Vector2:
 	# Web parity (colliders.resolve): three passes of oriented boxes, static
-	# circles and the other walkers. Large building circles are covered by the
-	# boxes and are skipped here; the porch/door tags are resolved by ignore.
+	# collision circles and the other walkers. Scenery placement circles
+	# (`obstacles`) are not colliders; a body skips statics tagged `ignore`.
 	var p := point
 	for iteration in range(3):
 		for box in boxes:
@@ -276,13 +296,12 @@ func resolve_body(point: Vector2, radius: float, self_body = null) -> Vector2:
 					and String(box.get("tag", "")) == String(self_body.get("ignore", "")):
 				continue
 			p = _push_out_box(p, radius, box)
-		for obstacle in obstacles:
-			var obstacle_radius: float = obstacle[2]
-			if obstacle_radius >= 1.3:
+		for circle in circles:
+			if self_body != null and String(circle[3]) == String(self_body.get("ignore", "")):
 				continue
-			var ox := p.x - float(obstacle[0])
-			var oz := p.y - float(obstacle[1])
-			var minimum := obstacle_radius + radius
+			var ox := p.x - float(circle[0])
+			var oz := p.y - float(circle[1])
+			var minimum := float(circle[2]) + radius
 			var distance_sq := ox * ox + oz * oz
 			if distance_sq < minimum * minimum:
 				if distance_sq > 1e-9:
@@ -341,22 +360,8 @@ func _push_out_box(point: Vector2, radius: float, box: Dictionary) -> Vector2:
 	return point + Vector2(c * push_x + s * push_z, -s * push_x + c * push_z)
 
 func is_free_for_walker(x: float, z: float, pad: float = 0.16) -> bool:
-	if wet(x, z) > -0.10:
-		return false
-	for obstacle in obstacles:
-		var radius: float = obstacle[2]
-		# Small plants and lamp posts can be brushed through; walls, beds and
-		# larger trees remain solid so the walker does not cut through the farm.
-		if radius < 0.55:
-			continue
-		var dx := x - float(obstacle[0])
-		var dz := z - float(obstacle[1])
-		if dx * dx + dz * dz <= pow(radius + pad, 2.0):
-			return false
-	for box in boxes:
-		if _box_overlap(x, z, pad, box):
-			return false
-	return true
+	# Water stays off limits; everything else is the web collision world.
+	return wet(x, z) <= -0.10 and not blocked(x, z, pad)
 
 func near_path(x: float, z: float) -> bool:
 	for p in path_points:
@@ -726,6 +731,10 @@ func _build_cottage(cx: float, cz: float, rot: float) -> void:
 			0.14, COTTAGE.P - 0.13, rot, "house")
 		add_box(cx + float(side) * (COTTAGE.W * 0.5 + 0.58) * 0.5,
 			porch_z - 0.06, COTTAGE.W * 0.5 - 0.58, 0.14, rot, "house")
+	# Balcony support posts standing on the porch deck.
+	for side in [-1.0, 1.0]:
+		add_circle(cx + float(side) * (float(COTTAGE.BW) * 0.5 - 0.05),
+			cz + COTTAGE.D * 0.5 + float(COTTAGE.B) - 0.08, 0.1, "house")
 	door_leaf = _build_door_leaf(cx, gy, cz, rot)
 	obstacles.append([cx, cz, 2.3])
 	obstacles.append([cx, porch_z + 0.2, 0.75])
@@ -1186,6 +1195,9 @@ func _fence_run(points: Array) -> void:
 		var count := maxi(1, int(round(length / 0.85)))
 		for k in range(1 if i > 1 else 0, count + 1):
 			posts.append(a.lerp(b, float(k) / float(count)))
+		# Web: one fence collider box per polyline segment.
+		add_box((a.x + b.x) * 0.5, (a.y + b.y) * 0.5, 0.16, length,
+			atan2(b.x - a.x, b.y - a.y), "fence")
 	for i in range(posts.size()):
 		var p: Vector2 = posts[i]
 		var py := height(p.x, p.y)
@@ -1385,6 +1397,7 @@ func _build_trees() -> void:
 			b.part(kind + "Bark", x, y, z, s, s, s, b.pick(BARK_COLORS), 0.0, angle, 0.0)
 			b.part(kind + "Leaves", x, y, z, s, s, s, b.pick(palette), 0.0, angle, 0.0, 0.014)
 		obstacles.append([x, z, 0.58 * s])
+		add_circle(x, z, 0.32 * s, "tree")
 
 func tree_canopies() -> Array:
 	# World-space AABBs for the tree canopies, used by the rain/snow collision
@@ -1423,6 +1436,7 @@ func _build_stumps() -> void:
 			b.part("stumpTop", 0.0, -0.04, 0.0, 1.0, 1.0, 1.0, "#d1b07a")
 		)
 		obstacles.append([x, z, 0.45])
+		add_circle(x, z, 0.4, "plant")
 
 func _build_ground_cover() -> void:
 	var gx := -14.85
@@ -1494,6 +1508,7 @@ func _build_ground_cover() -> void:
 			b.part(kind + "Leaves", x, height(x, z) - 0.02, z, s3, s3 * (0.85 + b.randf() * 0.3), s3,
 				b.pick(["#6f8d40", "#7e9949", "#8b9f4f"]), 0.0, turn, 0.0, 0.05)
 			obstacles.append([x, z, 0.42 * s3])
+			add_circle(x, z, 0.42 * s3, "plant")
 
 	# M4(X): the web has no separate wildflower drifts; the 440-point scatter
 	# above (a single-colour cluster every fourth point) is the only source.
@@ -1550,6 +1565,7 @@ func _build_lamps() -> void:
 			_lantern_parts("post")
 		)
 		obstacles.append([x, z, 0.2])
+		add_circle(x, z, 0.2, "lamp")
 		# M5: the pendant hangs from its own pivot so it can swing with the
 		# breeze; the spotlight travels with it like the web's lantern pivot.
 		var pivot := Node3D.new()
@@ -1656,6 +1672,7 @@ func set_cloud_shadow(amount: float, clock: float) -> void:
 		mat.set_shader_parameter("cloud_clock", clock)
 
 func walkable(x: float, z: float) -> bool:
-	return wet(x, z) < -0.2 and is_free(x, z, 0.26)
+	# Web: !colliders.blocked(x, z, .26) && wet < -.2
+	return wet(x, z) < -0.2 and not blocked(x, z, 0.26)
 
 

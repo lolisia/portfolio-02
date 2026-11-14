@@ -56,6 +56,7 @@ var toon_double_count := 0
 var _toon_white: ImageTexture
 var time := 0.0
 var stride_left := 0.0
+var stuck := 0.0
 var foot := 1.0
 
 var rod: Node3D
@@ -577,26 +578,22 @@ func _walk_route(delta: float, speed: float = 0.62) -> void:
 	var direction := flat.normalized()
 	pace = lerpf(pace, speed, 1.0 - exp(-delta * 3.0))
 	var step := minf(pace * delta, flat.length())
-	var moved := false
 	var start := Vector2(position.x, position.z)
-	var candidates := [
-		Vector2(position.x + direction.x * step, position.z + direction.y * step),
-		Vector2(position.x + direction.x * step, position.z),
-		Vector2(position.x, position.z + direction.y * step),
-	]
-	for candidate in candidates:
-		var point: Vector2 = candidate
-		if _can_stand(point):
-			if world != null and not body.is_empty():
-				point = world.resolve_body(point, 0.20, body)
-			position.x = point.x
-			position.z = point.y
-			moved = true
-			break
-	if not moved:
+	# Web walk(): step toward the waypoint and let the collision world slide
+	# her along whatever is in the way. Water is the only hard stop.
+	var point := start + direction * step
+	if _can_stand(point):
+		if world != null and not body.is_empty():
+			point = world.resolve_body(point, 0.20, body)
+		position.x = point.x
+		position.z = point.y
+	var moved := start.distance_to(Vector2(position.x, position.z))
+	# Blocked (another walker parked on the waypoint, a post in the way):
+	# give up on that waypoint after 1.2 s, exactly like unitychan.js.
+	stuck = stuck + delta if moved < step * 0.3 else 0.0
+	if stuck > 1.2:
+		stuck = 0.0
 		route.pop_front()
-		pace = lerpf(pace, 0.0, 1.0 - exp(-delta * 6.0))
-		return
 	var running := pace > 1.1
 	_track_feet(start.distance_to(Vector2(position.x, position.z)), running)
 	rotation.y = lerp_angle(rotation.y, atan2(direction.x, direction.y), 1.0 - exp(-delta * turn_rate))
@@ -607,11 +604,10 @@ func _walk_route(delta: float, speed: float = 0.62) -> void:
 func _can_stand(p: Vector2) -> bool:
 	if world == null:
 		return true
-	# The porch deck/steps are raised walking surfaces inside the house
-	# obstacle; allow them explicitly so the door route can climb.
+	# Colliders are resolved by resolve_body(); only keep her out of the pond.
 	if world.is_on_porch(p.x, p.y):
 		return true
-	return world.is_free_for_walker(p.x, p.y, 0.16)
+	return world.wet(p.x, p.y) <= -0.10
 
 func _in_doorway() -> bool:
 	if world == null:
