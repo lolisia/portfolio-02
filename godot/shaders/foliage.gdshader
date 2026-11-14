@@ -125,6 +125,13 @@ void fragment() {
 	if (CAMERA_POSITION_WORLD.y < 0.0 && v_origin.y < 0.44) {
 		discard;
 	}
+	// Web parity (surfaces.js): each seasonal plant instance has a fixed rank and
+	// drops out once winterBare passes it, so plants thin out one by one while
+	// the blend eases 0 -> 1 and are all gone at full winter. Evergreens stay.
+	float rank = fract(dot(v_origin, vec3(16.321, 28.735, 9.135)));
+	if (evergreen < 0.5 && rank < winter) {
+		discard;
+	}
 	// Alpha-cut the canopy using a procedural leaf spray. Only leaf materials
 	// opt in; grass, stems and flowers keep their solid geometry.
 	if (leaf_cut > 1.5) {
@@ -161,9 +168,6 @@ void fragment() {
 	SPECULAR = 0.15;
 	ALBEDO = albedo;
 
-	if (evergreen < 0.5 && winter > 0.5 && hash(v_origin.xz) < winter * 0.95) {
-		discard;
-	}
 }
 
 void light() {

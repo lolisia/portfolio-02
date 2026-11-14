@@ -87,7 +87,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		var motion := event as InputEventMouseMotion
 		var rotate_unit := TAU / maxf(get_viewport().get_visible_rect().size.y, 1.0)
 		yaw_target -= motion.relative.x * rotate_unit * rotate_speed
-		pitch_target -= motion.relative.y * rotate_unit * rotate_speed
+		pitch_target += motion.relative.y * rotate_unit * rotate_speed
 	elif event is InputEventScreenTouch:
 		var touch := event as InputEventScreenTouch
 		if touch.pressed:
@@ -101,7 +101,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		if _touch_points.size() == 1:
 			var rotate_unit := TAU / maxf(get_viewport().get_visible_rect().size.y, 1.0)
 			yaw_target -= drag.relative.x * rotate_unit * rotate_speed
-			pitch_target -= drag.relative.y * rotate_unit * rotate_speed
+			pitch_target += drag.relative.y * rotate_unit * rotate_speed
 		elif _touch_points.size() >= 2:
 			_update_pinch()
 
