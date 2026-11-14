@@ -4,9 +4,9 @@ shader_type sky;
 // screen-space backdrop quad; this shader supplies the palette, cloud veil and
 // sun glow that the water and materials reflect, matching surfaces.js.
 
-uniform vec3 sky_top : source_color = vec3(0.24, 0.42, 0.58);
-uniform vec3 sky_horizon : source_color = vec3(0.42, 0.50, 0.54);
-uniform vec3 sky_land : source_color = vec3(0.10, 0.12, 0.10);
+uniform vec3 sky_top = vec3(0.24, 0.42, 0.58);
+uniform vec3 sky_horizon = vec3(0.42, 0.50, 0.54);
+uniform vec3 sky_land = vec3(0.10, 0.12, 0.10);
 uniform vec3 sun_dir = vec3(0.0, 1.0, 0.0);
 uniform vec3 sun_color : source_color = vec3(1.0, 0.85, 0.62);
 uniform float sun_strength = 0.8;
@@ -41,15 +41,16 @@ void sky() {
 	float up = clamp(dir.y, -1.0, 1.0);
 	vec3 color;
 	if (up >= 0.0) {
-		color = mix(sky_horizon, sky_top, smoothstep(0.0, 1.0, pow(up, 0.55)));
+		color = mix(sky_horizon, sky_top, 1.0 - exp(-up * 3.8));
 	} else {
-		color = mix(sky_horizon, sky_land, smoothstep(0.0, 1.0, pow(-up, 0.55)));
+		color = mix(sky_horizon, sky_land, 1.0 - exp(up * 3.8));
 	}
 	// Cloud veil: a slowly drifting fbm layer around the upper hemisphere.
 	vec2 cloud_uv = dir.xz / max(0.15, abs(dir.y) + 0.24);
 	float cloud = smoothstep(0.42, 0.72,
 		fbm2(cloud_uv * 2.2 + vec2(cloud_clock * 0.010, -cloud_clock * 0.006)));
-	color = mix(color, vec3(0.58, 0.62, 0.66), cloud * cloud_amount
+	// web sky.js: the veil blends toward the horizon colour (.55 at most).
+	color = mix(color, sky_horizon, cloud * cloud_amount * 0.55
 		* smoothstep(0.0, 0.25, up));
 	// Sun disc and broad glow, like the web sky/PMREM source.
 	float facing = max(dot(dir, normalize(sun_dir)), 0.0);

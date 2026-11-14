@@ -469,9 +469,9 @@ func _update_backdrop() -> void:
 func _setup_environment() -> void:
 	sky_material = ShaderMaterial.new()
 	sky_material.shader = preload("res://shaders/sky.gdshader")
-	sky_material.set_shader_parameter("sky_top", Color(0.34, 0.55, 0.72).srgb_to_linear())
-	sky_material.set_shader_parameter("sky_horizon", Color(0.68, 0.76, 0.80).srgb_to_linear())
-	sky_material.set_shader_parameter("sky_land", Color(0.10, 0.12, 0.10).srgb_to_linear())
+	sky_material.set_shader_parameter("sky_top", Color(0.34, 0.55, 0.72))
+	sky_material.set_shader_parameter("sky_horizon", Color(0.68, 0.76, 0.80))
+	sky_material.set_shader_parameter("sky_land", Color(0.10, 0.12, 0.10))
 	sky_material.set_shader_parameter("sun_strength", 0.8)
 	sky_material.set_shader_parameter("sun_dir", Vector3(0.0, 1.0, 0.0))
 
@@ -484,8 +484,8 @@ func _setup_environment() -> void:
 	env.background_mode = Environment.BG_SKY
 	env.sky = sky
 	env.ambient_light_source = Environment.AMBIENT_SOURCE_SKY
-	env.ambient_light_sky_contribution = 0.58
-	env.ambient_light_energy = 0.48
+	env.ambient_light_sky_contribution = 1.0
+	env.ambient_light_energy = 0.63
 	env.reflected_light_source = Environment.REFLECTION_SOURCE_SKY
 	env.tonemap_mode = Environment.TONE_MAPPER_ACES
 	env.tonemap_exposure = 1.14
@@ -815,7 +815,7 @@ func _process(delta: float) -> void:
 					backdrop_material.set_shader_parameter("sun_uv", sun_screen)
 					backdrop_material.set_shader_parameter("sun_strength", strength * 0.9)
 					backdrop_material.set_shader_parameter("sun_color",
-						sun.light_color.srgb_to_linear())
+						sun.light_color)
 				if atmosphere_effect != null:
 					atmosphere_effect.sun_uv = sun_screen
 					atmosphere_effect.sun_strength = strength

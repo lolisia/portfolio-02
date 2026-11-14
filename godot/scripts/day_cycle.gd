@@ -61,10 +61,11 @@ func apply(hour: float, weather: int = 0, _season: int = 1,
 	top_color *= dimming
 	horizon_color *= dimming
 	if backdrop_material != null:
-		# Shader uniforms receive these as linear values; convert the sRGB
-		# palette once here so the screen gradient matches the web composite.
-		backdrop_material.set_shader_parameter("bg_top", top_color.srgb_to_linear())
-		backdrop_material.set_shader_parameter("bg_bottom", horizon_color.srgb_to_linear())
+		# Pass sRGB Colors: Godot converts Color values to linear when it
+		# uploads vec3/vec4 uniforms, so converting here as well darkened and
+		# oversaturated the sky twice.
+		backdrop_material.set_shader_parameter("bg_top", top_color)
+		backdrop_material.set_shader_parameter("bg_bottom", horizon_color)
 	var ground_color: Color = Daylight.color_at(Daylight.SKY_LAND, t["from"], t["to"], t["f"]).lerp(
 		Color(0.22, 0.25, 0.25), overcast * 0.5)
 	var fog_color: Color = Daylight.color_at(Daylight.FOG_SCATTER, t["from"], t["to"], t["f"])
@@ -73,14 +74,21 @@ func apply(hour: float, weather: int = 0, _season: int = 1,
 	# foliageTint and winterBare. Keep the time-of-day palette untouched.
 
 	sun.light_energy = sun_energy
-	# L3: the sky shader is the reflection/ambient source. Pass linear colours
-	# so the PMREM radiance matches the backdrop's display palette.
-	sky_material.set_shader_parameter("sky_top", top_color.srgb_to_linear())
-	sky_material.set_shader_parameter("sky_horizon", horizon_color.srgb_to_linear())
+	# L3 (web sky.js): the lighting probe is its own zenith/horizon/land
+	# palette, not the screen backdrop, dimmed by weather and night in linear
+	# space. Vector3 uniforms are uploaded as-is, so pass linear values.
+	var probe_scale := (1.0 - 0.19 * coverage) * (1.0 - 0.75 * night)
+	var zenith := Daylight.color_at(Daylight.SKY_TOP, t["from"], t["to"], t["f"]).srgb_to_linear()
+	var horizon := Daylight.color_at(Daylight.SKY_HORIZON, t["from"], t["to"], t["f"]).srgb_to_linear()
+	var land := Daylight.color_at(Daylight.SKY_LAND, t["from"], t["to"], t["f"]).srgb_to_linear()
+	sky_material.set_shader_parameter("sky_top",
+		Vector3(zenith.r, zenith.g, zenith.b) * probe_scale)
+	sky_material.set_shader_parameter("sky_horizon",
+		Vector3(horizon.r, horizon.g, horizon.b) * probe_scale)
 	sky_material.set_shader_parameter("sky_land",
-		ground_color.darkened(0.78).lerp(Color(0.02, 0.035, 0.045), 0.40).srgb_to_linear())
+		Vector3(land.r, land.g, land.b) * probe_scale)
 	sky_material.set_shader_parameter("sun_dir", t["direction"])
-	sky_material.set_shader_parameter("sun_color", sun.light_color.srgb_to_linear())
+	sky_material.set_shader_parameter("sun_color", sun.light_color)
 	sky_material.set_shader_parameter("sun_strength",
 		(0.45 + 0.75 * golden) * (1.0 - night * 0.75))
 	sky_material.set_shader_parameter("cloud_amount",
@@ -88,8 +96,9 @@ func apply(hour: float, weather: int = 0, _season: int = 1,
 	sky_material.set_shader_parameter("cloud_clock",
 		float(Time.get_ticks_msec()) / 1000.0)
 
-	env.ambient_light_sky_contribution = 0.58
-	env.ambient_light_energy = 0.48
+	# Web: scene.environmentIntensity = .63 on the sky probe.
+	env.ambient_light_sky_contribution = 1.0
+	env.ambient_light_energy = 0.63
 	env.background_energy_multiplier = 1.0
 	env.fog_enabled = true
 	env.fog_light_color = fog_color
