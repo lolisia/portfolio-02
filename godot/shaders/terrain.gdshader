@@ -57,11 +57,19 @@ void fragment() {
 	float large = fbm(v_world.xz * 1.4);
 	float fine = fbm(v_world.xz * 11.0);
 	float soil_detail = fbm(v_world.xz * 34.0);
-	float blades = smoothstep(0.54, 0.92, fbm(v_world.xz * 88.0));
-	float spatter = step(0.72, fbm(v_world.xz * 47.0));
-	vec3 albedo = v_color * (0.72 + 0.32 * large + 0.18 * fine);
-	albedo += vec3(0.014, 0.030, 0.008) * blades;
-	albedo += vec3(0.020, 0.030, 0.012) * spatter;
+	// Web world.js ground canvas: one texel per 30/1024 tile carries a little
+	// random grain, and ~27% of texels take one of four alpha-blended specks.
+	vec2 texel = floor((v_world.xz + vec2(15.0)) * (1024.0 / 30.0));
+	vec3 albedo = v_color * (1.0 + (hash(texel) - 0.5) * 0.08);
+	float speck = hash(texel + vec2(17.1, 3.3));
+	if (speck < 0.27) {
+		float pick = hash(texel + vec2(3.7, 41.9));
+		vec4 dot_color = pick < 0.25 ? vec4(0.087, 0.188, 0.042, 0.33)
+			: pick < 0.5 ? vec4(0.590, 0.665, 0.171, 0.47)
+			: pick < 0.75 ? vec4(0.227, 0.331, 0.069, 0.53)
+			: vec4(0.056, 0.109, 0.037, 0.33);
+		albedo = mix(albedo, dot_color.rgb, dot_color.a);
+	}
 
 	// Ground mask: R = leaf litter under trees, G = soft trail.
 	vec2 mask_uv = (v_world.xz + vec2(15.0)) / 30.0;

@@ -13,6 +13,10 @@ uniform float cloud_amount : hint_range(0.0, 1.2) = 0.0;
 uniform float cloud_clock = 0.0;
 uniform float trample_strength : hint_range(0.0, 1.0) = 0.0;
 uniform vec3 season_tint = vec3(1.0);
+// Web foliageTint influence: needles .19, petals 0 (not tinted), else 1.
+uniform float tint_influence : hint_range(0.0, 1.0) = 1.0;
+// Web leafSpray() canvas baked by tools/leaf-spray.py (spray / needle).
+uniform sampler2D spray_tex : source_color, filter_linear_mipmap_anisotropic, repeat_disable;
 uniform vec4 trample[16];
 
 varying vec3 v_color;
@@ -41,31 +45,6 @@ float fbm(vec2 p) {
 		a *= 0.5;
 	}
 	return n;
-}
-
-// Broadleaf spray: a grid of rotated pointed leaves cut into the solid
-// canopy mesh, standing in for the web's alpha-tested leaf texture.
-float broadleaf_mask(vec3 p) {
-	vec2 q = p.xz * 5.2 + vec2(p.y * 2.1, -p.y * 1.4);
-	vec2 cell = floor(q);
-	vec2 f = fract(q) - 0.5;
-	float r = hash(cell);
-	vec2 offset = vec2(r, hash(cell + 19.3)) - 0.5;
-	vec2 local = f - offset * 0.30;
-	float angle = r * 6.2831853;
-	float c = cos(angle);
-	float s = sin(angle);
-	vec2 rotated = vec2(local.x * c - local.y * s, local.x * s + local.y * c);
-	rotated.x *= 1.15;
-	return 1.0 - smoothstep(0.30, 0.55, length(rotated * vec2(1.0, 1.45)));
-}
-
-// Pine needle spray: thin overlapping strokes.
-float needle_mask(vec3 p) {
-	vec2 q = p.xz * 18.0 + vec2(p.y * 8.0, -p.y * 4.0);
-	vec2 f = fract(q) - 0.5;
-	float groove = abs(f.x + f.y * 0.45);
-	return 1.0 - smoothstep(0.10, 0.28, groove);
 }
 
 void vertex() {
@@ -132,18 +111,18 @@ void fragment() {
 	if (evergreen < 0.5 && rank < winter) {
 		discard;
 	}
-	// Alpha-cut the canopy using a procedural leaf spray. Only leaf materials
-	// opt in; grass, stems and flowers keep their solid geometry.
-	if (leaf_cut > 1.5) {
-		if (needle_mask(v_world) < 0.24) {
-			discard;
-		}
-	} else if (leaf_cut > 0.5) {
-		if (broadleaf_mask(v_world) < 0.30) {
+	// Leaves and needles are alpha-tested sprays mapped by the card UVs, like
+	// the web 'spray'/'needle' materials (alphaTest .29). The web canvas
+	// texture is flipY'd, so sample with v flipped to match its orientation.
+	vec4 spray = vec4(1.0);
+	if (leaf_cut > 0.5) {
+		spray = texture(spray_tex, vec2(UV.x, 1.0 - UV.y));
+		if (spray.a < 0.29) {
 			discard;
 		}
 	}
-	vec3 albedo = base_color.rgb * v_color * season_tint;
+	vec3 albedo = base_color.rgb * v_color * spray.rgb
+		* mix(vec3(1.0), season_tint, tint_influence);
 	// K9: spring blossom freckles on broadleaf spray (web foliageTint.g > 1).
 	float spring = clamp((season_tint.g - 1.02) * 6.0, 0.0, 1.0);
 	if (leaf_cut > 0.5 && leaf_cut < 1.5 && spring > 0.01) {
@@ -152,11 +131,6 @@ void fragment() {
 		albedo = mix(albedo, vec3(0.93, 0.55, 0.66),
 			blossom * spring * 0.75);
 	}
-	// Leafy dapple: world-space noise breaks the flat canopy blobs into
-	// lighter and darker leaf clusters, like the reference's foliage.
-	float leaf = fbm(v_world.xz * 7.0 + vec2(v_world.y * 2.7));
-	float fine = fbm(v_world.xz * 21.0 + vec2(v_world.y * 6.0));
-	albedo *= 0.82 + 0.28 * leaf + 0.08 * fine;
 	float up = clamp(v_world_normal.y, 0.0, 1.0);
 	float snow_noise = fbm(v_origin.xz * 2.6);
 	float snow_mask = smoothstep(0.04, 0.46, snow_depth * 1.2 - snow_noise * 0.35)
@@ -164,10 +138,10 @@ void fragment() {
 	float wetness = wet * (1.0 - snow_mask);
 	albedo *= mix(1.0, 0.76, wetness);
 	albedo = mix(albedo, vec3(0.68, 0.77, 0.87), snow_mask * 0.92);
-	ROUGHNESS = mix(0.86, 0.94, snow_mask);
+	// Web roughness: spray/needle .78, grass .82.
+	ROUGHNESS = mix(leaf_cut > 0.5 ? 0.78 : 0.82, 0.94, snow_mask);
 	SPECULAR = 0.15;
 	ALBEDO = albedo;
-
 }
 
 void light() {

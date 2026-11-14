@@ -372,16 +372,15 @@ func near_path(x: float, z: float) -> bool:
 func clear(x: float, z: float) -> bool:
 	return is_free(x, z, 0.16) and wet(x, z) < -0.13 and not near_path(x, z)
 
-func _terrain_color(x: float, z: float, y: float) -> Color:
-	var n := 0.5 + 0.25 * sin(x * 1.4 + sin(z)) + 0.25 * cos(z * 0.94 + x * 0.55)
-	var base := Color(0.20, 0.29, 0.13).lerp(Color(0.40, 0.48, 0.20), clampf(n, 0.0, 1.0))
-	if wet(x, z) > -0.13:
-		base = base.lerp(Color(0.52, 0.48, 0.32), 0.68)
-	if y < WATER_Y - 0.05:
-		base = base.lerp(Color(0.10, 0.14, 0.09), 0.62)
-	if maxf(absf(x), absf(z)) > 14.55:
-		base = base.lerp(Color(0.30, 0.22, 0.14), 0.72)
-	return base.srgb_to_linear()
+func _terrain_color(x: float, z: float, _y: float) -> Color:
+	# Web world.js ground canvas: (123,149,73) grass or (125,129,87) shore,
+	# plus the smooth field term (the per-pixel speckle lives in the shader).
+	var field := sin(x * 1.4 + sin(z)) * 3.0 + cos(z * 0.94 + x * 0.55) * 5.0 		+ sin(z * 3.2 - x * 2.2) * 2.0
+	var shore := wet(x, z) > -0.13
+	var r := (125.0 if shore else 123.0) + field
+	var g := (129.0 if shore else 149.0) + field
+	var bl := (87.0 if shore else 73.0) + field * 0.62
+	return Color(r / 255.0, g / 255.0, bl / 255.0).srgb_to_linear()
 
 func _build_terrain() -> void:
 	var n := 120

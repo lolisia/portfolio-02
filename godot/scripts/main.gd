@@ -488,7 +488,11 @@ func _setup_environment() -> void:
 	env.ambient_light_energy = 0.63
 	env.reflected_light_source = Environment.REFLECTION_SOURCE_SKY
 	env.tonemap_mode = Environment.TONE_MAPPER_ACES
-	env.tonemap_exposure = 1.14
+	# Godot's ACES divides by the tonemapped white and biases exposure by
+	# 1.8; white 16 and exposure 1.08 reproduce three's ACESFilmic at
+	# toneMappingExposure 1.14 within one 8-bit step (measured on a grey ramp).
+	env.tonemap_white = 16.0
+	env.tonemap_exposure = 1.08
 	env.glow_enabled = true
 	env.glow_intensity = 0.16
 	env.glow_bloom = 0.04
@@ -850,7 +854,7 @@ func _update_atmosphere(daylight: Dictionary) -> void:
 		# intensity, dimmed slightly by the blended weather coverage.
 		fill.light_color = Daylight.color_at(Daylight.SKY, from_index, to_index, blend)
 		fill.light_energy = Daylight.value_at([0.54, 0.62, 0.50, 0.10, 0.48],
-			from_index, to_index, blend) * (1.0 - weather_coverage * 0.09)
+			from_index, to_index, blend) * (1.0 - weather_coverage * 0.09) / PI
 	var base_density := Daylight.value_at(Daylight.FOG_DENSITY, from_index, to_index, blend)
 	atmosphere_effect.fog_density = base_density * (1.0 + 0.38 * coverage) * density_scale
 	var scatter := Daylight.color_at(Daylight.FOG_SCATTER, from_index, to_index, blend)

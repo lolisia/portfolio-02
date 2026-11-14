@@ -51,7 +51,8 @@ func _update_panel(force: bool) -> void:
 
 func set_grade(tint_value: Color, saturation_value: float, contrast_value: float, vignette_value: float,
 		shadow_value := Vector3.ONE, highlight_value := Vector3.ONE) -> void:
-	material.set_shader_parameter("tint", tint_value)
+	# Vector3: a Color would be sRGB-decoded on upload, but this is a linear gain.
+	material.set_shader_parameter("tint", Vector3(tint_value.r, tint_value.g, tint_value.b))
 	material.set_shader_parameter("shadow_tint", shadow_value)
 	material.set_shader_parameter("highlight_tint", highlight_value)
 	material.set_shader_parameter("saturation", saturation_value)

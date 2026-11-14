@@ -111,10 +111,14 @@ func _initialize() -> void:
 			failures.append("oak foliage material missing")
 		else:
 			var oak_mat := oak_mmi.material_override as ShaderMaterial
-			if absf(float(oak_mat.get_shader_parameter("use_vertex_color")) - 1.0) > 0.01:
-				failures.append("baked foliage vertex colours not used")
-			if _mesh_color_count(world.meshes["oakALeaves"]) <= 0:
-				failures.append("foliage shade colours missing")
+			# The web nature meshes have no vertex colours: no synthesised shade.
+			if float(oak_mat.get_shader_parameter("use_vertex_color")) > 0.01:
+				failures.append("non-web synthesised foliage shade still applied")
+			if oak_mat.get_shader_parameter("spray_tex") == null:
+				failures.append("broadleaf spray texture missing")
+			var pine_mmi := world.find_child("pineANeedles", true, false) as MultiMeshInstance3D
+			if pine_mmi == null or (pine_mmi.material_override as ShaderMaterial) 					.get_shader_parameter("spray_tex") == null:
+				failures.append("needle spray texture missing")
 			if float(oak_mat.get_shader_parameter("leaf_cut")) < 0.5:
 				failures.append("leaf backlight flag missing")
 		var bloom_mesh: Mesh = world.meshes.get("sunflowerBloom")

@@ -19,6 +19,8 @@ const PLANT_KINDS := [
 	"lavenderStem", "lavenderBloom", "tulipStem", "tulipBloom",
 	"foxgloveStem", "foxgloveBloom", "roseBloom",
 ]
+const LEAF_SPRAY := preload("res://assets/textures/leaf_spray.png")
+const NEEDLE_SPRAY := preload("res://assets/textures/needle_spray.png")
 const NO_SHADOW := ["turf0", "turf1", "turf2", "grass0", "grass1", "grass2", "glass"]
 
 func _init(p_root: Node3D, p_assets: Dictionary, p_seed: int = 41573) -> void:
@@ -150,8 +152,14 @@ func _material_for(kind: String, mesh: Mesh = null) -> Material:
 		if kind == "pineANeedles":
 			shader_mat.set_shader_parameter("evergreen", 1.0)
 			shader_mat.set_shader_parameter("leaf_cut", 2.0)
+			shader_mat.set_shader_parameter("spray_tex", NEEDLE_SPRAY)
+			shader_mat.set_shader_parameter("tint_influence", 0.19)
 		elif kind.ends_with("Leaves"):
 			shader_mat.set_shader_parameter("leaf_cut", 1.0)
+			shader_mat.set_shader_parameter("spray_tex", LEAF_SPRAY)
+		elif kind == "flowerHead" or kind.ends_with("Bloom"):
+			# Web 'petal' material is not part of the foliageTint set.
+			shader_mat.set_shader_parameter("tint_influence", 0.0)
 		return shader_mat
 	if kind == "glass" or kind == "lampglass":
 		var mat := StandardMaterial3D.new()

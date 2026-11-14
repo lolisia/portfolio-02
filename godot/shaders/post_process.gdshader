@@ -16,6 +16,15 @@ uniform float sun_strength = 0.0;
 uniform float shaft_strength = 0.0;
 uniform vec3 sun_color = vec3(1.0, 0.85, 0.62);
 
+vec3 srgb_to_linear(vec3 c) {
+	return mix(c / 12.92, pow((c + 0.055) / 1.055, vec3(2.4)), step(vec3(0.04045), c));
+}
+
+vec3 linear_to_srgb(vec3 c) {
+	c = clamp(c, vec3(0.0), vec3(1.0));
+	return mix(c * 12.92, 1.055 * pow(c, vec3(1.0 / 2.4)) - 0.055, step(vec3(0.0031308), c));
+}
+
 void fragment() {
 	vec2 uv = SCREEN_UV;
 	vec2 half_size = max(panel_rect.zw, vec2(0.0001));
@@ -58,16 +67,18 @@ void fragment() {
 		float glow = exp(-dist * 5.5) * 0.32 + exp(-dist * 24.0) * 0.75;
 		color += sun_color * glow * sun_strength * sky_mask;
 	}
+	// The web grades the linear HDR frame (mist.js composite). This pass sees
+	// the display-encoded image, so decode to linear first; grading sRGB
+	// values directly made the vignette and contrast roughly twice as strong.
+	color = srgb_to_linear(max(color, vec3(0.0)));
 	float lum = dot(color, vec3(0.2126, 0.7152, 0.0722));
-	// Split-tone: warm the highlights and cool the shadows around golden hour
-	// and night, matching the original composite grade.
 	color *= mix(shadow_tint, highlight_tint, smoothstep(0.02, 0.45, lum));
 	lum = dot(color, vec3(0.2126, 0.7152, 0.0722));
-	color = mix(vec3(lum), color, saturation);
-	color = (color - 0.5) * contrast + 0.5;
-	color *= tint;
-
+	color = max(vec3(0.0), mix(vec3(lum), color, saturation)) * tint;
+	// Web weather contrast pivots on mid grey: .18 * pow(c / .18, contrast).
+	color = 0.18 * pow(color / 0.18, vec3(contrast));
 	vec2 edge_dist = (uv - 0.5) * vec2(viewport_size.x / max(viewport_size.y, 1.0), 1.0);
 	color *= 1.0 - vignette * smoothstep(0.25, 1.05, length(edge_dist));
+	color = linear_to_srgb(color);
 	COLOR = vec4(clamp(color, vec3(0.0), vec3(1.0)), 1.0);
 }

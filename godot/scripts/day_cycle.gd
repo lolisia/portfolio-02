@@ -40,9 +40,11 @@ func apply(hour: float, weather: int = 0, _season: int = 1,
 	var elevation := absf(t["direction"].y)
 	var sun_energy := 0.0
 	if moon:
-		sun_energy = 0.22 * smoothstep(0.0, 0.24, elevation)
+		# three.js lights are irradiance shaded with albedo/PI; Godot energy
+		# is shaded with albedo directly, so web intensities divide by PI.
+		sun_energy = 0.34 / PI * smoothstep(0.0, 0.24, elevation)
 	else:
-		sun_energy = 1.16 * (1.0 + 1.1 * golden) * smoothstep(-0.02, 0.34, elevation)
+		sun_energy = 2.85 / PI * (1.0 + 1.1 * golden) * smoothstep(-0.02, 0.34, elevation)
 	# L5: web main.js weather curve — clear/cloudy eases to .52, then storm to .25.
 	sun_energy *= lerp(1.0, 0.52, minf(coverage, 1.0)) if coverage <= 1.0 \
 		else lerpf(0.52, 0.25, coverage - 1.0)
@@ -113,7 +115,11 @@ func apply(hour: float, weather: int = 0, _season: int = 1,
 	env.glow_bloom = 0.04 + 0.10 * night
 	env.glow_hdr_threshold = lerpf(1.25, 0.55, night)
 	env.tonemap_mode = Environment.TONE_MAPPER_ACES
-	env.tonemap_exposure = 1.14
+	# Godot's ACES divides by the tonemapped white and biases exposure by
+	# 1.8; white 16 and exposure 1.08 reproduce three's ACESFilmic at
+	# toneMappingExposure 1.14 within one 8-bit step (measured on a grey ramp).
+	env.tonemap_white = 16.0
+	env.tonemap_exposure = 1.08
 	# L9(X): the web grades only in the composite pass; no Environment
 	# adjustment saturation/contrast/brightness or seasonal sky tint.
 	env.adjustment_enabled = false
