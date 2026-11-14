@@ -4,9 +4,6 @@ dist/
 # Temporary files and intermediate documents
 .artifact/
 
-# AI agent guide for opencode (local only)
-AGENTS.md
-
 # Local-only dev pipeline / agent tooling (never commit)
 .claude/skills/
 .claude/scheduled_tasks.lock
