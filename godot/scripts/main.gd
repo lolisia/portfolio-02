@@ -743,13 +743,16 @@ func _process(delta: float) -> void:
 		var mist_target := 0.10 + 0.10 * golden + 0.04 * night + 0.06 * overcast
 		if season == 3:
 			mist_target += 0.02
-		# The compositor raymarch already carries the volumetric haze; keep the
-		# FogVolume only as a light complement so the two do not double up.
-		if compositor_fog:
-			mist_target *= 0.22
+		# Web parity: mist.js is the only fog. When the compositor raymarch is
+		# running, the depth fog, volumetric fog and FogVolumes are switched off
+		# instead of stacking under it; they remain the Mobile/Low fallback.
+		mist.visible = quality < 2 and not compositor_fog
+		env.volumetric_fog_enabled = quality < 2 and not compositor_fog
+		if day_cycle != null:
+			day_cycle.depth_fog = not compositor_fog
+		env.fog_enabled = not compositor_fog
 		mist_material.density = lerpf(mist_material.density, mist_target, 1.0 - exp(-delta * 0.7))
-		env.volumetric_fog_density = (0.009 + 0.008 * night + 0.006 * overcast + 0.005 * golden) \
-			* (0.30 if compositor_fog else 1.0)
+		env.volumetric_fog_density = 0.009 + 0.008 * night + 0.006 * overcast + 0.005 * golden
 		if low_mist_material != null:
 			var low_target := clampf(golden * 1.3 + overcast * 0.45 + (1.0 if weather == 3 else 0.0)
 				+ (0.15 if season == 3 else 0.0), 0.0, 1.0) * (1.0 - night * 0.45)

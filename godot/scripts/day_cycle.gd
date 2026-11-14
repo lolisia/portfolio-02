@@ -5,6 +5,8 @@ var sun: DirectionalLight3D
 var fill: DirectionalLight3D
 var env: Environment
 var sky_material: ShaderMaterial
+## False while the compositor raymarch provides the fog (web mist.js only).
+var depth_fog := true
 var world: FarmWorld
 var backdrop_material: ShaderMaterial
 
@@ -100,7 +102,7 @@ func apply(hour: float, weather: int = 0, _season: int = 1,
 	env.ambient_light_sky_contribution = 1.0
 	env.ambient_light_energy = 0.63
 	env.background_energy_multiplier = 1.0
-	env.fog_enabled = true
+	env.fog_enabled = depth_fog
 	env.fog_light_color = fog_color
 	env.fog_light_energy = 0.35
 	env.fog_density = (0.0025 + 0.008 * night) * (1.0 + overcast * 0.8)
