@@ -21,6 +21,8 @@ const SunShadow = preload("res://scripts/sun_shadow.gd")
 const PathDebug = preload("res://scripts/path_debug.gd")
 
 var world: FarmWorld
+## Development: `--ui-scale N` forces the devicePixelRatio (captures).
+var ui_scale_override := 0.0
 var orbit: OrbitCamera
 var ui: GameUI
 var character: UnityChan
@@ -82,17 +84,20 @@ var _water_freeze_applied := -1.0
 var _presses: Dictionary = {}
 var _trail: Array = []
 var _trail_clock := 0.0
-var adaptive_scale := 1.0
 var _base_render_scale := 1.0
-var _fps_smooth := 60.0
-var _fps_check := 0.0
 var _bench_target := 0
 var _bench_frames := 0
 var _bench_elapsed := 0.0
 
 func _ready() -> void:
+	var scale_args := OS.get_cmdline_user_args()
+	var scale_index := scale_args.find("--ui-scale")
+	if scale_index >= 0 and scale_index + 1 < scale_args.size():
+		ui_scale_override = float(scale_args[scale_index + 1])
 	_apply_content_scale()
 	get_window().size_changed.connect(_apply_content_scale)
+	if get_window().has_signal("dpi_changed"):
+		get_window().connect("dpi_changed", _apply_content_scale)
 	_setup_environment()
 	_setup_lights()
 
@@ -178,9 +183,9 @@ func _ready() -> void:
 	for arg in OS.get_cmdline_user_args():
 		cli.append(arg)
 	if "--house" in cli:
-		orbit.set_view(Vector3(-1.0, 1.6, -1.2), 0.6747, 0.438, 3.0)
+		_web_closeup(Vector3(-1.0, 1.6, -1.2), 3.0)
 	if "--coop" in cli:
-		orbit.set_view(Vector3(2.25, 1.7, -1.6), 0.0, 0.438, 3.3)
+		_web_closeup(Vector3(2.25, 1.7, -1.6), 3.3)
 	if "--char" in cli:
 		orbit.set_view(Vector3(-1.0, 0.65, 0.85), 0.0, 1.05, 7.0)
 	if "--char2" in cli:
@@ -189,7 +194,7 @@ func _ready() -> void:
 		orbit.max_zoom = 12.0
 		orbit.set_view(Vector3(-0.35, 1.25, 1.0), 1.1, 1.12, 10.0)
 	if "--pond" in cli:
-		orbit.set_view(Vector3(10.2, 0.4, 6.3), 0.0, 0.438, 5.0)
+		_web_closeup(Vector3(10.2, 0.4, 6.3), 5.0)
 	if "--pondside" in cli:
 		orbit.set_view(Vector3(8.6, 0.6, 6.0), 1.95, 0.46, 2.3)
 	if "--fishtest" in cli:
@@ -202,9 +207,9 @@ func _ready() -> void:
 	if "--front" in cli:
 		orbit.set_view(Vector3(-1.0, 1.2, -0.4), 0.1, 0.42, 4.0)
 	if "--garden" in cli:
-		orbit.set_view(Vector3(-1.1, 3.2, -7.65), 0.0, 0.438, 5.0)
+		_web_closeup(Vector3(-1.1, 3.2, -7.65), 5.0)
 	if "--stairs" in cli:
-		orbit.set_view(Vector3(-5.4, 2.2, -4.4), 0.0, 0.438, 3.0)
+		_web_closeup(Vector3(-5.4, 2.2, -4.4), 3.0)
 	if "--falls" in cli:
 		orbit.set_view(Vector3(13.4, -0.10, 6.1), 0.965, 0.391, 3.25)
 	if "--porch" in cli:
@@ -386,6 +391,13 @@ func _ready() -> void:
 	orbit.set_portrait_scale(_desired_portrait_scale())
 	ui.set_time_value(hour)
 	ui.set_wind_value(wind)
+	if OS.is_debug_build() and FileAccess.file_exists("user://profile.json"):
+		var profile_options = JSON.parse_string(FileAccess.get_file_as_string("user://profile.json"))
+		if profile_options is Dictionary:
+			DirAccess.remove_absolute("user://profile.json")
+			var profiler := preload("res://scripts/device_profile.gd").new()
+			add_child(profiler)
+			profiler.setup(self, profile_options)
 
 func _exit_tree() -> void:
 	if atmosphere_effect != null:
@@ -399,15 +411,11 @@ func _desired_v_offset() -> float:
 	var viewport_size := get_viewport().get_visible_rect().size
 	if viewport_size.x >= viewport_size.y:
 		return 0.0
-	return -22.0 if ui.is_panel_open() else -4.0
+	return -4.0
 
 func _desired_portrait_scale() -> float:
-	if ui == null:
-		return 1.0
-	var viewport_size := get_viewport().get_visible_rect().size
-	if viewport_size.x >= viewport_size.y:
-		return 1.0
-	return 1.38 if ui.is_panel_open() else 1.0
+	# The panel overlays the scene; opening it never moves or zooms the view.
+	return 1.0
 
 func _update_view_framing(delta: float) -> void:
 	if orbit == null or ui == null:
@@ -430,15 +438,44 @@ func _capture_screenshot(path: String, delay: float = 0.0) -> void:
 	image.save_png(path)
 	get_tree().quit()
 
+func _web_closeup(at: Vector3, zoom_value: float) -> void:
+	# src/main.js closeUps: target + rotateY((24,18,30), yaw).
+	var offset := Vector3(24.0, 18.0, 30.0)
+	var args := OS.get_cmdline_user_args()
+	var yaw_index := args.find("--yaw")
+	if yaw_index >= 0 and yaw_index + 1 < args.size():
+		offset = offset.rotated(Vector3.UP, deg_to_rad(float(args[yaw_index + 1])))
+	var zoom_index := args.find("--zoom")
+	if zoom_index >= 0 and zoom_index + 1 < args.size():
+		zoom_value = maxf(0.7, float(args[zoom_index + 1]))
+	orbit.distance = offset.length()
+	orbit.max_zoom = maxf(orbit.max_zoom, zoom_value)
+	orbit.set_view(at, atan2(offset.x, offset.z), asin(offset.y / offset.length()), zoom_value)
+
 func _apply_content_scale() -> void:
-	# Keep the UI at a readable physical size on phones while still scaling up
-	# comfortably on very large desktop windows. With canvas_items stretch the
-	# content size is the layout space; 0 would mean "use the window size".
+	# Web parity: the panel is laid out in CSS pixels and the browser scales
+	# CSS pixels by devicePixelRatio (the OS display scale). Use that same
+	# factor instead of the window height so the UI has the web's physical
+	# size at every resolution (4K at 200% -> 2x, 1080p at 100% -> 1x).
 	var window_size := get_window().size
-	var ui_scale := clampf(float(window_size.y) / 720.0, 1.0, 1.75)
+	var ui_scale := _device_pixel_ratio()
 	get_window().content_scale_size = Vector2i(
 		maxi(1, roundi(float(window_size.x) / ui_scale)),
 		maxi(1, roundi(float(window_size.y) / ui_scale)))
+
+func _device_pixel_ratio() -> float:
+	if ui_scale_override > 0.0:
+		return ui_scale_override
+	var screen := get_window().current_screen
+	var ratio := DisplayServer.screen_get_scale(screen)
+	var dpi := float(DisplayServer.screen_get_dpi(screen))
+	if dpi > 0.0:
+		# Desktop browsers use 96 dpi as 1x, Android/iOS use 160 dpi.
+		var base := 160.0 if OS.has_feature("mobile") else 96.0
+		if not OS.has_feature("macos"):
+			ratio = maxf(ratio, dpi / base)
+	# Display scales come in 25% steps; snap away dpi rounding noise.
+	return clampf(roundf(ratio * 4.0) / 4.0, 1.0, 4.0)
 
 func _setup_backdrop() -> void:
 	backdrop = MeshInstance3D.new()
@@ -481,7 +518,10 @@ func _setup_environment() -> void:
 	sky.process_mode = Sky.PROCESS_MODE_INCREMENTAL
 
 	env = Environment.new()
-	env.background_mode = Environment.BG_SKY
+	# The camera backdrop already covers every background pixel. Keep the
+	# sky for ambient/reflection probes, without shading it a second time
+	# behind the opaque gradient quad at full phone resolution.
+	env.background_mode = Environment.BG_COLOR
 	env.sky = sky
 	env.ambient_light_source = Environment.AMBIENT_SOURCE_SKY
 	env.ambient_light_sky_contribution = 1.0
@@ -666,20 +706,7 @@ func _process(delta: float) -> void:
 
 	_update_view_framing(delta)
 	_update_backdrop()
-	if OS.has_feature("mobile"):
-		_fps_smooth = lerpf(_fps_smooth, Engine.get_frames_per_second(), 1.0 - exp(-delta * 0.3))
-		_fps_check += delta
-		if _fps_check > 2.0:
-			_fps_check = 0.0
-			var changed := false
-			if _fps_smooth < 45.0 and adaptive_scale > 0.65:
-				adaptive_scale = maxf(0.65, adaptive_scale - 0.05)
-				changed = true
-			elif _fps_smooth > 57.0 and adaptive_scale < 1.0:
-				adaptive_scale = minf(1.0, adaptive_scale + 0.03)
-				changed = true
-			if changed:
-				_apply_render_scale()
+	world.set_mobile_ground_lod(orbit.size)
 
 	if farm_life != null:
 		farm_life.hour = clock_hour
@@ -946,7 +973,6 @@ func _on_reset_requested() -> void:
 func _set_quality(index: int) -> void:
 	quality = clampi(index, 0, 2)
 	_base_render_scale = [1.0, 0.85, 0.72][quality]
-	adaptive_scale = 1.0
 	if quality_manager != null:
 		quality_manager.apply(quality)
 	if atmosphere_effect != null:
@@ -962,7 +988,7 @@ func _set_quality(index: int) -> void:
 func _apply_render_scale() -> void:
 	var viewport := get_viewport()
 	if viewport != null:
-		viewport.scaling_3d_scale = clampf(_base_render_scale * adaptive_scale, 0.55, 1.0)
+		viewport.scaling_3d_scale = clampf(_base_render_scale, 0.55, 1.0)
 
 func _on_quality_changed(index: int) -> void:
 	_set_quality(index)

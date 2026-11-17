@@ -89,10 +89,10 @@ func _initialize_compute() -> void:
 		return
 	var shaft_source := RDShaderSource.new()
 	shaft_source.language = RenderingDevice.SHADER_LANGUAGE_GLSL
-	shaft_source.source_compute = FileAccess.get_file_as_string("res://shaders/atmosphere_shafts.glsl").replace("#[compute]\n", "")
+	shaft_source.source_compute = FileAccess.get_file_as_string("res://shaders/atmosphere_shafts.glsl").replace("\r\n", "\n").replace("#[compute]\n", "")
 	var composite_source := RDShaderSource.new()
 	composite_source.language = RenderingDevice.SHADER_LANGUAGE_GLSL
-	composite_source.source_compute = FileAccess.get_file_as_string("res://shaders/atmosphere_composite.glsl").replace("#[compute]\n", "")
+	composite_source.source_compute = FileAccess.get_file_as_string("res://shaders/atmosphere_composite.glsl").replace("\r\n", "\n").replace("#[compute]\n", "")
 	var shaft_spirv := rd.shader_compile_spirv_from_source(shaft_source)
 	var composite_spirv := rd.shader_compile_spirv_from_source(composite_source)
 	if shaft_spirv.compile_error_compute != "":
@@ -140,7 +140,8 @@ func _render_callback(_callback_type: int, render_data: RenderData) -> void:
 	var color_rid: RID = buffers.get_color_layer(0)
 	var depth_rid: RID = buffers.get_depth_layer(0)
 	if size != cached_size or color_rid != cached_color or depth_rid != cached_depth \
-			or shadow_texture_rid != cached_shadow_rid:
+			or shadow_texture_rid != cached_shadow_rid \
+			or not rd.uniform_set_is_valid(shaft_set) or not rd.uniform_set_is_valid(composite_set):
 		_build(buffers, size, color_rid, depth_rid)
 		if not supported:
 			return
@@ -367,9 +368,12 @@ func _shutdown() -> void:
 	working = false
 
 func _free_resources() -> void:
-	if shaft_set.is_valid():
+	# Scene-buffer resize/MSAA changes may already have destroyed descriptor
+	# sets referencing those borrowed textures. RID.is_valid only means nonzero;
+	# ask RenderingDevice whether the set is still alive before freeing it.
+	if shaft_set.is_valid() and rd.uniform_set_is_valid(shaft_set):
 		rd.free_rid(shaft_set)
-	if composite_set.is_valid():
+	if composite_set.is_valid() and rd.uniform_set_is_valid(composite_set):
 		rd.free_rid(composite_set)
 	if shaft_texture.is_valid():
 		rd.free_rid(shaft_texture)

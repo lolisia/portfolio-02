@@ -26,6 +26,7 @@ var rng := RandomNumberGenerator.new()
 var drop_instance: MultiMeshInstance3D
 var drop_multimesh: MultiMesh
 var drop_states: Array = []
+var drop_buffer := PackedFloat32Array()
 var foam: MeshInstance3D
 var foam_material: ShaderMaterial
 var vapor: Array[Sprite3D] = []
@@ -59,7 +60,7 @@ func _build_drops() -> void:
 	var material := StandardMaterial3D.new()
 	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	material.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+	material.blend_mode = BaseMaterial3D.BLEND_MODE_MIX
 	material.billboard_mode = BaseMaterial3D.BILLBOARD_ENABLED
 	material.billboard_keep_scale = true
 	material.cull_mode = BaseMaterial3D.CULL_DISABLED
@@ -73,7 +74,9 @@ func _build_drops() -> void:
 	drop_multimesh.transform_format = MultiMesh.TRANSFORM_3D
 	drop_multimesh.use_colors = true
 	drop_multimesh.mesh = quad
-	drop_multimesh.instance_count = DROP_COUNT
+	var count := 360 if MobileProfile.enabled() else DROP_COUNT
+	drop_multimesh.instance_count = count
+	drop_buffer.resize(count * 16)
 	drop_instance = MultiMeshInstance3D.new()
 	drop_instance.name = "CascadeDroplets"
 	drop_instance.multimesh = drop_multimesh
@@ -83,16 +86,16 @@ func _build_drops() -> void:
 		Vector3(6.0, 6.0, 9.0))
 	drop_instance.visible = false
 	add_child(drop_instance)
-	for i in range(DROP_COUNT):
+	for i in range(count):
 		drop_states.append({
-			"life": 0.0, "max": 1.0, "x": 0.0, "y": -999.0, "z": 0.0,
+			"life": 1.0, "max": 1.0, "x": 0.0, "y": -999.0, "z": 0.0,
 			"vx": 0.0, "vy": 0.0, "vz": 0.0, "size": 0.02,
-			"splash": i >= CURTAIN_DROPS,
+			"splash": i >= count / 3,
 		})
 
 func _build_foam() -> void:
 	var plane := PlaneMesh.new()
-	plane.size = Vector2(width * 0.55 + 0.2, width * 0.5 + 0.18)
+	plane.size = Vector2(width * 0.55 + 0.2, width * 0.5 + 0.18) * 2.0
 	foam_material = ShaderMaterial.new()
 	foam_material.shader = preload("res://shaders/cascade_foam.gdshader")
 	foam_material.set_shader_parameter("clock", 0.0)
@@ -102,7 +105,7 @@ func _build_foam() -> void:
 	foam.name = "CascadeFoam"
 	foam.mesh = plane
 	foam.material_override = foam_material
-	foam.rotation.x = -PI * 0.5
+	# PlaneMesh already lies in XZ; rotating it made a vertical foam stripe.
 	var foot: Vector3 = path_fn.call(0.5, 1.0, 0.0)
 	foam.position = Vector3(foot.x, foot_y + 0.01, foot.z)
 	foam.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
@@ -171,10 +174,6 @@ func update(delta: float, p_wind: float, p_light: float) -> void:
 	foam.visible = true
 	foam_material.set_shader_parameter("clock", time)
 	foam_material.set_shader_parameter("freeze", freeze)
-	var camera := get_viewport().get_camera_3d()
-	var basis := Basis.IDENTITY
-	if camera != null:
-		basis = camera.global_transform.basis.orthonormalized()
 	var dt := minf(delta, 0.05)
 	for i in range(drop_states.size()):
 		var d: Dictionary = drop_states[i]
@@ -188,17 +187,24 @@ func update(delta: float, p_wind: float, p_light: float) -> void:
 		if bool(d["splash"]) and float(d["y"]) < foot_y - 0.02:
 			d["life"] = d["max"]
 		var fade := sin(minf(1.0, float(d["life"]) / maxf(float(d["max"]), 0.001)) * PI)
-		var alpha := (0.60 if bool(d["splash"]) else 0.45) * fade * flow
+		var alpha := (0.75 if bool(d["splash"]) else 0.60) * fade * flow
 		# The web clamps gl_PointSize to one pixel; keep the quad at a
 		# comparable on-screen size instead of letting it vanish.
 		var size := maxf(float(d["size"]), 0.020)
-		drop_multimesh.set_instance_transform(i,
-			Transform3D(basis * Basis.from_scale(Vector3.ONE * size),
-				Vector3(float(d["x"]), float(d["y"]), float(d["z"]))))
-		# cascade.js passes light = 1 - .85*night into the droplet shader;
-		# vertex color carries that so the spray does not glow at midnight.
-		drop_multimesh.set_instance_color(i,
-			Color(light, light, light, alpha))
+		# Billboard orientation is already supplied by the material. Upload
+		# the identical positions/scales/colours in one MultiMesh buffer.
+		var k := i * 16
+		drop_buffer[k] = size
+		drop_buffer[k + 3] = float(d["x"])
+		drop_buffer[k + 5] = size
+		drop_buffer[k + 7] = float(d["y"])
+		drop_buffer[k + 10] = size
+		drop_buffer[k + 11] = float(d["z"])
+		drop_buffer[k + 12] = light
+		drop_buffer[k + 13] = light
+		drop_buffer[k + 14] = light
+		drop_buffer[k + 15] = alpha
+	drop_multimesh.buffer = drop_buffer
 	for i in range(vapor.size()):
 		var sprite: Sprite3D = vapor[i]
 		sprite.visible = true
@@ -211,5 +217,5 @@ func update(delta: float, p_wind: float, p_light: float) -> void:
 			p.z + sin(float(i) * 1.7) * age * 0.41)
 		sprite.scale = Vector3.ONE * (0.4 + age * 0.8)
 		var tint := sprite.modulate
-		tint.a = 0.13 * sin(age * PI) * light * flow
+		tint.a = 0.20 * sin(age * PI) * light * flow
 		sprite.modulate = tint

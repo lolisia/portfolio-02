@@ -111,16 +111,41 @@ func _fit_model() -> void:
 	model.position.y -= box.position.y
 
 func _model_aabb() -> AABB:
+	# Mesh AABBs describe the bind pose, not the animated boots/head. Measure
+	# skinned vertices in this actor's local coordinates, excluding world height.
 	var result := AABB()
 	var first := true
+	var to_local := global_transform.affine_inverse()
 	for node in model.find_children("*", "MeshInstance3D", true, false):
 		var mi := node as MeshInstance3D
-		var box: AABB = mi.global_transform * mi.get_aabb()
-		if first:
-			result = box
-			first = false
-		else:
-			result = result.merge(box)
+		var skeleton := mi.get_node_or_null(mi.skeleton) as Skeleton3D
+		var palette: Array[Transform3D] = []
+		if skeleton != null and mi.skin != null:
+			skeleton.force_update_all_bone_transforms()
+			for i in range(mi.skin.get_bind_count()):
+				var name := mi.skin.get_bind_name(i)
+				var bone := skeleton.find_bone(name) if not name.is_empty() else mi.skin.get_bind_bone(i)
+				palette.append(to_local * skeleton.global_transform * skeleton.get_bone_global_pose(bone) * mi.skin.get_bind_pose(i))
+		for surface in range(mi.mesh.get_surface_count()):
+			var arrays := mi.mesh.surface_get_arrays(surface)
+			var vertices: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
+			var bones = arrays[Mesh.ARRAY_BONES]
+			var weights = arrays[Mesh.ARRAY_WEIGHTS]
+			var stride := 0 if weights == null else int(weights.size() / vertices.size())
+			for i in range(vertices.size()):
+				var point := Vector3.ZERO
+				if not palette.is_empty() and stride > 0:
+					for j in range(stride):
+						var k := i * stride + j
+						if weights[k] > 0.0:
+							point += (palette[bones[k]] * vertices[i]) * weights[k]
+				else:
+					point = to_local * mi.global_transform * vertices[i]
+				if first:
+					result = AABB(point, Vector3.ZERO)
+					first = false
+				else:
+					result = result.expand(point)
 	return result
 
 func _find_face() -> void:

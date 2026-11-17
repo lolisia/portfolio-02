@@ -60,6 +60,6 @@ func apply(level: int) -> void:
 	if weather != null:
 		weather.quality_scale = 1.0 if high else (0.75 if not low else 0.5)
 	if seasons != null:
-		seasons.quality_scale = 1.0 if high else (0.75 if not low else 0.5)
+		seasons.quality_scale = (0.45 if high else 0.35) if MobileProfile.enabled() else (1.0 if high else (0.75 if not low else 0.5))
 	if world != null:
 		world.set_quality(level)

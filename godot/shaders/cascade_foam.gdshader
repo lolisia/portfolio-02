@@ -2,7 +2,7 @@ shader_type spatial;
 render_mode blend_mix, cull_disabled, depth_draw_never;
 
 // Foam disc at the foot of the cascade (src/cascade.js). Two fbm layers drift
-// outward from the impact; the alpha laces them into a ring on the rocks.
+// across the impact; soft edge falloff blends the foam into the rocks.
 
 uniform float clock = 0.0;
 uniform float freeze = 0.0;
@@ -34,12 +34,14 @@ float fbm(vec2 p) {
 void fragment() {
 	vec2 q = UV * 2.0 - 1.0;
 	float r = length(q);
-	vec2 dir = q / max(r, 0.001);
-	float n1 = fbm(q * 1.8 - dir * clock * 0.18);
-	float n2 = fbm(q * 3.4 + vec2(0.37, 0.11) - dir * clock * 0.31);
-	float lace = smoothstep(0.22, 0.62, n1 * 0.6 + n2 * 0.55);
-	float edge = 1.0 - smoothstep(0.4, 1.0, r);
+	// Avoid q/length(q) advection: its singularity stretches noise into a
+	// stationary radial fan as time grows. Drift two continuous fields.
+	float n1 = fbm(q * 3.0 + vec2(clock * 0.11, -clock * 0.08));
+	float n2 = fbm(q * 5.2 + vec2(0.37 - clock * 0.09, 0.11 + clock * 0.13));
+	float lace = smoothstep(0.30, 0.65, n1 * 0.6 + n2 * 0.55);
+	float edge = 1.0 - smoothstep(0.15, 0.95, r);
 	ALBEDO = vec3(0.894, 0.933, 0.941);
-	ROUGHNESS = 0.5;
-	ALPHA = lace * edge * opacity * (1.0 - smoothstep(0.08, 0.92, freeze));
+	ROUGHNESS = 0.92;
+	SPECULAR = 0.0;
+	ALPHA = lace * edge * opacity * 0.65 * (1.0 - smoothstep(0.08, 0.92, freeze));
 }

@@ -1,8 +1,10 @@
 import json, struct, sys, io
+from pathlib import Path
 from PIL import Image
 
-src = r'D:\DEV\portfolio-02\public\models\unitychan\sd_unitychan.glb'
-dst = r'D:\DEV\portfolio-02\godot\assets\models\unitychan\sd_unitychan.glb'
+root = Path(__file__).resolve().parent.parent
+src = root / 'public/models/unitychan/sd_unitychan.glb'
+dst = root / 'godot/assets/models/unitychan/sd_unitychan.glb'
 
 with open(src, 'rb') as f:
     data = f.read()
@@ -22,6 +24,54 @@ while offset < length:
     offset += 8 + chunk_len
 
 gltf = json.loads(json_chunk.rstrip(b' \t\r\n\x00').decode('utf-8'))
+
+def floats(index):
+    accessor = gltf['accessors'][index]
+    view = gltf['bufferViews'][accessor['bufferView']]
+    components = {'SCALAR': 1, 'VEC3': 3, 'VEC4': 4}[accessor['type']]
+    assert accessor['componentType'] == 5126 and 'byteStride' not in view
+    start = view.get('byteOffset', 0) + accessor.get('byteOffset', 0)
+    return list(struct.unpack_from('<' + 'f' * (accessor['count'] * components), bin_chunk, start))
+
+def append_floats(index, values):
+    global bin_chunk
+    while len(bin_chunk) % 4:
+        bin_chunk += b'\x00'
+    offset = len(bin_chunk)
+    raw = struct.pack('<' + 'f' * len(values), *values)
+    bin_chunk += raw
+    gltf['bufferViews'].append({'buffer': 0, 'byteOffset': offset, 'byteLength': len(raw)})
+    accessor = dict(gltf['accessors'][index])
+    accessor.update(bufferView=len(gltf['bufferViews']) - 1, byteOffset=0)
+    accessor.pop('min', None)
+    accessor.pop('max', None)
+    if accessor['type'] == 'SCALAR':
+        accessor.update(min=[min(values)], max=[max(values)])
+    gltf['accessors'].append(accessor)
+    return len(gltf['accessors']) - 1
+
+# Match src/unitychan.js tidy() BEFORE import. Otherwise Godot inserts a
+# rest-pose key at t=0 ahead of the take's absolute timestamp (Walking 2.67s).
+loops = {'Standing', 'Walking', 'Running', 'Gathering', 'FishingLoop'}
+for animation in gltf.get('animations', []):
+    samplers = animation['samplers']
+    start = min(min(floats(s['input'])) for s in samplers)
+    rebased = {}
+    for sampler in samplers:
+        index = sampler['input']
+        if index not in rebased:
+            rebased[index] = append_floats(index, [v - start for v in floats(index)])
+        sampler['input'] = rebased[index]
+    if animation['name'] in loops:
+        for channel in animation['channels']:
+            target = channel['target']
+            name = gltf['nodes'][target['node']].get('name', '')
+            if target['path'] == 'translation' and (name == 'center' or name.endswith('Hips')):
+                sampler = samplers[channel['sampler']]
+                values = floats(sampler['output'])
+                for i in range(3, len(values), 3):
+                    values[i], values[i + 2] = values[0], values[2]
+                sampler['output'] = append_floats(sampler['output'], values)
 print('extensionsUsed', gltf.get('extensionsUsed'))
 print('textures', json.dumps(gltf.get('textures'), indent=1)[:1000])
 print('images', gltf.get('images'))

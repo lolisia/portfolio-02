@@ -177,11 +177,9 @@ func _build_vane() -> void:
 	rotor_mast.height = 0.8
 	rotor_mast.radial_segments = 8
 	_cylinder(vane_root, rotor_mast, metal, 0.0, 1.24, 0.0)
-	var cup_mesh := SphereMesh.new()
-	cup_mesh.radius = 0.115
-	cup_mesh.height = 0.23
-	cup_mesh.radial_segments = 10
-	cup_mesh.rings = 6
+	var cup_mesh := _anemometer_cup()
+	var cup_material := brass.duplicate() as StandardMaterial3D
+	cup_material.cull_mode = BaseMaterial3D.CULL_DISABLED
 	for i in range(3):
 		var arm := Node3D.new()
 		arm.rotation.y = i * TAU / 3.0
@@ -189,11 +187,30 @@ func _build_vane() -> void:
 		_box(arm, metal, 0.19, 0.0, 0.0, 0.38, 0.025, 0.025)
 		var cup := MeshInstance3D.new()
 		cup.mesh = cup_mesh
-		cup.material_override = brass
+		cup.material_override = cup_material
 		cup.position = Vector3(0.4, 0.0, 0.0)
 		cup.rotation.x = PI * 0.5
 		cup.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
 		arm.add_child(cup)
+
+func _anemometer_cup() -> ArrayMesh:
+	# Open upper hemisphere, with no equator cap. A full SphereMesh hides
+	# the hollow mouth and looks like a ball as the rotor turns.
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var segments := 24
+	var rings := 10
+	for row in range(rings):
+		for col in range(segments):
+			var corners: Array[Vector3] = []
+			for rc in [Vector2i(row, col), Vector2i(row + 1, col), Vector2i(row + 1, col + 1), Vector2i(row, col + 1)]:
+				var theta := float(rc.x) / rings * PI * 0.5
+				var phi := float(rc.y) / segments * TAU
+				corners.append(Vector3(sin(theta) * cos(phi), cos(theta), sin(theta) * sin(phi)))
+			for index in [0, 2, 1, 0, 3, 2]:
+				st.set_normal(corners[index])
+				st.add_vertex(corners[index] * 0.115)
+	return st.commit()
 
 func _rooster_silhouette() -> MeshInstance3D:
 	# Traditional brass rooster cut-out, drawn as a 2D silhouette texture so the

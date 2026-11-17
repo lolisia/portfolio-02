@@ -2,14 +2,20 @@ shader_type spatial;
 render_mode cull_back, diffuse_burley, specular_schlick_ggx;
 
 uniform int surface_kind = 1; // 0 wood, 1 stone, 2 clay, 3 plaster, 4 soil, 5 iron
+uniform bool use_detail_map = false;
+uniform sampler2D detail_albedo : source_color, filter_linear_mipmap_anisotropic, repeat_enable;
+uniform sampler2D detail_normal : filter_linear_mipmap_anisotropic, repeat_enable;
+uniform sampler2D snow_noise_map : filter_linear_mipmap, repeat_enable;
 uniform float wet : hint_range(0.0, 1.0) = 0.0;
 uniform float snow_depth : hint_range(0.0, 1.0) = 0.0;
 uniform float winter : hint_range(0.0, 1.0) = 0.0;
+uniform bool mobile_clouds = false;
 uniform float cloud_amount : hint_range(0.0, 1.2) = 0.0;
 uniform float cloud_clock = 0.0;
 uniform float water_y = 0.44;
 
 varying vec3 v_world;
+varying float v_cloud_shade;
 varying vec3 v_world_normal;
 varying vec3 v_color;
 varying vec3 v_local;
@@ -130,9 +136,11 @@ void fragment() {
 	if (CAMERA_POSITION_WORLD.y < 0.0 && v_world.y < 0.44) {
 		discard;
 	}
-	float n = fbm3(v_world * 5.5);
-	vec2 box_uv_pos = box_uv();
-	float relief = box_relief(box_uv_pos);
+	float n = 0.0;
+	if (surface_kind == 4 || surface_kind == 5) { n = fbm3(v_world * 5.5); }
+	vec2 box_uv_pos = surface_kind == 7 ? vec2(UV.x, 1.0 - UV.y) : box_uv();
+	float relief = 0.0;
+	if (!use_detail_map && surface_kind <= 3) { relief = box_relief(box_uv_pos); }
 	vec3 albedo = v_color;
 	float roughness = 0.9;
 	float metallic = 0.0;
@@ -143,16 +151,6 @@ void fragment() {
 		roughness = 0.80;
 	} else if (surface_kind == 1) {
 		albedo *= 0.80 + 0.30 * relief;
-		// The diorama's outer cliff reads as layered rock: broad sediment
-		// bands, fine bedding lines and occasional vertical cracks.
-		float cliff = 1.0 - smoothstep(2.8, 3.4, v_world.y);
-		float warp = fbm3(vec3(v_world.x * 0.8, v_world.y * 1.8, v_world.z * 0.8));
-		float strata = sin(v_world.y * 5.5 + warp * 3.2) * 0.5 + 0.5;
-		float bedding = smoothstep(0.70, 0.96,
-			sin(v_world.y * 26.0 + warp * 7.0) * 0.5 + 0.5);
-		float crack = pow(1.0 - abs(fbm3(v_world * vec3(1.6, 5.0, 1.6)) - 0.5) * 2.0, 18.0);
-		albedo *= mix(1.0, 0.86 + 0.20 * strata - 0.10 * bedding, cliff);
-		albedo *= 1.0 - 0.22 * crack * cliff;
 		roughness = 0.91;
 	} else if (surface_kind == 2) {
 		albedo *= 0.82 + 0.28 * relief;
@@ -170,31 +168,69 @@ void fragment() {
 		metallic = 0.55;
 	}
 
-	// K7 normal detail: finite differences of the same box relief, applied in
-	// a tangent frame so all six box faces receive matching surface bumps.
-	if (surface_kind <= 3) {
-		float eps = 0.012;
-		float dx = box_relief(box_uv_pos + vec2(eps, 0.0))
-			- box_relief(box_uv_pos - vec2(eps, 0.0));
-		float dy = box_relief(box_uv_pos + vec2(0.0, eps))
-			- box_relief(box_uv_pos - vec2(0.0, eps));
-		float relief_depth = surface_kind == 0 ? 0.10
-			: (surface_kind == 1 ? 0.12 : (surface_kind == 2 ? 0.05 : 0.04));
-		// Snow settles over the relief instead of tracing every plank/tile gap.
-		relief_depth *= 1.0 - clamp(snow_depth, 0.0, 1.0) * 0.9;
+	if (surface_kind == 6) {
+		// cascade.js rockMat is plain, wet-looking stone.
+		roughness = 0.36;
+		albedo = v_color;
+	} else if (use_detail_map) {
+		// The web texture recipes are baked verbatim, including their sRGB
+		// albedo and restrained normal maps; no extra cliff strata/cracks.
+		albedo = v_color * texture(detail_albedo, box_uv_pos).rgb;
+		if (surface_kind == 7) { roughness = 0.98; }
+		vec3 map_normal = texture(detail_normal, box_uv_pos).rgb * 2.0 - 1.0;
+		map_normal.xy *= 1.0 - clamp(snow_depth, 0.0, 1.0) * 0.9;
 		vec3 wn = normalize(v_world_normal);
-		vec3 tangent = normalize(cross(abs(wn.y) < 0.9 ? vec3(0.0, 1.0, 0.0)
-			: vec3(1.0, 0.0, 0.0), wn));
-		vec3 bitangent = cross(wn, tangent);
-		wn = normalize(wn - (tangent * dx + bitangent * dy) * relief_depth / eps);
+		vec3 dpdx = dFdx(v_world), dpdy = dFdy(v_world);
+		vec2 duvdx = dFdx(box_uv_pos), duvdy = dFdy(box_uv_pos);
+		vec3 px = cross(dpdy, wn), py = cross(wn, dpdx);
+		vec3 tangent = px * duvdx.x + py * duvdy.x;
+		vec3 bitangent = px * duvdx.y + py * duvdy.y;
+		float inv_scale = inversesqrt(max(max(dot(tangent, tangent), dot(bitangent, bitangent)), 0.000001));
+		wn = normalize(mat3(tangent * inv_scale, bitangent * inv_scale, wn) * map_normal);
 		NORMAL = normalize((VIEW_MATRIX * vec4(wn, 0.0)).xyz);
+	} else {
+		// K7 normal detail: finite differences of the same box relief, applied in
+		// a tangent frame so all six box faces receive matching surface bumps.
+		if (surface_kind <= 3) {
+			float eps = 0.012;
+			float dx = box_relief(box_uv_pos + vec2(eps, 0.0))
+				- box_relief(box_uv_pos - vec2(eps, 0.0));
+			float dy = box_relief(box_uv_pos + vec2(0.0, eps))
+				- box_relief(box_uv_pos - vec2(0.0, eps));
+			float relief_depth = surface_kind == 0 ? 0.10
+				: (surface_kind == 1 ? 0.12 : (surface_kind == 2 ? 0.05 : 0.04));
+			// Snow settles over the relief instead of tracing every plank/tile gap.
+			relief_depth *= 1.0 - clamp(snow_depth, 0.0, 1.0) * 0.9;
+			vec3 wn = normalize(v_world_normal);
+			vec3 tangent = normalize(cross(abs(wn.y) < 0.9 ? vec3(0.0, 1.0, 0.0)
+				: vec3(1.0, 0.0, 0.0), wn));
+			vec3 bitangent = cross(wn, tangent);
+			wn = normalize(wn - (tangent * dx + bitangent * dy) * relief_depth / eps);
+			NORMAL = normalize((VIEW_MATRIX * vec4(wn, 0.0)).xyz);
+		}
+
 	}
 
 	float up = clamp(v_world_normal.y, 0.0, 1.0);
-	float snow_noise = fbm3(v_world * 3.1);
-	float snow_mask = smoothstep(0.04, 0.40, snow_depth * 1.15 - snow_noise * 0.38)
-		* smoothstep(0.0, 0.55, up);
-	snow_mask *= 1.0 - 0.35 * abs(v_world_normal.x);
+	// surfaces.js snow: favour upward faces and leave trunks/vertical
+	// twigs brown. Triplanar noise avoids streaks down narrow branches.
+	float uneven = 0.0;
+	float snow_mask = 0.0;
+	if (snow_depth > 0.0) {
+		vec3 tri = pow(abs(v_world_normal), vec3(4.0));
+		tri /= max(dot(tri, vec3(1.0)), 0.0001);
+		for (int i = 0; i < 3; i++) {
+			float scale = i == 0 ? 0.21 : (i == 1 ? 0.83 : 3.1);
+			float offset = i == 0 ? 0.0 : (i == 1 ? 0.37 : 0.71);
+			float n = texture(snow_noise_map, v_world.yz * scale + offset).r * tri.x
+				+ texture(snow_noise_map, v_world.xz * scale + offset).r * tri.y
+				+ texture(snow_noise_map, v_world.xy * scale + offset).r * tri.z;
+			uneven += n * (i == 0 ? 0.6 : (i == 1 ? 0.3 : 0.1));
+		}
+		float hold = mix(0.6, 1.0, smoothstep(0.35, 0.95, up));
+		snow_mask = smoothstep(0.0, 0.16, snow_depth * 1.55 * hold - uneven * 0.82)
+			* smoothstep(0.14, 0.84, up) * smoothstep(0.43, 0.69, v_world.y);
+	}
 
 	float wetness = wet * (0.35 + 0.65 * up) * (1.0 - snow_mask);
 	// K8: stone at the waterline keeps a dark wet foot and a low-roughness sheen.
@@ -215,30 +251,33 @@ void fragment() {
 	}
 	albedo = pow(max(albedo, vec3(0.0)), vec3(1.0 + 0.32 * wetness));
 	roughness = mix(roughness, 0.28, wetness);
-	albedo = mix(albedo, vec3(0.66, 0.75, 0.86), snow_mask);
+	albedo = mix(albedo, vec3(0.80, 0.88, 0.95) * (0.87 + 0.17 * uneven), snow_mask);
 	roughness = mix(roughness, 0.93, snow_mask);
-	// K8: sparse crystal glints on snow-covered boxes.
-	float snow_glint = pow(fbm3(v_world * 78.0 + vec3(TIME * 0.19)), 16.0);
-	albedo += vec3(0.16, 0.19, 0.22) * snow_glint * snow_mask;
+	// No snow means no visible crystal term. Avoid four octaves of 3D
+	// noise at every dry stone/roof pixel just to multiply the result by 0.
+	if (snow_mask > 0.0) {
+		float snow_glint = pow(fbm3(v_world * 78.0 + vec3(TIME * 0.19)), 16.0);
+		albedo += vec3(0.16, 0.19, 0.22) * snow_glint * snow_mask;
+	}
+	// Shared by both directional lights, evaluated once per fragment.
+	vec3 cloud_wind = vec3(cloud_clock * 0.05, 0.0, cloud_clock * 0.02);
+	float cloud_cover = mobile_clouds ? texture(snow_noise_map, (v_world.xz + v_world.y * vec2(0.25, -0.16)) * 0.024 + vec2(cloud_clock * 0.0019, cloud_clock * 0.0008)).r : fbm3(vec3(v_world.x * 0.55, v_world.y * 0.22, v_world.z * 0.55) + cloud_wind);
+	v_cloud_shade = 1.0 - smoothstep(0.31, 0.66, cloud_cover) * cloud_amount;
 
 	ALBEDO = albedo;
 	ROUGHNESS = roughness;
 	METALLIC = metallic;
-	SPECULAR = 0.18;
-}
-
-// K6: drifting cloud shadows on direct sunlight.
-float cloud_shade(vec3 world_pos) {
-	vec3 wind = vec3(cloud_clock * 0.05, 0.0, cloud_clock * 0.02);
-	float cover = fbm3(vec3(world_pos.x * 0.55, world_pos.y * 0.22,
-		world_pos.z * 0.55) + wind);
-	return 1.0 - smoothstep(0.31, 0.66, cover) * cloud_amount;
+	SPECULAR = surface_kind == 5 ? 0.5 : 0.03;
 }
 
 void light() {
-	float shade = LIGHT_IS_DIRECTIONAL ? cloud_shade(v_world) : 1.0;
+	float shade = LIGHT_IS_DIRECTIONAL ? v_cloud_shade : 1.0;
 	float ndl = max(0.0, dot(NORMAL, LIGHT));
 	DIFFUSE_LIGHT += ndl * ATTENUATION * LIGHT_COLOR * shade / PI;
-	float spec = pow(max(0.0, dot(NORMAL, normalize(LIGHT + VIEW))), 24.0);
-	SPECULAR_LIGHT += spec * ATTENUATION * LIGHT_COLOR * shade * 0.18;
+	// The old fixed Phong term ignored roughness and made .91 stone shine
+	// like polished metal. Keep the strong highlight on actual iron only.
+	if (surface_kind == 5) {
+		float spec = pow(max(0.0, dot(NORMAL, normalize(LIGHT + VIEW))), 24.0);
+		SPECULAR_LIGHT += spec * ATTENUATION * LIGHT_COLOR * shade * 0.18;
+	}
 }

@@ -31,6 +31,8 @@ var panel_control: PanelContainer
 var body_control: VBoxContainer
 var body_clip: Control
 var toggle_button: Button
+var toggle_icon: Control
+var _icon_tween: Tween
 var toggle_action: Label
 var bottom_box: VBoxContainer
 var credit_label: LinkButton
@@ -61,13 +63,13 @@ func _ready() -> void:
 	_bold_font = FontVariation.new()
 	_bold_font.base_font = font
 	_bold_font.variation_embolden = 0.55
-	var shadow := Color(0.06, 0.11, 0.15, 0.60)
+	var shadow := Color(0.06, 0.11, 0.15, 0.35)
 	for type_name in ["Label", "Button", "CheckBox"]:
 		ui_theme.set_color("font_color", type_name, Color(1, 1, 1, 0.94))
 		ui_theme.set_color("font_shadow_color", type_name, shadow)
 		ui_theme.set_constant("shadow_offset_x", type_name, 0)
 		ui_theme.set_constant("shadow_offset_y", type_name, 1)
-		ui_theme.set_constant("shadow_outline_size", type_name, 3)
+		ui_theme.set_constant("shadow_outline_size", type_name, 1)
 
 	var root := Control.new()
 	root.name = "Root"
@@ -141,14 +143,29 @@ func _ready() -> void:
 	)
 	outer.add_child(toggle_button)
 	toggle_action = Label.new()
-	toggle_action.text = "펼치기  ▾"
-	toggle_action.add_theme_font_size_override("font_size", 11)
-	toggle_action.add_theme_color_override("font_color", Color(1, 1, 1, 0.65))
+	toggle_action.text = "펼치기"
+	toggle_action.add_theme_font_size_override("font_size", 12)
+	toggle_action.add_theme_color_override("font_color", Color(1, 1, 1, 0.94))
+	toggle_action.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	toggle_action.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	toggle_action.set_anchors_and_offsets_preset(Control.PRESET_CENTER_RIGHT)
+	toggle_action.set_anchors_and_offsets_preset(Control.PRESET_RIGHT_WIDE)
+	toggle_action.offset_top = 0
+	toggle_action.offset_bottom = 0
 	toggle_action.offset_left = -110
-	toggle_action.offset_right = -22
+	toggle_action.offset_right = -42
 	toggle_button.add_child(toggle_action)
+	toggle_icon = Control.new()
+	toggle_icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	toggle_icon.set_anchors_and_offsets_preset(Control.PRESET_CENTER_RIGHT)
+	toggle_icon.offset_left = -30
+	toggle_icon.offset_right = -18
+	toggle_icon.offset_top = -6
+	toggle_icon.offset_bottom = 6
+	toggle_icon.pivot_offset = Vector2(6, 6)
+	toggle_icon.draw.connect(func() -> void:
+		toggle_icon.draw_polyline(PackedVector2Array([Vector2(2, 8), Vector2(6, 4), Vector2(10, 8)]), Color(1, 1, 1, 0.65), 1.0, true)
+	)
+	toggle_button.add_child(toggle_icon)
 
 	body_clip = Control.new()
 	body_clip.name = "PanelBodyClip"
@@ -210,6 +227,11 @@ func _build_time_row() -> void:
 	time_slider.add_child(time_thumb)
 	time_slider.resized.connect(_update_time_thumb)
 	auto_check = CheckBox.new()
+	for state in ["checked", "checked_disabled"]:
+		auto_check.add_theme_icon_override(state, preload("res://assets/checkbox_checked.svg"))
+	for state in ["unchecked", "unchecked_disabled"]:
+		auto_check.add_theme_icon_override(state, preload("res://assets/checkbox_unchecked.svg"))
+	auto_check.add_theme_constant_override("h_separation", 5)
 	auto_check.text = "시간 자동 진행"
 	auto_check.custom_minimum_size = Vector2(0, 22)
 	auto_check.add_theme_font_size_override("font_size", 11)
@@ -605,7 +627,14 @@ func set_panel_open(open: bool, instant: bool = false) -> void:
 	if body_control == null or body_clip == null:
 		return
 	panel_open = open
-	toggle_action.text = "접기  ▴" if open else "펼치기  ▾"
+	toggle_action.text = "접기" if open else "펼치기"
+	if _icon_tween != null and _icon_tween.is_valid():
+		_icon_tween.kill()
+	if instant or reduced_motion:
+		toggle_icon.rotation = PI if open else 0.0
+	else:
+		_icon_tween = create_tween()
+		_icon_tween.tween_property(toggle_icon, "rotation", PI if open else 0.0, 0.25).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
 	if _panel_tween != null and _panel_tween.is_valid():
 		_panel_tween.kill()
 	_refresh_body_height()

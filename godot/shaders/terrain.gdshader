@@ -1,11 +1,13 @@
 shader_type spatial;
 render_mode cull_back, diffuse_burley, specular_schlick_ggx;
 
+uniform sampler2D cloud_noise_map : filter_linear_mipmap, repeat_enable;
 uniform sampler2D path_mask : filter_linear;
 uniform float wet : hint_range(0.0, 1.0) = 0.0;
 uniform float snow_depth : hint_range(0.0, 1.0) = 0.0;
 uniform float winter : hint_range(0.0, 1.0) = 0.0;
 uniform vec3 winter_bare_color = vec3(0.36, 0.235, 0.135);
+uniform bool mobile_clouds = false;
 uniform float cloud_amount : hint_range(0.0, 1.2) = 0.0;
 uniform float cloud_clock = 0.0;
 uniform float water_y = 0.44;
@@ -124,7 +126,8 @@ void fragment() {
 	albedo = mix(albedo, vec3(0.66, 0.75, 0.86), snow_mask);
 	roughness = mix(roughness, 0.94, snow_mask);
 	// K8: sparse crystal glints on the snow cover.
-	float glint = pow(fbm(v_world.xz * 95.0 + vec2(TIME * 0.21)), 16.0);
+	float glint = 0.0;
+	if (snow_mask > 0.0) { glint = pow(fbm(v_world.xz * 95.0 + vec2(TIME * 0.21)), 16.0); }
 	albedo += vec3(0.16, 0.19, 0.22) * glint * snow_mask;
 
 	ALBEDO = albedo;
@@ -136,7 +139,7 @@ void fragment() {
 // K6: web cloud shadows — a drifting noise mask multiplies direct sunlight.
 float cloud_shade(vec3 world_pos) {
 	vec2 wind = vec2(cloud_clock * 0.05, cloud_clock * 0.02);
-	float cover = fbm((world_pos.xz + world_pos.y * vec2(0.25, -0.16)) * 0.55 + wind);
+	float cover = mobile_clouds ? texture(cloud_noise_map, (world_pos.xz + world_pos.y * vec2(0.25, -0.16)) * 0.024 + vec2(cloud_clock * 0.0019, cloud_clock * 0.0008)).r : fbm((world_pos.xz + world_pos.y * vec2(0.25, -0.16)) * 0.55 + wind);
 	return 1.0 - smoothstep(0.31, 0.66, cover) * cloud_amount;
 }
 

@@ -222,8 +222,8 @@ void main() {
 		return;
 	}
 
-	// Add the screen-space shafts themselves, softened at night.
-	sum += params.sun_color.rgb * shaft * sun_strength * 0.45
-		* (0.55 + 0.45 * (1.0 - params.fog.y));
+	// Web mist.js integrates scattering only. Adding twelve bright-pass
+	// samples again stamps copies of waterfall droplets down the cliff.
+	// Keep the visibility proxy solely for the no-shadow raymarch fallback.
 	imageStore(shaft_image, pixel, vec4(sum, through));
 }

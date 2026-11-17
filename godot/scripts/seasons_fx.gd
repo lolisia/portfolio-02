@@ -132,11 +132,8 @@ func _petal_texture(leaf: bool) -> ImageTexture:
 func _update_system(items: Array, multimesh: MultiMesh, level: float,
 		wind: float, delta: float) -> void:
 	var active := int(round(float(items.size()) * clampf(quality_scale, 0.0, 1.0)))
-	for i in range(items.size()):
-		if i >= active or level <= 0.002:
-			multimesh.set_instance_transform(i,
-				Transform3D(Basis.from_scale(Vector3.ZERO), Vector3(0, -80, 0)))
-			continue
+	multimesh.visible_instance_count = active if level > 0.002 else 0
+	for i in range(active):
 		var item: Dictionary = items[i]
 		var a: float = float(item["phase"]) + time * float(item["rate"])
 		var base := world.roof_floor(float(item["x"]), float(item["z"])) + 0.035

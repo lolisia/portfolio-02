@@ -29,43 +29,6 @@ func _init(world: FarmWorld) -> void:
 			if distance < 0.9 and _clear(world, a, b, distance):
 				(a["edges"] as Array).append([j, distance])
 				(b["edges"] as Array).append([i, distance])
-	_add_porch_chain(world)
-
-func _add_porch_chain(world: FarmWorld) -> void:
-	# The normal grid stops at the porch obstacle. Add an explicit chain up the
-	# steps and across the deck so A* can route the walker through the door.
-	var chain: Array[Vector2] = [
-		Vector2(-1.0, 1.8), Vector2(-1.0, 1.35), Vector2(-1.0, 1.0),
-		Vector2(-1.0, 0.65), Vector2(-1.0, 0.35), Vector2(-1.0, 0.15),
-		Vector2(-1.0, -0.2), Vector2(-1.0, -0.55), Vector2(-1.0, -0.9),
-	]
-	var indices: Array[int] = []
-	var grid_count := nodes.size()
-	for point in chain:
-		nodes.append({"x": point.x, "z": point.y, "edges": [], "porch": true})
-		indices.append(nodes.size() - 1)
-	for i in range(indices.size() - 1):
-		_add_edge(indices[i], indices[i + 1])
-	# Join the yard end and first step to the surrounding walkable grid.
-	for k in range(mini(2, indices.size())):
-		var start := indices[k]
-		var start_node: Dictionary = nodes[start]
-		for i in range(grid_count):
-			var node: Dictionary = nodes[i]
-			var dx: float = float(node["x"]) - float(start_node["x"])
-			var dz: float = float(node["z"]) - float(start_node["z"])
-			var distance := sqrt(dx * dx + dz * dz)
-			if distance < 1.5 and _clear(world, start_node, node, distance):
-				_add_edge(start, i)
-
-func _add_edge(a: int, b: int) -> void:
-	var na: Dictionary = nodes[a]
-	var nb: Dictionary = nodes[b]
-	var dx: float = float(na["x"]) - float(nb["x"])
-	var dz: float = float(na["z"]) - float(nb["z"])
-	var distance := sqrt(dx * dx + dz * dz)
-	(na["edges"] as Array).append([b, distance])
-	(nb["edges"] as Array).append([a, distance])
 
 func _clear(world: FarmWorld, a: Dictionary, b: Dictionary, distance: float) -> bool:
 	var steps := maxi(1, int(ceil(distance / 0.18)))
@@ -80,21 +43,6 @@ func _clear(world: FarmWorld, a: Dictionary, b: Dictionary, distance: float) -> 
 func closest(world: FarmWorld, point: Vector2) -> int:
 	if nodes.is_empty():
 		return -1
-	if world != null and world.is_on_porch(point.x, point.y):
-		var best_porch := -1
-		var best_distance := INF
-		for i in range(nodes.size()):
-			if not bool(nodes[i].get("porch", false)):
-				continue
-			var node: Dictionary = nodes[i]
-			var dx: float = float(node["x"]) - point.x
-			var dz: float = float(node["z"]) - point.y
-			var distance := dx * dx + dz * dz
-			if distance < best_distance:
-				best_distance = distance
-				best_porch = i
-		if best_porch >= 0:
-			return best_porch
 	var order: Array = []
 	for i in range(nodes.size()):
 		var node: Dictionary = nodes[i]

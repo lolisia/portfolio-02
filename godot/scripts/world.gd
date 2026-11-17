@@ -58,6 +58,8 @@ var door_leaf: Node3D
 var door_target_open := false
 var door_open := 0.0
 var obstacles: Array = []
+var _ground_quality_factor := 1.0
+var _ground_lod_factor := 1.0
 var boxes: Array = []
 ## Static collision circles [x, z, r, tag] (web colliders.circle). Separate from
 ## `obstacles`, which only keeps scenery from being placed on top of itself.
@@ -410,6 +412,8 @@ func _build_terrain() -> void:
 	var mesh := st.commit()
 	terrain_material = ShaderMaterial.new()
 	terrain_material.shader = preload("res://shaders/terrain.gdshader")
+	terrain_material.set_shader_parameter("mobile_clouds", MobileProfile.enabled())
+	terrain_material.set_shader_parameter("cloud_noise_map", preload("res://assets/textures/web_cloud.png"))
 	terrain_material.set_shader_parameter("winter_bare_color",
 		Vector3(0.36, 0.235, 0.135))
 	ground = MeshInstance3D.new()
@@ -423,8 +427,8 @@ func _build_water() -> void:
 	# Web parity (water.js): a 10×9 grid with a per-vertex bed depth attribute.
 	# The shader uses the real depth instead of an ellipse distance, so the
 	# pond centre is deep and the banks shallow.
-	var cols := 136
-	var rows := 120
+	var cols := 68 if MobileProfile.enabled() else 136
+	var rows := 60 if MobileProfile.enabled() else 120
 	var vertices := PackedVector3Array()
 	var uvs := PackedVector2Array()
 	var uv2s := PackedVector2Array()
@@ -452,7 +456,7 @@ func _build_water() -> void:
 	var mesh := ArrayMesh.new()
 	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
 	var mat := ShaderMaterial.new()
-	mat.shader = WATER_SHADER
+	mat.shader = preload("res://shaders/water_mobile.gdshader") if MobileProfile.enabled() else WATER_SHADER
 	mat.set_shader_parameter("breeze", 0.4)
 	water = MeshInstance3D.new()
 	water.name = "Pond"
@@ -499,7 +503,8 @@ func _build_cascade() -> void:
 		var mat := ShaderMaterial.new()
 		mat.shader = preload("res://shaders/waterfall.gdshader")
 		mat.set_shader_parameter("layer", layer)
-		mat.set_shader_parameter("shade", 1.0 if layer < 0.5 else 0.62)
+		mat.set_shader_parameter("shade", 1.0)
+		mat.set_shader_parameter("cloud_map", preload("res://assets/textures/web_cloud.png"))
 		mat.set_shader_parameter("freeze", 0.0)
 		mat.set_shader_parameter("breeze", 0.4)
 		cascade_materials.append(mat)
@@ -512,18 +517,18 @@ func _build_cascade() -> void:
 	# The web's seven displaced boulders around the outlet.
 	var rock_color := "#515b56"
 	var middle := cascade_left + cascade_width * 0.5
-	b.part("boulder", 15.36, FLOOR_Y + 0.08, middle, 1.11, 0.34, cascade_width * 0.73,
+	b.part("cascadeRock", 15.36, FLOOR_Y + 0.08, middle, 1.11, 0.34, cascade_width * 0.73,
 		rock_color, 0.13, 0.08, -0.14)
-	b.part("boulder", 15.84, FLOOR_Y + 0.10, cascade_left + 0.18, 0.49, 0.27, 0.57,
+	b.part("cascadeRock", 15.84, FLOOR_Y + 0.10, cascade_left + 0.18, 0.49, 0.27, 0.57,
 		rock_color, 0.13, 0.72, -0.14)
-	b.part("boulder", 15.68, FLOOR_Y + 0.07, cascade_left + cascade_width * 0.82,
+	b.part("cascadeRock", 15.68, FLOOR_Y + 0.07, cascade_left + cascade_width * 0.82,
 		0.62, 0.32, 0.52, rock_color, 0.13, -0.4, -0.14)
 	for entry in [[cascade_left, -1.0], [cascade_left + cascade_width, 1.0]]:
 		var edge_z: float = entry[0]
 		var sign: float = entry[1]
-		b.part("boulder", 14.93, WATER_Y + 0.03, edge_z + sign * 0.12, 0.37, 0.23, 0.32,
+		b.part("cascadeRock", 14.93, WATER_Y + 0.03, edge_z + sign * 0.12, 0.37, 0.23, 0.32,
 			rock_color, 0.13, sign * 0.6, -0.14)
-		b.part("boulder", 15.10, WATER_Y - 0.31, edge_z + sign * 0.09, 0.28, 0.28, 0.41,
+		b.part("cascadeRock", 15.10, WATER_Y - 0.31, edge_z + sign * 0.09, 0.28, 0.28, 0.41,
 			rock_color, 0.13, -sign * 0.25, -0.14)
 	# Droplets, foam and vapour from cascade.js.
 	cascade_fx = preload("res://scripts/cascade_fx.gd").new()
@@ -547,6 +552,7 @@ func _cascade_curtain(layer: float) -> ArrayMesh:
 	var vertices := PackedVector3Array()
 	var normals := PackedVector3Array()
 	var uvs := PackedVector2Array()
+	var stream_uvs := PackedVector2Array()
 	var indices := PackedInt32Array()
 	var eps := 0.004
 	for r in range(rows + 1):
@@ -556,6 +562,7 @@ func _cascade_curtain(layer: float) -> ArrayMesh:
 			var p := cascade_path(across, t, layer)
 			vertices.append(p)
 			uvs.append(Vector2(across, t))
+			stream_uvs.append(Vector2(p.z * 1.9, t))
 			var du := cascade_path(minf(across + eps, 1.0), t, layer) \
 				- cascade_path(maxf(across - eps, 0.0), t, layer)
 			var dv := cascade_path(across, t + eps, layer) \
@@ -574,6 +581,7 @@ func _cascade_curtain(layer: float) -> ArrayMesh:
 	arrays[Mesh.ARRAY_VERTEX] = vertices
 	arrays[Mesh.ARRAY_NORMAL] = normals
 	arrays[Mesh.ARRAY_TEX_UV] = uvs
+	arrays[Mesh.ARRAY_TEX_UV2] = stream_uvs
 	arrays[Mesh.ARRAY_INDEX] = indices
 	var mesh := ArrayMesh.new()
 	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
@@ -1339,8 +1347,18 @@ func set_season_blend(tint: Vector3, winter: float) -> void:
 ## 16 x (x, z, radius, strength) presses written by main.gd. Only the turf /
 ## grass materials receive the array, so trees and crops skip the loop.
 func set_trample(slots: PackedVector4Array) -> void:
+	var bounds := Vector4(1e9, 1e9, -1e9, -1e9)
+	for slot in slots:
+		if slot.w < 0.01:
+			continue
+		var reach := slot.z * 1.7
+		bounds.x = minf(bounds.x, slot.x - reach)
+		bounds.y = minf(bounds.y, slot.y - reach)
+		bounds.z = maxf(bounds.z, slot.x + reach)
+		bounds.w = maxf(bounds.w, slot.y + reach)
 	for mat in _trample_materials:
 		mat.set_shader_parameter("trample", slots)
+		mat.set_shader_parameter("trample_bounds", bounds)
 
 func set_water_freeze(value: float) -> void:
 	if cascade_fx != null:
@@ -1361,21 +1379,28 @@ func update_cascade(delta: float, wind: float, light: float) -> void:
 		cascade_fx.update(delta, wind, light)
 
 func set_quality(level: int) -> void:
-	var factor: float = [1.0, 0.78, 0.50][clampi(level, 0, 2)]
+	_ground_quality_factor = [1.0, 0.78, 0.50][clampi(level, 0, 2)]
+	_apply_ground_budget()
+
+func set_mobile_ground_lod(view_span: float) -> void:
+	if not MobileProfile.enabled():
+		return
+	var factor := lerpf(1.0, 0.55, smoothstep(18.0, 70.0, view_span))
+	if absf(factor - _ground_lod_factor) < 0.015:
+		return
+	_ground_lod_factor = factor
+	_apply_ground_budget()
+
+func _apply_ground_budget() -> void:
+	var factor := _ground_quality_factor * _ground_lod_factor
 	for child in get_children():
-		if not (child is MultiMeshInstance3D):
+		if not child is MultiMeshInstance3D:
 			continue
-		var mmi := child as MultiMeshInstance3D
-		var kind := String(mmi.name)
+		var kind := String(child.name)
 		if not (kind.begins_with("turf") or kind.begins_with("grass")):
 			continue
-		var multimesh := mmi.multimesh
-		if multimesh == null:
-			continue
-		if factor >= 1.0:
-			multimesh.visible_instance_count = -1
-		else:
-			multimesh.visible_instance_count = maxi(1, int(multimesh.instance_count * factor))
+		var mm: MultiMesh = child.multimesh
+		mm.visible_instance_count = -1 if factor >= 1.0 else maxi(1, int(mm.instance_count * factor))
 
 func _build_trees() -> void:
 	for i in range(TREE_LIST.size()):
@@ -1632,7 +1657,8 @@ func _collect_materials() -> void:
 			window_glass_material = glass
 		var name := String(mmi.name)
 		if mat is ShaderMaterial and (name.begins_with("turf") or name.begins_with("grass")):
-			_trample_materials.append(mat)
+			if not mat in _trample_materials:
+				_trample_materials.append(mat)
 
 func set_night(night: float) -> void:
 	for entry in lamps:
@@ -1665,7 +1691,8 @@ func set_cloud_shadow(amount: float, clock: float) -> void:
 			var mat := (node as MultiMeshInstance3D).material_override
 			if mat is ShaderMaterial and (mat as ShaderMaterial).shader != null \
 				and (mat as ShaderMaterial).shader.code.contains("cloud_amount"):
-				_cloud_materials.append(mat)
+				if not mat in _cloud_materials:
+					_cloud_materials.append(mat)
 	for mat in _cloud_materials:
 		mat.set_shader_parameter("cloud_amount", amount)
 		mat.set_shader_parameter("cloud_clock", clock)

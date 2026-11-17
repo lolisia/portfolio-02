@@ -1,0 +1,32 @@
+[
+  {
+    "draw_calls": 391.0,
+    "fps": 28.0152593084669,
+    "frame_ms": 35.6948329119258,
+    "frames": 226,
+    "gpu_ms": 0.0,
+    "p90_ms": 37.5,
+    "phase": "full",
+    "primitives": 520607.0,
+    "process_ms": 43.7977920353982,
+    "quality": 1,
+    "render_cpu_ms": 0.0,
+    "scale": 0.850000023841858,
+    "viewport": "(390.0, 848.0)"
+  },
+  {
+    "draw_calls": 391.0,
+    "fps": 27.9363201746552,
+    "frame_ms": 35.7956951290684,
+    "frames": 225,
+    "gpu_ms": 0.0,
+    "p90_ms": 36.9573333333337,
+    "phase": "full",
+    "primitives": 520607.0,
+    "process_ms": 42.6872400000001,
+    "quality": 1,
+    "render_cpu_ms": 0.0,
+    "scale": 0.850000023841858,
+    "viewport": "(390.0, 848.0)"
+  }
+]

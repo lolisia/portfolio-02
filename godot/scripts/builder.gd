@@ -70,27 +70,41 @@ func finish() -> void:
 				items[i] = items[j]
 				items[j] = swap
 		var material: Material = _material_for(kind_name, mesh)
-		var mm := MultiMesh.new()
-		mm.transform_format = MultiMesh.TRANSFORM_3D
-		mm.use_colors = true
-		mm.use_custom_data = true
-		mm.mesh = mesh
-		mm.instance_count = items.size()
-		for i in range(items.size()):
-			var item: Array = items[i]
-			mm.set_instance_transform(i, item[0])
-			var item_color: Color = item[1]
-			mm.set_instance_color(i, item_color)
-			# The foliage shader reads the tint from custom data as well, because
-			# MultiMesh instance colors are not exposed consistently in custom shaders.
-			mm.set_instance_custom_data(i, Color(item_color.r, item_color.g, item_color.b, float(item[2])))
-		var mmi := MultiMeshInstance3D.new()
-		mmi.name = kind_name
-		mmi.multimesh = mm
-		mmi.material_override = material
-		var no_shadow := kind_name in NO_SHADOW
-		mmi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF if no_shadow else GeometryInstance3D.SHADOW_CASTING_SETTING_ON
-		root.add_child(mmi)
+		var chunks: Dictionary = {}
+		var split := MobileProfile.enabled() and (kind_name.begins_with("turf") or kind_name.begins_with("grass"))
+		for item in items:
+			var at: Vector3 = item[0].origin
+			var key := Vector2i(floori(at.x / 8.0), floori(at.z / 8.0)) if split else Vector2i.ZERO
+			if not chunks.has(key):
+				chunks[key] = []
+			chunks[key].append(item)
+		var chunk_index := 0
+		for key in chunks:
+			_emit_batch(kind_name, chunks[key], mesh, material, chunk_index)
+			chunk_index += 1
+
+func _emit_batch(kind_name: String, items: Array, mesh: Mesh, material: Material, chunk_index: int) -> void:
+	var mm := MultiMesh.new()
+	mm.transform_format = MultiMesh.TRANSFORM_3D
+	mm.use_colors = true
+	mm.use_custom_data = true
+	mm.mesh = mesh
+	mm.instance_count = items.size()
+	for i in range(items.size()):
+		var item: Array = items[i]
+		mm.set_instance_transform(i, item[0])
+		var item_color: Color = item[1]
+		mm.set_instance_color(i, item_color)
+		# The foliage shader reads the tint from custom data as well, because
+		# MultiMesh instance colors are not exposed consistently in custom shaders.
+		mm.set_instance_custom_data(i, Color(item_color.r, item_color.g, item_color.b, float(item[2])))
+	var mmi := MultiMeshInstance3D.new()
+	mmi.name = kind_name if chunk_index == 0 else kind_name + "_chunk_" + str(chunk_index)
+	mmi.multimesh = mm
+	mmi.material_override = material
+	var no_shadow := kind_name in NO_SHADOW
+	mmi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF if no_shadow else GeometryInstance3D.SHADOW_CASTING_SETTING_ON
+	root.add_child(mmi)
 
 func _mesh_for(kind: String) -> Mesh:
 	if assets.has(kind):
@@ -116,13 +130,10 @@ func _mesh_for(kind: String) -> Mesh:
 			trunk.radial_segments = 7
 			trunk.rings = 1
 			return trunk
+		"cascadeRock":
+			return preload("res://assets/models/cascade_rock.obj")
 		"leaf", "boulder":
-			var sphere := SphereMesh.new()
-			sphere.radius = 0.52
-			sphere.height = 1.04
-			sphere.radial_segments = 7
-			sphere.rings = 4
-			return sphere
+			return preload("res://assets/models/field_rock.obj")
 		_:
 			var fallback := BoxMesh.new()
 			fallback.size = Vector3.ONE
@@ -132,6 +143,8 @@ func _material_for(kind: String, mesh: Mesh = null) -> Material:
 	if kind in PLANT_KINDS:
 		var shader_mat := ShaderMaterial.new()
 		shader_mat.shader = preload("res://shaders/foliage.gdshader")
+		shader_mat.set_shader_parameter("mobile_clouds", MobileProfile.enabled())
+		shader_mat.set_shader_parameter("snow_noise_map", preload("res://assets/textures/web_cloud.png"))
 		shader_mat.set_shader_parameter("wind_strength", 1.0)
 		# K4: the Blender nature meshes carry their baked shading in vertex
 		# colours. Detect that per mesh and multiply it into the instance tint.
@@ -183,17 +196,30 @@ func _material_for(kind: String, mesh: Mesh = null) -> Material:
 	match kind:
 		"wood", "bedFrame", "stumpBark", "stumpTop": kind_index = 0
 		"stone", "boulder", "leaf": kind_index = 1
+		"cascadeRock": kind_index = 6
 		"clay": kind_index = 2
 		"plaster": kind_index = 3
 		"soil", "bedSoil": kind_index = 4
 		"iron": kind_index = 5
-	# Bark, twigs and stump parts use the wood grain rather than the default
-	# stone surface (the web gives them a dedicated rough bark recipe).
+	# Bark and twigs use the web bark recipe; the stump cut face keeps wood.
 	var lower_kind := kind.to_lower()
-	if "bark" in lower_kind or "twig" in lower_kind or lower_kind.begins_with("stump"):
-		kind_index = 0
+	if "bark" in lower_kind or "twig" in lower_kind:
+		kind_index = 7
 	var surface_mat := ShaderMaterial.new()
 	surface_mat.shader = preload("res://shaders/surface.gdshader")
+	surface_mat.set_shader_parameter("mobile_clouds", MobileProfile.enabled())
+	surface_mat.set_shader_parameter("snow_noise_map", preload("res://assets/textures/web_cloud.png"))
 	surface_mat.set_shader_parameter("surface_kind", kind_index)
+	var recipe := ""
+	match kind_index:
+		0: recipe = "wood"
+		1: recipe = "stone"
+		2: recipe = "clay"
+		3: recipe = "plaster"
+		7: recipe = "bark"
+	if not recipe.is_empty():
+		surface_mat.set_shader_parameter("use_detail_map", true)
+		surface_mat.set_shader_parameter("detail_albedo", load("res://assets/textures/" + recipe + "_albedo.png"))
+		surface_mat.set_shader_parameter("detail_normal", load("res://assets/textures/" + recipe + "_normal.png"))
 	return surface_mat
 

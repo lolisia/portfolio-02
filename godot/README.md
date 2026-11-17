@@ -28,7 +28,7 @@ Godot 실행 파일이 다른 곳에 있으면 `GODOT_EXE` 환경 변수로 지�
 
 - 데스크톱: Forward+
 - 모바일: Mobile (`project.godot`의 `renderer/rendering_method.mobile`)
-- 조작: 좌클릭 드래그 회전, 휠 확대/축소, 터치 한 손가락 회전, 두 손가락 핀치 확대/축소
+- 조작: 좌클릭 드래그/한 손가락 드래그로 지면 이동, 우클릭(또는 좌우 동시 클릭) 드래그/두 손가락 드래그로 회전, 휠/핀치로 포인터·손가락 중심 기준 확대/축소
 - 개발용 프리셋: `-- --house`, `-- --pond`, `-- --pondside`, `-- --char`, `-- --char2`, `-- --charclose`, `-- --panel`, `-- --fishtest`, `-- --door`, `-- --front`, `-- --garden`
 - 날씨/계절 프리뷰: `-- --winter`, `-- --snow`, `-- --rain`, `-- --spring`, `-- --autumn`, `-- --night`, `-- --dusk`, `-- --dawn`, `-- --sunrise`
 - 태스크 프리뷰: `-- --gather`, `-- --fish`, `-- --salute`, `-- --fishnear`, `-- --gathernear`, `-- --snowtest`
@@ -46,8 +46,8 @@ Godot 실행 파일이 다른 곳에 있으면 `GODOT_EXE` 환경 변수로 지�
 - 연못 물고기 10마리(수면 점프), 나무/램프/지붕을 옮겨 앉는 새
 - 시각/바람 슬라이더, 날씨/계절 선택, 자동 시간, 패널 접기, 리셋
 - 모션 프리뷰 카드: 지평선(시각), 풍속계(바람), 날씨 아이콘
-- 반응형 UI: 실제 창 크기 기준 content scale, 360px 폭/세로 모드 대응, 터치 타깃, 패널 열림 시 카메라 프레이밍 보정
-- 품질 프리셋: 높음/보통/낮음 (MSAA, 3D 해상도 스케일, SSAO/볼류메트릭, 물 반사, 잔디/파티클 밀도), 모바일 FPS 기반 적응형 해상도
+- 반응형 UI: 실제 창 크기 기준 content scale, 360px 폭/세로 모드 대응, 터치 타깃, 패널 열림 시에도 게임 화면의 위치·배율 유지
+- 품질 프리셋: 높음/보통/낮음 (MSAA, 3D 해상도 스케일, SSAO/볼류메트릭, 물 반사, 잔디/파티클 밀도), 선택한 품질의 고정 해상도(자동 품질 저하 없음)
 - 태양/하늘/안개/톤매핑/글로우/SSAO 기본 환경, 원본 backdrop 기반 하늘 그라데이션과 분할 톤(그림자/하이라이트) 그레이드
 - Forward+ 볼류메트릭 미스트(FogVolume)와 **SubViewport 평면 물 반사**(모바일은 화면공간 반사 폴백), 4옥타브 advected wave normal·바람 기반 slope·slope 반사 왜곡
 - 표면 셰이더: 나무결·석재·기와·흙 디테일, 절벽 지층, foliage dapple, 젖은 표면, 눈 덮임
@@ -66,8 +66,8 @@ Godot 실행 파일이 다른 곳에 있으면 `GODOT_EXE` 환경 변수로 지�
 
 ## 아직 남은 작업
 
-- 모바일 실기기 프로파일링(중급 Android), 적응형 해상도, safe area
-- export 템플릿/Android SDK가 이 환경에 없어 패키징 미검증 (Windows preset은 준비됨, `export_presets.cfg`)
+- 추가 Android GPU/중급 기기 프로파일링과 60 FPS 목표 최적화
+- Android 실기기 설치·성능 검증(현재 ADB 연결 기기 없음). 세로 고정 debug APK 빌드·서명 검증 및 Mali-G720 실기기 실행·프로파일링 완료.
 
 ## 다음 작업
 
@@ -76,3 +76,28 @@ Godot 실행 파일이 다른 곳에 있으면 `GODOT_EXE` 환경 변수로 지�
 ## 변환 노트
 
 원본 `public/models/unitychan/sd_unitychan.glb`는 `EXT_texture_webp`를 필수로 요구해 Godot 코어 glTF 임포터가 거부합니다. `convert_unitychan_glb.py`가 임베디드 WebP를 PNG로 바꾸고 `godot/assets/models/unitychan/`에 다시 저장합니다. 원본 에셋과 라이선스는 `public/models/unitychan/`을 참고하세요.
+
+## 2차 감사 반영
+
+수정 내용과 검증 범위는 [PARITY_AUDIT_2_RESULT.md](PARITY_AUDIT_2_RESULT.md)를 참고하세요.
+`-- --ui-scale 2`로 UI 배율을 명시할 수 있습니다. 근접 프리셋은 `-- --garden --yaw 30 --zoom 5`처럼 웹과 같은 yaw/zoom을 지정할 수 있습니다.
+회귀 검사: `Godot --headless --path godot --script res://tools/parity_test.gd` (리포지토리 루트에서 실행).
+
+## Android 세로 APK
+
+- 결과: `build/android/ForestFarmDiorama-portrait.apk` (설치용 debug 서명, ARM64 + ARMv7)
+- 패키지: `com.lolis.forestfarmdiorama`, 버전 `0.1.1` (code 2)
+- 방향: Portrait 고정. 모바일 기준 뷰포트 720×1280, 화면 배율·안전 영역 대응 UI.
+- Android는 Mobile 렌더러와 ETC2/ASTC 텍스처 사용. PC Mobile 렌더러 세로 화면 검사 완료. Mali-G720 실기기에서 실행·프로파일링 완료.
+- 이 프로젝트에는 C# 코드가 없으므로 표준 Godot 4.7.2와 표준 Android export template을 사용한다.
+
+리포지토리 루트에서 재빌드:
+
+```powershell
+& 'D:\Godot\Godot_v4.7.2-stable_win64\Godot_v4.7.2-stable_win64_console.exe' --headless --path godot --editor --import --quit
+& 'D:\Godot\Godot_v4.7.2-stable_win64\Godot_v4.7.2-stable_win64_console.exe' --headless --path godot --export-debug 'Android Portrait' build/android/ForestFarmDiorama-portrait.apk
+```
+
+스토어 제출용 release 키 서명은 포함하지 않는다.
+
+모바일 수정과 실측 결과: [reports/mobile-2026-11-14/REPORT.md](reports/mobile-2026-11-14/REPORT.md).
