@@ -4,7 +4,7 @@ import {createFarmPaths} from './farm-paths.js';
 
 // SD Unity-chan © Unity Technologies Japan/UCL — see public/models/unitychan/.
 // Gathering / Fishing clips are retargeted from Kevin Iglesias "Human Crafting Animations FREE".
-const URL='/models/unitychan/sd_unitychan.glb';
+const URL=import.meta.env.BASE_URL+'models/unitychan/sd_unitychan.glb';
 const HEIGHT=1.02, RADIUS=.2;
 const LOOPS=new Set(['Standing','Walking','Running','Gathering','FishingLoop']);
 const BEDS=[[1.1,3.3],[2.7,3.3]], POND={x:10.7,z:6.3};

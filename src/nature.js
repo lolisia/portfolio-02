@@ -18,7 +18,7 @@ const KINDS={
   stumpBark:{material:'bark'},stumpTop:{material:'wood-uv'}
 };
 
-export async function loadNature(url='/models/nature.glb'){
+export async function loadNature(url=import.meta.env.BASE_URL+'models/nature.glb'){
   const gltf=await new GLTFLoader().loadAsync(url),kinds=new Map();
   gltf.scene.updateMatrixWorld(true);
   gltf.scene.traverse(o=>{
