@@ -34,9 +34,6 @@ input:focus-visible,button:focus-visible,.options input:focus-visible+span{outli
 @media(prefers-reduced-motion:reduce){body,#panel,#panel *,#panel *:before{animation:none!important;transition:none!important}}
 
 @media(max-width:500px){.control{padding:7px}.auto small{margin-left:0}.panel-footer{padding:6px}.panel-footer fieldset{gap:3px}}
-#credit{position:fixed;left:10px;bottom:8px;z-index:5;font:11px/1.3 system-ui,sans-serif;color:#2c3a46;background:#ffffffa8;padding:3px 8px;border-radius:6px;text-decoration:none}
-#credit:hover{text-decoration:underline}
-@media(max-width:500px){#credit{top:8px;bottom:auto;font-size:10px}}
 
 /* Transparent panel: content is separated only by hairlines, all text is white. */
 #panel{background:none;border:1px solid #ffffff73;box-shadow:none;backdrop-filter:none;-webkit-backdrop-filter:none;text-shadow:0 1px 3px #0f1d2699,0 0 1px #0f1d2666}
