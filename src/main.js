@@ -26,8 +26,9 @@ renderer.toneMapping=T.ACESFilmicToneMapping;renderer.toneMappingExposure=1.14;
 renderer.shadowMap.enabled=true;renderer.shadowMap.type=T.PCFShadowMap;
 const camera=new T.OrthographicCamera(-22,22,15,-15,.1,180);
 const controls=new OrbitControls(camera,canvas);controls.enableDamping=true;controls.zoomToCursor=true;controls.enablePan=false;
-controls.minPolarAngle=.35;controls.maxPolarAngle=1.18;controls.minZoom=.7;controls.maxZoom=3.3;
-function home(){controls.target.set(0,1,0);camera.position.set(31,34,41);camera.zoom=1;camera.updateProjectionMatrix();controls.update()}
+controls.minPolarAngle=.35;controls.maxPolarAngle=1.18;controls.minZoom=.7;controls.maxZoom=10;
+const followCharacter=document.querySelector('#followCharacter');
+function home(){followCharacter.checked=false;controls.target.set(0,1,0);camera.position.set(31,34,41);camera.zoom=1;camera.updateProjectionMatrix();controls.update()}
 home();
 const view=new URLSearchParams(location.search).get('view');
 if(view==='water'||view==='falls'){
@@ -58,6 +59,7 @@ const prints=createFootprints(scene,world,atmosphere);
 const farmLife=createFarmLife(scene,world,prints);
 let unityChanLoaded;const unityChanReady=new Promise(r=>unityChanLoaded=r);
 const unityChan=createUnityChan(scene,world,unityChanLoaded,prints);
+const trackedCharacter=scene.getObjectByName('sd-unity-chan'),followTarget=new T.Vector3(),followDelta=new T.Vector3();
 const homeLife=createInterior(world,surface('glass'),windowLight);
 const setSky=createSky(renderer,scene,world.water);
 const volume=createVolume(renderer,world,sun,atmosphere.cloudMap);
@@ -285,6 +287,13 @@ renderer.setAnimationLoop(ms=>{
   prints.update(dt,weatherBlend.snow*(1+weatherBlend.storm));
   farmLife(dt,ms/1000,hourShown,weatherIndex,windShown,camera,nightLevel);
   unityChan(dt,ms/1000,hourShown,weatherIndex,windShown);
+  if(followCharacter.checked&&trackedCharacter?.visible){
+    trackedCharacter.getWorldPosition(followTarget);followTarget.y+=.55;
+    followDelta.copy(followTarget).sub(controls.target).multiplyScalar(1-Math.exp(-4*elapsedFrame));
+    // Equal translation preserves the user's orbit, distance and zoom. The one
+    // controls.update() above handles input/damping before this tracking offset.
+    controls.target.add(followDelta);camera.position.add(followDelta);
+  }
   if(flies.visible){flies.position.y=Math.sin(ms*.0015)*.14;flies.rotation.y=Math.sin(ms*.00035)*.025;flies.material.opacity=.72+.25*Math.sin(ms*.0025)}
   const seconds=ms/1000;
   for(const {pivot} of lanterns){
