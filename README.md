@@ -3,7 +3,7 @@
 숲속 농가를 30×30 타일로 만든 실시간 3D 디오라마. 시간, 날씨, 계절에 따라 빛과 대기가 바뀌고,
 캐릭터와 동물이 스스로 돌아다니며 일한다.
 
-- **웹 (Three.js)**: https://aisilol.com/diorama/ (기준 구현)
+- **웹 (Three.js)**: https://lolisia.github.io/portfolio-02/ (기준 구현. `master`에 push하면 GitHub Actions가 자동 배포)
 - **네이티브 (Godot 4.7)**: 웹 버전을 PC(Forward+)와 Android(Mobile 렌더러)로 옮긴 버전. [`godot/`](godot/README.md)
 
 | | 웹 | 네이티브 |
@@ -11,7 +11,7 @@
 | 엔진 | three.js 0.187, Vite 8 | Godot 4.7.2 (GDScript, GLSL 컴퓨트) |
 | 렌더러 | WebGL 2, 커스텀 HDR 후처리 체인 | Forward+ (PC) / Mobile (Android) |
 | 셰이더 | 내장 재질 청크 주입(`onBeforeCompile`), 전체 화면 패스 | `.gdshader`, `CompositorEffect` 컴퓨트 셰이더 |
-| 배포 | nginx 정적 호스팅 (`/diorama/`) | Windows, Android 세로 APK |
+| 배포 | GitHub Pages (정적 빌드) | Windows, Android 세로 APK |
 
 ## 렌더링 기법
 
@@ -128,7 +128,8 @@ Mali-G720 MC8)에서 측정했다.
 ```bash
 npm ci
 npm run dev                # 웹 개발 서버
-npm run build:diorama      # /diorama/ 경로용 정적 빌드
+npm run build:pages        # GitHub Pages(/portfolio-02/)용 정적 빌드
+npm run build:diorama      # 자체 서버(/diorama/)용 정적 빌드
 bash scripts/verify.sh     # 웹 빌드 + Godot import + 헤드리스 테스트
 ```
 
