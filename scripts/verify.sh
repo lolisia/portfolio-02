@@ -29,6 +29,7 @@ if [ -f package.json ] && [ "${VERIFY_SKIP_WEB:-0}" != "1" ]; then
   if [ ! -d node_modules ]; then
     npm ci --no-audit --no-fund
   fi
+  node tools/mobile-web-quality-test.mjs
   npm run build
   ran=$((ran + 1))
 fi

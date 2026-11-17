@@ -1,12 +1,13 @@
 import * as T from 'three';
 import {Reflector} from 'three/addons/objects/Reflector.js';
+import {quality} from './mobile-quality.js';
 
 export function makeWater(height,level){
   const geometry=new T.PlaneGeometry(10,9,136,120);
   const positions=geometry.attributes.position,depth=[];
   for(let i=0;i<positions.count;i++)depth.push(level-height(10+positions.getX(i),6.1-positions.getY(i)));
   geometry.setAttribute('bedDepth',new T.Float32BufferAttribute(depth,1));
-  const water=new Reflector(geometry,{textureWidth:640,textureHeight:512,multisample:0,clipBias:.001});
+  const water=new Reflector(geometry,{textureWidth:Math.round(640*quality.reflectionScale),textureHeight:Math.round(512*quality.reflectionScale),multisample:0,clipBias:.001});
   water.rotation.x=-Math.PI/2;water.position.set(10,level,6.1);
   water.userData.impacts=Array.from({length:18},()=>new T.Vector4(0,0,-100,0));
   water.userData.freeze={value:0};
@@ -31,7 +32,15 @@ export function makeWater(height,level){
   const crop=new T.OrthographicCamera(),corner=new T.Vector3(),mirrorScale={value:new T.Vector2(1,1)};
   water.userData.mirrorScale=mirrorScale;
   const reflect=water.onBeforeRender;
+  const capturedWorld=new T.Matrix4(),capturedProjection=new T.Matrix4();
+  let captured=false,lastCapture=-Infinity;
   water.onBeforeRender=function(renderer,scene,camera){
+    // Only the reflected image is cached; surface ripples still animate every frame. Camera
+    // motion and zoom invalidate it immediately so the mirror never slides during an orbit.
+    const now=performance.now()/1000;
+    const viewChanged=!captured||!capturedWorld.equals(camera.matrixWorld)||!capturedProjection.equals(camera.projectionMatrix);
+    if(quality.reflectionInterval>0&&!viewChanged&&now-lastCapture<quality.reflectionInterval)return;
+    const sourceCamera=camera;
     let l=1,r=-1,b=1,t=-1;
     for(const x of [west,east])for(const z of [north,south]){
       corner.set(x,level,z).project(camera);
@@ -49,7 +58,14 @@ export function makeWater(height,level){
     const background=scene.background;
     const alpha=renderer.getClearAlpha();renderer.getClearColor(savedClear);
     scene.background=null;renderer.setClearColor(0,0);
-    try{reflect.call(this,renderer,scene,camera)}finally{
+    try{
+      reflect.call(this,renderer,scene,camera);
+      capturedWorld.copy(sourceCamera.matrixWorld);capturedProjection.copy(sourceCamera.projectionMatrix);
+      // Carry the fractional interval forward rather than falling to 20 Hz when a nominal
+      // 60 Hz device supplies 16.6 ms timestamps instead of exactly 1000/60 ms.
+      lastCapture=quality.reflectionInterval>0&&!viewChanged?now-(now-lastCapture)%quality.reflectionInterval:now;
+      captured=true;
+    }finally{
       scene.background=background;renderer.setClearColor(savedClear,alpha);
     }
   };
@@ -116,19 +132,22 @@ export function shadeWater(shader,water){
     float shallow=exp(-7.5*depth);
     diffuseColor.rgb=mix(vec3(.003,.020,.038),vec3(.07,.146,.132),shallow);
     diffuseColor.a=mix(.85,.36,shallow);
-    vec2 cell=floor(q*1.3),local=fract(q*1.3);
-    float nearest=10.,second=10.;
-    for(int ix=-1;ix<=1;ix++)for(int iz=-1;iz<=1;iz++){
-      vec2 offset=vec2(float(ix),float(iz));
-      vec2 seed=vec2(pondHash(cell+offset),pondHash(cell+offset+19.7));
-      float dist=length(offset+seed-local);
-      if(dist<nearest){second=nearest;nearest=dist;}else second=min(second,dist);
+    if(pondIce>0.){
+      vec2 cell=floor(q*1.3),local=fract(q*1.3);
+      float nearest=10.,second=10.;
+      for(int ix=-1;ix<=1;ix++)for(int iz=-1;iz<=1;iz++){
+        vec2 offset=vec2(float(ix),float(iz));
+        vec2 seed=vec2(pondHash(cell+offset),pondHash(cell+offset+19.7));
+        float dist=length(offset+seed-local);
+        if(dist<nearest){second=nearest;nearest=dist;}else second=min(second,dist);
+      }
+      float fracture=1.-smoothstep(.008,.038,second-nearest);
+      float frost=smoothstep(-.3,.38,pondNoise(q*.85).x);
+      vec3 iceColor=vec3(.24,.38,.40)+frost*vec3(.20,.23,.23)+fracture*.11;
+      diffuseColor.rgb=mix(diffuseColor.rgb,iceColor,pondIce);
+      diffuseColor.a=mix(diffuseColor.a,1.,pondIce);
     }
-    float fracture=1.-smoothstep(.008,.038,second-nearest);
-    float frost=smoothstep(-.3,.38,pondNoise(q*.85).x);
-    vec3 iceColor=vec3(.24,.38,.40)+frost*vec3(.20,.23,.23)+fracture*.11;
-    diffuseColor.rgb=mix(diffuseColor.rgb,iceColor,pondIce);
-    diffuseColor.a=mix(diffuseColor.a,1.,pondIce);`);
+    `);
   shader.fragmentShader=shader.fragmentShader.replace('#include <lights_physical_fragment>',
     'roughnessFactor=clamp(sqrt(roughnessFactor*roughnessFactor+unresolved*.48),.065,.48);roughnessFactor=mix(roughnessFactor,.46,pondIce);\n#include <lights_physical_fragment>');
   shader.fragmentShader=shader.fragmentShader.replace('#include <normal_fragment_maps>',`

@@ -1,5 +1,6 @@
 import * as T from 'three';
 import {GTAOShader,generateMagicSquareNoise} from 'three/addons/shaders/GTAOShader.js';
+import {quality} from './mobile-quality.js';
 
 const fullscreenVertex=`
   varying vec2 screenUv;
@@ -14,7 +15,7 @@ export function createVolume(renderer,world,sun,clouds){
   const fog=new T.WebGLRenderTarget(1,1,{type:T.HalfFloatType,depthBuffer:false});
   const aoTarget=new T.WebGLRenderTarget(1,1,{depthBuffer:false});
   const ao=new T.ShaderMaterial({...GTAOShader,uniforms:T.UniformsUtils.clone(GTAOShader.uniforms),
-    defines:{...GTAOShader.defines,NORMAL_VECTOR_TYPE:0,PERSPECTIVE_CAMERA:0,SAMPLES:8},
+    defines:{...GTAOShader.defines,NORMAL_VECTOR_TYPE:0,PERSPECTIVE_CAMERA:0,SAMPLES:quality.aoSamples},
     depthTest:false,depthWrite:false});
   ao.uniforms.tDepth.value=frame.depthTexture;ao.uniforms.tNoise.value=generateMagicSquareNoise();
   ao.uniforms.radius.value=.58;ao.uniforms.thickness.value=.42;
@@ -49,7 +50,7 @@ export function createVolume(renderer,world,sun,clouds){
       // the ground, so samples are spent where they show: a few long steps through the thin air
       // above y=5, the rest packed into the layer below it (finer there than an even split).
       float split=ray.y<-.001?clamp((5.-origin.y)/ray.y,start,max(start,end)):start;
-      float dsHigh=(split-start)/6.,dsLow=max(0.,end-split)/18.;
+      float dsHigh=(split-start)/${quality.fogHighSteps}.,dsLow=max(0.,end-split)/${quality.fogLowSteps}.;
       vec3 sum=vec3(0.);float through=1.;
       if(end>start){
         float jitter=.25+.5*fract(52.9829189*fract(dot(gl_FragCoord.xy,vec2(.06711056,.00583715))));
@@ -63,8 +64,8 @@ export function createVolume(renderer,world,sun,clouds){
           vec3 toLamp=lamps[j]-origin;float along=dot(toLamp,ray);
           nearLamp[j]=dot(toLamp,toLamp)-along*along<30.;anyLit=anyLit||nearLamp[j];
         }
-        for(int i=0;i<24;i++,p+=ray*ds){
-          if(i==6){p=origin+ray*(split+dsLow*jitter);ds=dsLow;}
+        for(int i=0;i<${quality.fogHighSteps+quality.fogLowSteps};i++,p+=ray*ds){
+          if(i==${quality.fogHighSteps}){p=origin+ray*(split+dsLow*jitter);ds=dsLow;}
           float edge=1.-smoothstep(13.4,17.,max(abs(p.x),abs(p.z)));
           float bank=texture2D(cloudMap,p.xz*.039+p.y*vec2(.019,-.027)+clock*vec2(-.0014,.0008)).r;
           float pool=exp(-.029*dot(p.xz-vec2(10.5,6.),p.xz-vec2(10.5,6.)));
@@ -126,13 +127,14 @@ export function createVolume(renderer,world,sun,clouds){
       gl_FragColor=vec4(c*.25,1.);
     }`,{blending:T.AdditiveBlending,transparent:true});
   const composite=new T.ShaderMaterial({depthTest:false,depthWrite:false,
+    defines:{SEPARATE_CONTACT:quality.fogScale!==.5?1:0},
     uniforms:{bgTop:{value:new T.Color()},bgBottom:{value:new T.Color()},sunScreen:{value:new T.Vector2(.5,2)},glowColor:{value:new T.Color()},glowAmount:{value:0},
       shadowTint:{value:new T.Vector3(1,1,1)},highlightTint:{value:new T.Vector3(1,1,1)},saturation:{value:1},vignette:{value:.2},
       bloomMap:{value:blooms[0].texture},bloomAmount:{value:0},stars:{value:0},skyTurn:{value:0},clock:{value:0},
       moodTint:{value:new T.Vector3(1,1,1)},moodSaturation:{value:1},moodContrast:{value:1},moodBloom:{value:1},
-      glassRect:{value:new T.Vector4()},viewport:{value:new T.Vector2()},contact:{value:aoTarget.texture},sceneColor:{value:frame.texture},depthMap:{value:frame.depthTexture},volume:{value:fog.texture},fogSize:{value:new T.Vector2()}},
+      glassRect:{value:new T.Vector4()},viewport:{value:new T.Vector2()},contact:{value:aoTarget.texture},sceneColor:{value:frame.texture},depthMap:{value:frame.depthTexture},volume:{value:fog.texture},fogSize:{value:new T.Vector2()},contactSize:{value:new T.Vector2()}},
     vertexShader:fullscreenVertex,fragmentShader:`
-    varying vec2 screenUv;uniform sampler2D sceneColor,depthMap,volume,contact,bloomMap;uniform vec2 fogSize;
+    varying vec2 screenUv;uniform sampler2D sceneColor,depthMap,volume,contact,bloomMap;uniform vec2 fogSize,contactSize;
     uniform float bloomAmount,stars,skyTurn,clock,moodSaturation,moodContrast,moodBloom;uniform vec3 moodTint;
     float starHash(vec2 p){vec3 q=fract(p.xyx*vec3(.1031,.1030,.0973));q+=dot(q,q.yzx+33.33);return fract((q.x+q.y)*q.z);}
     uniform vec4 glassRect;uniform vec2 viewport,sunScreen;
@@ -147,15 +149,31 @@ export function createVolume(renderer,world,sun,clouds){
       vec2 lensUv=clamp(screenUv-direction*bevel*8./viewport,0.,1.);
       float z=texture2D(depthMap,lensUv).r;
       vec2 p=lensUv*fogSize-.5, f=fract(p);
-      vec4 v=vec4(0.);float total=0.,visibility=0.;
+      vec4 v=vec4(0.);float total=0.,visibility=0.,contactTotal=0.;
       for(int i=0;i<4;i++){
         vec2 corner=vec2(i%2,i/2);vec2 uv=(floor(p)+corner+.5)/fogSize;
         vec2 blend=mix(1.-f,f,corner);
         float weight=blend.x*blend.y/(1.+2400.*abs(texture2D(depthMap,uv).r-z));
-        visibility+=texture2D(contact,uv).r*weight;v+=texture2D(volume,uv)*weight;total+=weight;
+        #if !SEPARATE_CONTACT
+          visibility+=texture2D(contact,uv).r*weight;
+        #endif
+        v+=texture2D(volume,uv)*weight;total+=weight;
       }
       v/=max(total,.00001);
-      float contactLight=z>=1.?1.:mix(.68,1.,clamp(visibility/max(total,.00001),0.,1.));
+      #if SEPARATE_CONTACT
+        // Contact shading retains its half-resolution reconstruction even when the softer
+        // atmospheric volume uses a smaller target on phones.
+        vec2 contactP=lensUv*contactSize-.5,contactFraction=fract(contactP);
+        for(int i=0;i<4;i++){
+          vec2 corner=vec2(i%2,i/2),uv=(floor(contactP)+corner+.5)/contactSize;
+          vec2 blend=mix(1.-contactFraction,contactFraction,corner);
+          float weight=blend.x*blend.y/(1.+2400.*abs(texture2D(depthMap,uv).r-z));
+          visibility+=texture2D(contact,uv).r*weight;contactTotal+=weight;
+        }
+      #else
+        contactTotal=total;
+      #endif
+      float contactLight=z>=1.?1.:mix(.68,1.,clamp(visibility/max(contactTotal,.00001),0.,1.));
       vec3 base=texture2D(sceneColor,lensUv).rgb;
       if(z>=1.){
         // Behind the island: a vertical sky gradient with the low sun's glow toward its side.
@@ -203,8 +221,11 @@ export function createVolume(renderer,world,sun,clouds){
   return {
     resize(w,h){
       measureGlass();
-      frame.setSize(w,h);const x=Math.ceil(w*.5),y=Math.ceil(h*.5);fog.setSize(x,y);aoTarget.setSize(x,y);ao.uniforms.resolution.value.set(x,y);
-      composite.uniforms.fogSize.value.set(x,y);
+      frame.setSize(w,h);const x=Math.ceil(w*.5),y=Math.ceil(h*.5);
+      const fogX=Math.ceil(w*quality.fogScale),fogY=Math.ceil(h*quality.fogScale);
+      fog.setSize(fogX,fogY);aoTarget.setSize(x,y);ao.uniforms.resolution.value.set(x,y);
+      composite.uniforms.fogSize.value.set(fogX,fogY);
+      composite.uniforms.contactSize.value.set(x,y);
       blooms.forEach((target,i)=>target.setSize(Math.max(1,Math.ceil(x/2**i)),Math.max(1,Math.ceil(y/2**i))));
       bright.uniforms.texel.value.set(1/w,1/h);
     },

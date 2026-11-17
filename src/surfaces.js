@@ -2,6 +2,7 @@ import * as T from 'three';
 import {leafSpray} from './foliage.js';
 import {shadeWater} from './water.js';
 import {shadeCascade} from './cascade.js';
+import {quality} from './mobile-quality.js';
 
 export function field(size,seed,rows=size){
   const values=new Float32Array(size*rows);
@@ -29,7 +30,7 @@ export function field(size,seed,rows=size){
     T.ShaderChunk.lights_fragment_begin=chunk.slice(0,from)+local+chunk.slice(to);
   }
 }
-export const TRAMPLE_SLOTS=16;
+export const TRAMPLE_SLOTS=quality.trampleSlots;
 // Life behind the cottage windows (see interior.js): a TV's flickering colour reaching the
 // windows near it, and a person whose silhouette dims the window they pass.
 export const interior={tv:{value:new T.Vector3()},tvAt:{value:new T.Vector2()},person:{value:new T.Vector4(0,0,0,99)}};

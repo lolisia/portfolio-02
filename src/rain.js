@@ -1,13 +1,14 @@
 import * as T from 'three';
+import {quality} from './mobile-quality.js';
 
 export function createRain(scene,world){
-  const count=1600,vertices=new Float32Array(count*6),speed=new Float32Array(count);
+  const count=quality.rainCount,vertices=new Float32Array(count*6),speed=new Float32Array(count);
   const geo=new T.BufferGeometry(),attr=new T.BufferAttribute(vertices,3).setUsage(T.DynamicDrawUsage);
   geo.setAttribute('position',attr);
   const colors=new Float32Array(vertices.length),colorAttr=new T.BufferAttribute(colors,3).setUsage(T.DynamicDrawUsage);
   geo.setAttribute('color',colorAttr);
   const drops=new T.LineSegments(geo,new T.LineBasicMaterial({color:0xffffff,vertexColors:true,transparent:true,opacity:.27,depthWrite:false}));
-  const size=300,spray=new Float32Array(size*3),velocity=new Float32Array(size*3),life=new Float32Array(size);
+  const size=quality.rainSplashes,spray=new Float32Array(size*3),velocity=new Float32Array(size*3),life=new Float32Array(size);
   spray.fill(-100);
   const splashGeo=new T.BufferGeometry(),splashAttr=new T.BufferAttribute(spray,3).setUsage(T.DynamicDrawUsage);
   splashGeo.setAttribute('position',splashAttr);

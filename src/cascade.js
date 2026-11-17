@@ -1,4 +1,5 @@
 import * as T from 'three';
+import {quality} from './mobile-quality.js';
 
 export function makeCascade({height,waterY,floor,water}){
   const group=new T.Group(),outlets=[];
@@ -50,7 +51,7 @@ export function makeCascade({height,waterY,floor,water}){
     rock(15.10,waterY-.31,z+sign*.09,.28,.28,.41,-sign*.25);
   }
   // Soft round droplets (screen-aligned points sized in world units) replace stretched spheres.
-  const count=900,dropPos=new Float32Array(count*3),dropSize=new Float32Array(count),dropAlpha=new Float32Array(count);
+  const count=quality.cascadeDrops,dropPos=new Float32Array(count*3),dropSize=new Float32Array(count),dropAlpha=new Float32Array(count);
   const dropGeo=new T.BufferGeometry();
   dropGeo.setAttribute('position',new T.BufferAttribute(dropPos,3).setUsage(T.DynamicDrawUsage));
   dropGeo.setAttribute('size',new T.BufferAttribute(dropSize,1).setUsage(T.DynamicDrawUsage));
@@ -66,7 +67,7 @@ export function makeCascade({height,waterY,floor,water}){
     const h=renderer.getRenderTarget()?.height??renderer.domElement.height;
     dropMat.uniforms.pixels.value=h*camera.zoom/(camera.top-camera.bottom);
   };
-  const footY=floor+.27,droplets=Array.from({length:count},(_,i)=>({i,life:0,max:1,x:0,y:-99,z:0,vx:0,vy:0,vz:0,size:0,splash:i>=300}));
+  const footY=floor+.27,droplets=Array.from({length:count},(_,i)=>({i,life:0,max:1,x:0,y:-99,z:0,vx:0,vy:0,vz:0,size:0,splash:i>=Math.ceil(count/3)}));
   function spawn(d,wind){
     if(!d.splash){ // shed from the curtain, mostly in the lower half
       const across=Math.random(),t=.25+.7*Math.random(),[x,y,z]=path(across,t);
@@ -110,7 +111,7 @@ export function makeCascade({height,waterY,floor,water}){
   foam.rotation.x=-Math.PI/2;foam.renderOrder=3;
   {const [x,,z]=path(.5,1);foam.position.set(x,footY+.01,z);foam.scale.set(width*.55+.2,width*.5+.18,1)}
   group.add(foam);
-  const vapor=Array.from({length:24},(_,i)=>{
+  const vapor=Array.from({length:quality.cascadeMist},(_,i)=>{
     const sprite=new T.Sprite(new T.SpriteMaterial({map:fogMap,transparent:true,depthWrite:false,color:0xb5cdd4}));
     sprite.renderOrder=4;group.add(sprite);return sprite;
   });

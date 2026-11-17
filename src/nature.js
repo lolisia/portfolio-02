@@ -1,5 +1,7 @@
 import * as T from 'three';
 import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';
+import {quality} from './mobile-quality.js';
+import {mobileTurfGeometry} from './turf-lod.js';
 
 // Blender-built nature meshes (tools/nature-assets.py). Each mesh becomes an instanced
 // builder kind; `material` picks the shared surface so wind, seasons and snow still apply.
@@ -23,9 +25,13 @@ export async function loadNature(url=import.meta.env.BASE_URL+'models/nature.glb
   gltf.scene.updateMatrixWorld(true);
   gltf.scene.traverse(o=>{
     const spec=KINDS[o.name];if(!o.isMesh||!spec)return;
-    const geometry=o.geometry.clone().applyMatrix4(o.matrixWorld);
+    let geometry=o.geometry.clone().applyMatrix4(o.matrixWorld);
     if(!geometry.hasAttribute('color')){
       geometry.setAttribute('color',new T.Float32BufferAttribute(new Float32Array(geometry.attributes.position.count*3).fill(1),3));
+    }
+    if(quality.mobile&&/^turf[0-2]$/.test(o.name)){
+      const reduced=mobileTurfGeometry(geometry);
+      if(reduced!==geometry){geometry.dispose();geometry=reduced}
     }
     kinds.set(o.name,{geometry,...spec});
   });
