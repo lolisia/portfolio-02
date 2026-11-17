@@ -129,13 +129,14 @@ Mali-G720 MC8)에서 측정했다.
 npm ci
 npm run dev                # 웹 개발 서버
 npm run build:pages        # GitHub Pages(/portfolio-02/)용 정적 빌드
-npm run build:diorama      # 자체 서버(/diorama/)용 정적 빌드
 bash scripts/verify.sh     # 웹 빌드 + Godot import + 헤드리스 테스트
 ```
 
 - 근접 뷰: `?view=house|coop|stairs|garden|pond&zoom=N`
 - Godot 실행과 프리뷰 플래그: [godot/README.md](godot/README.md)
-- 배포: [deploy/diorama/README.md](deploy/diorama/README.md)
+- 배포: `master`에 웹 파일(`src/`, `public/`, `index.html`, `package*.json`) 변경을 push하면
+  [GitHub Actions](.github/workflows/pages.yml)가 빌드해 GitHub Pages에 올린다. Actions 탭에서 수동 실행도 된다.
+  별도 서버는 쓰지 않는다.
 
 ## 크레딧
 

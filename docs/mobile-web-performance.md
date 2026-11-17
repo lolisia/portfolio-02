@@ -78,7 +78,7 @@ Git Bash에서:
 
 ```bash
 VERIFY_SKIP_GODOT=1 bash scripts/verify.sh
-npm run build:diorama -- --outDir .artifact/mobile-production/diorama
+npm run build:pages -- --outDir .artifact/mobile-production/pages
 ```
 
 `tools/mobile-web-quality-test.mjs`는 실제 GLB 3종의 풀잎 뿌리·끝점·면적 보존,

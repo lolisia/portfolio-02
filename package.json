@@ -5,7 +5,6 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "build:diorama": "vite build --base=/diorama/",
     "build:pages": "vite build --base=/portfolio-02/"
   },
   "keywords": [],
