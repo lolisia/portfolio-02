@@ -19,16 +19,24 @@ import {gardenKinds} from './garden.js';
 import {createInterior} from './interior.js';
 import {createFootprints} from './footprints.js';
 import {quality} from './mobile-quality.js';
+import {attachMapControls} from './map-controls.js';
 
 const canvas=document.querySelector('#world');
 const scene=new T.Scene(), renderer=new T.WebGLRenderer({canvas,antialias:false,powerPreference:'high-performance'});
 renderer.toneMapping=T.ACESFilmicToneMapping;renderer.toneMappingExposure=1.14;
 renderer.shadowMap.enabled=true;renderer.shadowMap.type=T.PCFShadowMap;
 const camera=new T.OrthographicCamera(-22,22,15,-15,.1,180);
-const controls=new OrbitControls(camera,canvas);controls.enableDamping=true;controls.zoomToCursor=true;controls.enablePan=false;
+const controls=new OrbitControls(camera,canvas);controls.enableDamping=true;controls.zoomToCursor=true;
 controls.minPolarAngle=.35;controls.maxPolarAngle=1.18;controls.minZoom=.7;controls.maxZoom=10;
 const followCharacter=document.querySelector('#followCharacter');
-function home(){followCharacter.checked=false;controls.target.set(0,1,0);camera.position.set(31,34,41);camera.zoom=1;camera.updateProjectionMatrix();controls.update()}
+attachMapControls(controls,canvas,()=>{followCharacter.checked=false});
+function home(){
+  followCharacter.checked=false;
+  // Drain pending pan/rotation before setting the home pose, so damping cannot
+  // pull the camera away from the reset position on subsequent frames.
+  const damping=controls.enableDamping;controls.enableDamping=false;controls.update();controls.enableDamping=damping;
+  controls.target.set(0,1,0);camera.position.set(31,34,41);camera.zoom=1;camera.updateProjectionMatrix();controls.update();
+}
 home();
 const view=new URLSearchParams(location.search).get('view');
 if(view==='water'||view==='falls'){
