@@ -243,14 +243,12 @@ export function modules(b) {
     }
     for(let i=0;i<3;i++){const s=.45+r()*.3;p(pick(['grass0','grass1','grass2']),(r()-.5)*.7,0,(r()-.5)*.7,s,s,s,'#86a24c',0,r()*6.28)}
   }
+  // An empty raised bed; the farm game (farm.js) grows its crops.
   function bed(){
     p('bedFrame',0,0,0,1,1,1,'#9a6c47');
     p('bedSoil',0,0,0,1,1,1,'#6a4630');
-    for(let j=0;j<5;j++)for(let i=0;i<3;i++){
-      const x=(i-1)*.36+(r()-.5)*.04,z=(j-2)*.3+(r()-.5)*.04,s=.8+r()*.35;
-      if(j%2===0)p('cabbage',x,.19,z,s,s,s,pick(['#93b65a','#a3c063','#86a84f']),0,r()*6.28);
-      else p('carrot',x,.18,z,s,s,s,pick(['#6f9a3e','#7ea946']),0,r()*6.28);
-    }
+    // Draw what the old fixed crops drew (15 plants x 5) so the rest of the island keeps its layout.
+    for(let i=0;i<75;i++)r();
   }
   function bridge(len){
     for(let i=0;i<Math.ceil(len/.22);i++)box(0,.1,-len/2+i*.22,1.23,.14,.205,pick(wood));

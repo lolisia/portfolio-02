@@ -68,3 +68,54 @@ fieldset.control legend{background:none;padding:0;margin:0 0 8px}
 #panel[data-graphics-style="storybook"] :is(.options label:hover span,#reset:hover){background:#57775a18}
 #panel[data-graphics-style="storybook"] .auto input{accent-color:var(--ink)}
 #panel[data-graphics-style="storybook"] .slider .thumb{border-color:var(--ink);background:#fff2dc}
+/* ---- Farm game ---- */
+#panel{z-index:3}
+.farm-layer{position:fixed;inset:0;pointer-events:none;z-index:2;--card:#fff7e9f5;--card-ink:#3b3024;--leaf:#5e8f3c;--gold:#f2b632}
+.farm-layer>*{pointer-events:auto}
+.plot-tag{position:absolute;left:0;top:0;display:flex;align-items:center;gap:5px;height:28px;padding:0 9px 0 5px;margin:-14px 0 0;translate:-50% 0;border:2px solid #fff;border-radius:16px;background:var(--card);color:var(--card-ink);font-size:11px;font-weight:700;font-variant-numeric:tabular-nums;box-shadow:0 3px 10px #1b2a1a40;white-space:nowrap;transition:scale .15s,box-shadow .15s;will-change:transform}
+.plot-tag:hover,.plot-tag.hovered,.plot-tag.selected{scale:1.08;box-shadow:0 4px 14px #1b2a1a55}
+.plot-icon{display:grid;place-items:center;width:20px;height:20px;font-size:14px;line-height:1}
+.plot-meter{display:block;width:34px;height:6px;border-radius:3px;background:#3b302422;overflow:hidden}.plot-meter i{display:block;height:100%;width:0;border-radius:3px;background:linear-gradient(90deg,#86bd4f,var(--leaf))}
+.plot-tag[data-state=empty]{width:28px;padding:0;justify-content:center;background:#fff7e9c4;border-style:dashed;color:var(--leaf);font-size:15px}
+.plot-tag[data-state=empty] :is(.plot-meter,.plot-text){display:none}
+.plot-tag[data-state=empty] .plot-icon{font-size:16px;font-weight:800}
+.plot-tag[data-state=ready]{background:linear-gradient(#ffe48a,var(--gold));border-color:#fffbe8;padding-right:11px;animation:ripe 1.1s ease-in-out infinite}
+.plot-tag[data-state=ready] .plot-meter{display:none}
+@keyframes ripe{0%,100%{margin-top:-14px}50%{margin-top:-20px}}
+.farm-popup{position:absolute;left:0;top:0;width:min(286px,calc(100vw - 20px));border-radius:16px;border:2px solid #fff;background:var(--card);color:var(--card-ink);box-shadow:0 10px 30px #1b2a1a4d;padding:10px 10px 12px;font-size:12px}
+.farm-popup.show{animation:pop .2s cubic-bezier(.2,.9,.3,1.3)}
+@keyframes pop{from{opacity:0;scale:.92}to{opacity:1;scale:1}}
+.farm-popup header{display:flex;align-items:center;gap:8px;padding:2px 2px 8px 6px}.farm-popup header strong{font-size:13px}
+.farm-plot-no{font-size:10px;opacity:.55}
+.farm-close{margin-left:auto;width:26px;height:26px;border:0;border-radius:50%;background:#3b302412;font-size:11px}.farm-close:hover{background:#3b302424}
+.seed-list{display:grid;gap:5px;max-height:min(330px,52vh);overflow:auto}
+.seed{display:grid;grid-template-columns:34px 1fr auto;align-items:center;gap:8px;padding:6px 9px 6px 6px;border:1px solid #3b30241c;border-radius:11px;background:#fff;text-align:left;transition:background .15s,border-color .15s,translate .15s}
+.seed:not([disabled]):hover{background:#f1f8e6;border-color:#5e8f3c80;translate:0 -1px}
+.seed[disabled]{cursor:not-allowed;background:#ffffff80}.seed[data-locked]{opacity:.55;filter:grayscale(.8)}
+.seed-icon{display:grid;place-items:center;width:34px;height:34px;border-radius:9px;background:#f4ead6;font-size:20px}
+.seed-name{display:flex;flex-direction:column;font-weight:700;font-size:12.5px}.seed-name small,.seed-price small{font-weight:500;font-size:10px;opacity:.62}
+.seed-price{display:flex;flex-direction:column;align-items:flex-end;font-weight:700;font-variant-numeric:tabular-nums}.seed-price .short{color:#c4462e}
+.farm-info{display:grid;gap:8px;padding:0 4px}.farm-info-row{display:flex;justify-content:space-between;align-items:baseline}.farm-info-row span{opacity:.65}.farm-left{font-size:15px;font-variant-numeric:tabular-nums}
+.farm-bar{display:block;height:8px;border-radius:4px;background:#3b302418;overflow:hidden}.farm-bar i{display:block;height:100%;border-radius:4px;background:linear-gradient(90deg,#86bd4f,var(--leaf))}
+.farm-clear{margin-top:2px;padding:6px 8px;border:1px solid #c4462e55;border-radius:9px;background:transparent;color:#a63c27;font-size:11px}.farm-clear:hover,.farm-clear[data-confirm]{background:#c4462e14}
+.farm-float{position:absolute;display:flex;flex-direction:column;align-items:center;translate:-50% -100%;pointer-events:none;color:#fff;font-weight:800;font-size:15px;text-shadow:0 1px 0 #6b4a12,0 2px 6px #2b1d0699;animation:float 1.25s ease-out forwards;white-space:nowrap}
+.farm-float small{font-size:11px;color:#e4ffcf}
+@keyframes float{0%{opacity:0;transform:translateY(6px) scale(.8)}15%{opacity:1;transform:translateY(-6px) scale(1.08)}100%{opacity:0;transform:translateY(-58px) scale(1)}}
+.farm-toast{position:absolute;left:50%;top:max(16px,env(safe-area-inset-top));translate:-50% 0;display:flex;flex-direction:column;align-items:center;gap:2px;padding:10px 20px;border:2px solid #fffbe8;border-radius:16px;background:linear-gradient(#ffe48a,var(--gold));color:#4a3410;box-shadow:0 8px 24px #1b2a1a4d;pointer-events:none;animation:toast 3.2s ease forwards}
+.farm-toast strong{font-size:15px}.farm-toast span{font-size:12px;font-weight:600}
+@keyframes toast{0%{opacity:0;transform:translateY(-12px)}10%,85%{opacity:1;transform:none}100%{opacity:0;transform:translateY(-8px)}}
+.farm-hud{position:absolute;left:max(14px,env(safe-area-inset-left));top:max(14px,env(safe-area-inset-top));z-index:2;display:flex;gap:8px;align-items:center;pointer-events:none;color:#3b3024;font-weight:700}
+.farm-hud>div{display:flex;align-items:center;gap:7px;height:34px;padding:0 12px 0 5px;border:2px solid #fff;border-radius:18px;background:#fff7e9eb;box-shadow:0 3px 12px #1b2a1a33}
+.farm-level b{display:grid;place-items:center;height:24px;padding:0 7px;border-radius:12px;background:#5e8f3c;color:#fff;font-size:11px}
+.farm-xp{display:block;width:62px;height:7px;border-radius:4px;background:#3b302420;overflow:hidden}.farm-xp i{display:block;height:100%;width:0;background:linear-gradient(90deg,#9dd16a,#5e8f3c);transition:width .5s ease}
+.farm-level small{font-size:10px;font-weight:600;opacity:.65;font-variant-numeric:tabular-nums}
+.farm-coins{padding-left:9px!important;font-size:14px;font-variant-numeric:tabular-nums}.farm-coins span{font-size:16px}.farm-coins output{font-size:14px;font-weight:800;letter-spacing:0}
+.farm-coins.bump{animation:bump .4s ease}
+@keyframes bump{40%{scale:1.12}}
+.farm-layer.compact .plot-tag:not([data-state=empty]){width:32px;height:32px;margin-top:-16px;padding:0;justify-content:center;border-radius:50%}
+.farm-layer.compact .plot-tag :is(.plot-meter,.plot-text){display:none}
+.farm-layer.compact .plot-tag[data-state=growing]{border-color:transparent;background:radial-gradient(var(--card) 0 60%,transparent 62%),conic-gradient(var(--leaf) calc(var(--p,0)*1turn),#fff calc(var(--p,0)*1turn))}
+.farm-layer.compact .plot-tag[data-state=ready]{animation-name:ripe-round}
+@keyframes ripe-round{0%,100%{margin-top:-16px}50%{margin-top:-22px}}
+@media(max-width:500px){.farm-xp{width:44px}.farm-level small{display:none}}
+@media(prefers-reduced-motion:reduce){.plot-tag[data-state=ready],.farm-popup.show,.farm-coins.bump{animation:none}}

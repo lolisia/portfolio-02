@@ -16,6 +16,8 @@ import {buildWorld} from './world.js';
 import {loadNature} from './nature.js';
 import {createWeatherTransition} from './weather.js';
 import {gardenKinds} from './garden.js';
+import {cropKinds} from './crops.js';
+import {createFarm} from './farm.js';
 import {createInterior} from './interior.js';
 import {createFootprints} from './footprints.js';
 import {quality} from './mobile-quality.js';
@@ -48,8 +50,8 @@ if(view==='water'||view==='falls'){
   }
   camera.zoom=3.25;camera.updateProjectionMatrix();controls.update();
 }
-// Close-ups for checking details: ?view=house|coop|stairs|garden|pond, optionally &zoom=N.
-const closeUps={house:[-1,1.6,-1.2,3],garden:[-1.1,3.2,-7.65,5],coop:[2.25,1.7,-1.6,3.3],stairs:[-5.4,2.2,-4.4,3],pond:[10.2,.4,6.3,5]};
+// Close-ups for checking details: ?view=house|coop|stairs|garden|pond|farm, optionally &zoom=N.
+const closeUps={farm:[1.9,.5,3.3,4.2],house:[-1,1.6,-1.2,3],garden:[-1.1,3.2,-7.65,5],coop:[2.25,1.7,-1.6,3.3],stairs:[-5.4,2.2,-4.4,3],pond:[10.2,.4,6.3,5]};
 if(closeUps[view]){
   const [x,y,z,zoom]=closeUps[view],yaw=Number(new URLSearchParams(location.search).get('yaw'))||0;
   controls.target.set(x,y,z);camera.position.copy(controls.target).add(new T.Vector3(24,18,30).applyAxisAngle(new T.Vector3(0,1,0),yaw*Math.PI/180));
@@ -59,8 +61,10 @@ const sky=new T.DirectionalLight(0xc9e1fb,1.0),sun=new T.DirectionalLight(0xffe3
 sky.position.set(12,19,17);scene.add(sky,sun,new T.AmbientLight(0x8798ad,.11));sun.position.set(-13,24,9);sun.castShadow=true;
 Object.assign(sun.shadow.camera,{left:-24,right:24,top:24,bottom:-24,near:.1,far:78});sun.shadow.camera.updateProjectionMatrix();renderer.shadowMap.autoUpdate=true;sun.shadow.mapSize.set(quality.sunShadowSize,quality.sunShadowSize);sun.shadow.normalBias=.028;sun.shadow.bias=-.00016;
 const nature=await loadNature();
-for(const [name,kind] of gardenKinds())nature.set(name,kind);
+for(const [name,kind] of [...gardenKinds(),...cropKinds()])nature.set(name,kind);
 const b=builder(scene,undefined,nature), world=buildWorld(scene,b);b.finish();
+// Crop meshes exist (hidden) before the atmosphere hooks up wind and shadows, and before warm-up.
+const farm=createFarm(scene,world,nature,camera,canvas);
 const storybook={value:0};
 const switchStorybook=createStorybook(scene);
 const actorArt=createActorArt(storybook);
@@ -294,7 +298,7 @@ renderer.setAnimationLoop(ms=>{
   });
   renderer.shadowMap.needsUpdate=sunTurn||lampTurn;
   refreshStyleShadows=false;
-  glide(elapsedFrame);trample(dt);
+  glide(elapsedFrame);trample(dt);farm(elapsedFrame);
   const changingWeather=weatherBlend.active;weatherBlend.update(Math.min(.1,elapsedFrame));
   if(changingWeather)lighting();
   scene.background.lerp(backdrop,1-Math.exp(-3.8*Math.min(.5,elapsedFrame)));

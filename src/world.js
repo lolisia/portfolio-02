@@ -98,7 +98,9 @@ export function buildWorld(scene,b){
   const cottage={door:{x:hx,z:hz+D/2+.4},threshold:{x:hx,z:hz+D/2+.12},doorLeaf,apron:{x:hx,z:porchZ+steps*run+.3},
     chimney:new T.Vector3(hx+COTTAGE.chimney[0],houseY+E+span*slope+.58,hz+COTTAGE.chimney[1]),
     ridge:new T.Vector3(hx,houseY+E+span*slope+.1,hz-.5),window:new T.Vector3(hx,houseY+F+1.1,hz+D/2+.7)};
-  for(const [x,z] of [[1.1,3.3],[2.7,3.3],[-7,-9.5],[-5.45,-9.5]]){at(x,z,1,0,kit.bed);occupy(x,z,1);colliders.box(x,z,1.32,1.72,0,'bed')}
+  // Vegetable beds start bare: farm.js plants and grows the crops the player picks.
+  const beds=[[1.1,3.3],[2.7,3.3],[-7,-9.5],[-5.45,-9.5]].map(([x,z])=>({x,z,y:height(x,z)}));
+  for(const {x,z} of beds){at(x,z,1,0,kit.bed);occupy(x,z,1);colliders.box(x,z,1.32,1.72,0,'bed')}
   const paths=[];
   function path(ax,az,bx,bz,stair=false){
     const len=Math.hypot(ax-bx,az-bz),count=Math.ceil(len/(stair?.46:.73));
@@ -275,6 +277,6 @@ export function buildWorld(scene,b){
   birdPerches.push(...lamps.map((pivot,i)=>({crown:perches[treeList.length+i],limb:perches[treeList.length+i],pivot,kind:'lamp'})));
   ground.material.name='terrain';
   for(const [x,z,rad] of [...bushes,...stumps])colliders.circle(x,z,rad,'plant');
-  return {water,floor,waterY,lamps,height,stand,roofs,cottage,perches,birdPerches,props,ground,colliders,
+  return {water,floor,waterY,lamps,height,stand,roofs,cottage,perches,birdPerches,props,ground,colliders,beds,
     walkable:(x,z)=>!colliders.blocked(x,z,.26)&&wet(x,z)<-.2};
 }
