@@ -9,7 +9,8 @@ import {createGridPaths} from './pathgrid.js';
 // snow and rain on the glass). Two pendant lamps hang from the ceiling beams: each casts a
 // spotlight that sways very slightly, so its shadows move. Furniture can be used, and the
 // door leads back outside.
-const W=8.2,D=4.2,H=2.6,X0=-W/2,Z0=-D/2,XK=.6;   // XK: where the living room ends and the kitchen begins
+// The back wall stays at Z0; the room runs forward to the open (cut-away) front at Z1.
+const W=8.2,Z0=-2.1,Z1=3.0,D=Z1-Z0,ZC=(Z0+Z1)/2,H=2.6,X0=-W/2,XK=.6;   // XK: where the living room ends and the kitchen begins
 const FIRE_SECONDS=600,READ_COOLDOWN=300,COOK_COOLDOWN=300;
 
 // ---------- Canvas textures ----------
@@ -76,39 +77,73 @@ const rainTex=canvasTexture(128,256,(g,w,h)=>{
   g.fillStyle='rgba(235,242,250,.5)';for(let i=0;i<40;i++){g.beginPath();g.arc(rand()*w,rand()*h,.8+rand()*1.8,0,7);g.fill()}
 },false);
 
-// ---------- The sky beyond the windows ----------
+// ---------- The view beyond the windows ----------
+// Each pane is a little camera: a ray per pixel from an eye standing back in the room, out
+// through the glass. Up the ray meets a cloud deck (so the clouds foreshorten toward the
+// horizon), level with the eye it meets layered hills fading into the distance, and the sky
+// grades by elevation. Rain and snow fall in three depths at different speeds.
 const skyVertex='varying vec2 vUv;void main(){vUv=uv;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.);}';
 const skyFragment=`
 varying vec2 vUv;
-uniform vec3 top,bottom,glow;uniform vec2 sun;uniform float sunAmt,moonAmt,stars,cover,haze,time,night,snow,seed,aspect;
+uniform vec3 top,bottom,glow,sunDir;uniform float sunAmt,moonAmt,stars,cover,haze,time,night,snow,rain,whiteGround,seed,aspect,day;
 float hash(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}
 float noise(vec2 p){vec2 i=floor(p),f=fract(p);f=f*f*(3.-2.*f);
   return mix(mix(hash(i),hash(i+vec2(1,0)),f.x),mix(hash(i+vec2(0,1)),hash(i+vec2(1,1)),f.x),f.y);}
 float fbm(vec2 p){float v=0.,a=.5;for(int i=0;i<5;i++){v+=a*noise(p);p=p*2.03+vec2(1.7,.3);a*=.5;}return v;}
+float ridge(float az,float seed,float amp,float base){return base+amp*(fbm(vec2(az*3.+seed,seed))-.45);}
 void main(){
-  vec2 uv=vUv,p=vec2(uv.x*aspect,uv.y);
-  vec3 col=mix(bottom,top,smoothstep(-.1,1.1,uv.y));
-  float d=distance(p,vec2(sun.x*aspect,sun.y));
-  col+=glow*sunAmt*(smoothstep(.075,.06,d)*1.6+exp(-d*5.)*.55);
-  col=mix(col,vec3(.93,.95,1.),moonAmt*smoothstep(.055,.045,d));
-  col+=vec3(.6,.7,.9)*moonAmt*exp(-d*9.)*.25;
-  vec2 cell=floor((p+seed)*vec2(70.,70.));float tw=hash(cell);
-  col+=vec3(step(.986,tw)*stars*(.55+.45*sin(time*2.3+tw*40.)));
-  // Clouds drift across; more of them, and greyer, as the weather closes in.
-  vec2 q=(p+vec2(seed*3.1,0.))*vec2(2.2,3.)+vec2(time*.018,0.);
-  float c=fbm(q),thr=mix(.64,.3,clamp(cover*.5,0.,1.)),amount=smoothstep(thr,thr+.2,c);
-  vec3 cloud=mix(vec3(1.),vec3(.55,.57,.6),clamp(cover-.6,0.,1.))*(1.-.82*night);
-  cloud=mix(cloud,glow*1.1,.3*sunAmt*(1.-night));
-  cloud*=.82+.25*smoothstep(.2,.9,fbm(q*1.7+3.));
-  col=mix(col,cloud,amount*.92);
-  col=mix(col,mix(bottom,vec3(.82,.84,.86)*(1.-.75*night),.5),haze*.85);
-  // Snow drifting past, in two depths.
-  for(int l=0;l<2;l++){
-    float s=1.+float(l)*.7;vec2 f=uv*vec2(12.*aspect,9.)*s;f.y+=time*(.9+.5*float(l));f.x+=sin(time*.8+f.y*.4)*.35;
-    vec2 id=floor(f),o=vec2(hash(id+3.),hash(id+7.))*.6+.2;
-    float flake=smoothstep(.12/s,.0,length(fract(f)-o))*step(.45,hash(id+float(l)*13.));
-    col=mix(col,vec3(.97)*(1.-.6*night)+.03,flake*snow);
+  // Ray from an eye 1.1 pane-heights back in the room, a little above the pane's lower third.
+  vec3 ray=normalize(vec3((vUv.x-.5)*aspect,vUv.y-.36,-1.1));
+  float elev=ray.y,az=atan(ray.x,-ray.z)+seed;
+  vec3 sky=mix(bottom,top,smoothstep(-.05,.55,elev));
+  // Sun or moon, with a halo.
+  float cosA=dot(ray,normalize(sunDir));
+  sky+=glow*sunAmt*(smoothstep(.9992,.9996,cosA)*2.+pow(max(cosA,0.),60.)*.6+pow(max(cosA,0.),6.)*.15);
+  sky=mix(sky,vec3(.93,.95,1.),moonAmt*smoothstep(.9993,.9996,cosA));
+  sky+=vec3(.55,.65,.9)*moonAmt*pow(max(cosA,0.),40.)*.25;
+  // Stars, only up in clear sky.
+  vec2 sc=floor(vec2(az*90.,elev*90.));float tw=hash(sc+seed);
+  sky+=vec3(step(.988,tw)*stars*(.55+.45*sin(time*2.3+tw*40.)))*smoothstep(.02,.12,elev);
+  // Clouds on a deck overhead: foreshortened toward the horizon, thicker and greyer with weather.
+  if(elev>0.){
+    vec2 deck=ray.xz/max(elev,.04)*.5+vec2(time*.02,seed*3.);
+    float c=fbm(deck*vec2(1.,1.6)),thr=mix(.62,.28,clamp(cover*.5,0.,1.)),amount=smoothstep(thr,thr+.22,c);
+    vec3 cloud=mix(vec3(1.),vec3(.52,.55,.6),clamp(cover-.6,0.,1.))*mix(1.,.16,night);
+    cloud=mix(cloud,glow*1.15,.35*sunAmt*(1.-night));
+    cloud*=.78+.3*smoothstep(.25,.85,fbm(deck*2.3+5.));
+    amount*=smoothstep(.0,.18,elev);
+    sky=mix(sky,cloud,amount*.94);
   }
+  // Haze thickens toward the horizon.
+  vec3 hazeCol=mix(bottom,vec3(.8,.82,.85)*mix(1.,.2,night),.4);
+  sky=mix(sky,hazeCol,(1.-smoothstep(0.,.25,abs(elev)))*.35);
+  vec3 col=sky;
+  // Hills in three distances, each paler and bluer the farther it is (aerial perspective).
+  vec3 lit=mix(vec3(.05,.07,.1),vec3(1.),day);
+  vec3 farC=mix(vec3(.42,.52,.6),bottom,.55)*mix(.35,1.,day),midC=vec3(.32,.44,.3)*lit,nearC=vec3(.17,.27,.15)*lit;
+  vec3 snowC=vec3(.88,.9,.94)*mix(.2,1.,day);
+  farC=mix(farC,mix(snowC,bottom,.4),whiteGround*.8);midC=mix(midC,snowC*.92,whiteGround);nearC=mix(nearC,snowC*.8,whiteGround*.9);
+  float fr=ridge(az,seed+1.,.16,.02),mr=ridge(az*1.8,seed+5.,.1,-.01),nr=ridge(az*4.,seed+9.,.06,-.035)+.03*step(.5,noise(vec2(az*60.,seed)))*noise(vec2(az*140.,1.));
+  if(elev<fr)col=mix(farC,hazeCol,.45);
+  if(elev<mr)col=mix(midC*(.85+.15*noise(vec2(az*20.,elev*30.))),hazeCol,.22);
+  if(elev<nr)col=nearC*(.8+.25*noise(vec2(az*40.,elev*60.)));
+  if(elev<nr-.06)col=mix(nearC*1.1,snowC*.85,whiteGround)*(.75+.2*noise(vec2(az*25.,elev*25.)));
+  // Fog swallows the distance first.
+  col=mix(col,hazeCol*1.05,haze*mix(.95,.6,smoothstep(-.1,.0,elev)));
+  // Rain and snow in three depths: near drops big and fast, far ones fine and slow.
+  for(int l=0;l<3;l++){
+    float k=float(l),depth=1.+k*.9;
+    vec2 p=vUv*vec2(aspect,1.)*vec2(18.,6.)*depth;p.x+=p.y*.12;p.y+=time*(9.-k*2.5);
+    vec2 id=floor(p);float r=hash(id+k*7.);
+    float streak=smoothstep(.09,.0,abs(fract(p.x)-.5-r*.3))*smoothstep(.0,.5,fract(p.y))*step(.72,r);
+    col=mix(col,vec3(.82,.86,.92)*mix(1.,.3,night),streak*rain*(.55-k*.13));
+    vec2 q=vUv*vec2(aspect,1.)*vec2(9.,7.)*depth;q.y+=time*(.9-k*.22);q.x+=sin(time*.7+q.y*.5+k)*.35;
+    vec2 qi=floor(q),o=vec2(hash(qi+3.),hash(qi+7.))*.6+.2;
+    float flake=smoothstep(.16/depth+.02,.0,length(fract(q)-o))*step(.45,hash(qi+k*13.));
+    col=mix(col,vec3(.97)*mix(1.,.35,night),flake*snow*(1.-k*.25));
+  }
+  // The glass darkens a touch toward the recess of the frame.
+  col*=.86+.14*smoothstep(.0,.12,min(min(vUv.x,1.-vUv.x),min(vUv.y,1.-vUv.y)));
   gl_FragColor=vec4(col,1.);
   #include <tonemapping_fragment>
   #include <colorspace_fragment>
@@ -117,7 +152,7 @@ void main(){
 export function createRoom({renderer,world,character,canvas,controls,hooks}){
   const scene=new T.Scene();scene.background=new T.Color(0x1c1815);
   const camera=new T.OrthographicCamera(-5,5,3,-3,.1,80);
-  const target=new T.Vector3(.1,.95,.15);camera.position.copy(target).add(new T.Vector3(6.4,6.6,8.6));camera.lookAt(target);
+  const target=new T.Vector3(.1,.95,.6);camera.position.copy(target).add(new T.Vector3(6.4,6.6,8.6));camera.lookAt(target);
   const anchorTex=t=>{const c=t.clone();c.needsUpdate=true;return c};
   const std=(o)=>new T.MeshStandardMaterial({roughness:.75,...o});
   const M={
@@ -155,15 +190,15 @@ export function createRoom({renderer,world,character,canvas,controls,hooks}){
 
   // ---------- Shell ----------
   const shell=new T.Group();scene.add(shell);
-  box(shell,W+.36,.32,D+.36,0,-.164,0,M.walnut).receiveShadow=true;
-  const floor=new T.Mesh(new T.PlaneGeometry(W,D),M.floor);floor.rotation.x=-Math.PI/2;floor.receiveShadow=true;floor.name='floor';shell.add(floor);
-  box(shell,W+.16,H,.16,0,H/2,Z0-.08,M.plaster);box(shell,.16,H,D,X0-.08,H/2,0,M.plaster);
+  box(shell,W+.36,.32,D+.36,0,-.164,ZC,M.walnut).receiveShadow=true;
+  const floor=new T.Mesh(new T.PlaneGeometry(W,D),M.floor);floor.rotation.x=-Math.PI/2;floor.position.z=ZC;floor.receiveShadow=true;floor.name='floor';shell.add(floor);
+  box(shell,W+.16,H,.16,0,H/2,Z0-.08,M.plaster);box(shell,.16,H,D,X0-.08,H/2,ZC,M.plaster);
   // Board-and-batten wainscot with a rail, skirting, and a cut-section cap on the wall tops.
   for(let i=0;i<Math.round(W/.32);i++)rbox(shell,.3,.95,.035,X0+(i+.5)*W/Math.round(W/.32),.48,Z0+.018,M.oak,.008);
   for(let i=0;i<Math.round(D/.32);i++)rbox(shell,.035,.95,.3,X0+.018,.48,Z0+(i+.5)*D/Math.round(D/.32),M.oak,.008);
-  rbox(shell,W,.06,.07,0,.98,Z0+.04,M.walnut,.012);rbox(shell,.07,.06,D,X0+.04,.98,0,M.walnut,.012);
-  box(shell,W,.12,.04,0,.06,Z0+.04,M.walnut);box(shell,.04,.12,D,X0+.04,.06,0,M.walnut);
-  box(shell,W+.2,.05,.2,0,H+.025,Z0-.08,M.cream);box(shell,.2,.05,D+.04,X0-.08,H+.025,0,M.cream);
+  rbox(shell,W,.06,.07,0,.98,Z0+.04,M.walnut,.012);rbox(shell,.07,.06,D,X0+.04,.98,ZC,M.walnut,.012);
+  box(shell,W,.12,.04,0,.06,Z0+.04,M.walnut);box(shell,.04,.12,D,X0+.04,.06,ZC,M.walnut);
+  box(shell,W+.2,.05,.2,0,H+.025,Z0-.08,M.cream);box(shell,.2,.05,D+.04,X0-.08,H+.025,ZC,M.cream);
   // Joist ends where the (cut-away) ceiling meets the back wall.
   for(const x of [-3.4,-2.35,-1.1,1.3,2.35,3.5])rbox(shell,.16,.2,.34,x,H-.1,Z0+.17,M.walnut,.02);
   // A stub wall and header beam between living room and kitchen.
@@ -175,13 +210,19 @@ export function createRoom({renderer,world,character,canvas,controls,hooks}){
   function windowAt(w,h,x,y,z,ry,seed){
     const g=new T.Group();g.position.set(x,y,z);g.rotation.y=ry;scene.add(g);
     const sky=new T.ShaderMaterial({vertexShader:skyVertex,fragmentShader:skyFragment,uniforms:{
-      top:{value:new T.Color()},bottom:{value:new T.Color()},glow:{value:new T.Color()},sun:{value:new T.Vector2(.5,.5)},
-      sunAmt:{value:0},moonAmt:{value:0},stars:{value:0},cover:{value:0},haze:{value:0},time:{value:0},night:{value:0},snow:{value:0},seed:{value:seed},aspect:{value:w/h}}});
+      top:{value:new T.Color()},bottom:{value:new T.Color()},glow:{value:new T.Color()},sunDir:{value:new T.Vector3(0,1,-1)},
+      sunAmt:{value:0},moonAmt:{value:0},stars:{value:0},cover:{value:0},haze:{value:0},time:{value:0},night:{value:0},snow:{value:0},
+      rain:{value:0},whiteGround:{value:0},day:{value:1},seed:{value:seed},aspect:{value:w/h}}});
     const pane=new T.Mesh(new T.PlaneGeometry(w,h),sky);pane.position.z=.012;g.add(pane);skies.push(sky);
     const wet=new T.Mesh(new T.PlaneGeometry(w,h),new T.MeshBasicMaterial({map:anchorTex(rainTex),transparent:true,opacity:0,depthWrite:false}));
     wet.material.map.repeat.set(w/.6,h/.9);wet.position.z=.018;g.add(wet);wets.push(wet);
+    // A deep reveal: plaster returns standing out from the wall, so the glass sits back in a recess.
+    const reveal=std({color:0xcdbd9f,roughness:.95});
+    for(const [ww,hh,xx,yy] of [[w+.2,.06,0,h/2+.13],[.06,h+.2,-w/2-.13,0],[.06,h+.2,w/2+.13,0]])box(g,ww,hh,.09,xx,yy,.045,M.plaster);
+    for(const [ww,hh,xx,yy] of [[w+.02,.005,0,h/2+.1],[.005,h+.2,-w/2-.1,0],[.005,h+.2,w/2+.1,0]])box(g,ww,hh,.09,xx,yy,.045,reveal);
+    g.translateZ(.09);pane.position.z=-.09+.012;wet.position.z=-.09+.018;
     // Glass sheen, sash, glazing bars, sill and apron, curtains on a pole.
-    const sheen=new T.Mesh(new T.PlaneGeometry(w,h),new T.MeshPhysicalMaterial({color:0xffffff,transparent:true,opacity:.06,roughness:.05,depthWrite:false}));sheen.position.z=.022;g.add(sheen);
+    const sheen=new T.Mesh(new T.PlaneGeometry(w,h),new T.MeshPhysicalMaterial({color:0xffffff,transparent:true,opacity:.06,roughness:.05,depthWrite:false}));sheen.position.z=-.09+.022;g.add(sheen);
     for(const [ww,hh,xx,yy] of [[w+.16,.09,0,h/2+.045],[w+.16,.09,0,-h/2-.045],[.09,h,-w/2-.045,0],[.09,h,w/2+.045,0]])rbox(g,ww,hh,.1,xx,yy,.03,M.painted,.015);
     rbox(g,.035,h,.045,0,0,.04,M.painted,.008);rbox(g,w,.035,.045,0,h*.08,.04,M.painted,.008);
     rbox(g,w+.34,.05,.18,0,-h/2-.12,.08,M.oak,.015);rbox(g,w+.2,.1,.03,0,-h/2-.2,.02,M.oak,.01);
@@ -232,9 +273,19 @@ export function createRoom({renderer,world,character,canvas,controls,hooks}){
   rbox(sofa,.12,.3,.3,-.1,.68,-.48,M.cushion,.06).rotation.z=-.3;
   colliders.box(-3.66,.55,.86,1.7,0,'sofa');
   // Rug, coffee table with a mug, a book and a bowl of fruit.
-  const rug=new T.Mesh(new T.PlaneGeometry(2.3,1.7),new T.MeshStandardMaterial({map:rugTex,roughness:1,transparent:true,alphaTest:.5}));
-  rug.material.alphaMap=canvasTexture(64,64,(g,w,h)=>{g.fillStyle='#000';g.fillRect(0,0,w,h);g.fillStyle='#fff';g.beginPath();g.ellipse(w/2,h/2,w/2-1,h/2-1,0,0,7);g.fill()},false);
-  rug.rotation.x=-Math.PI/2;rug.position.set(-2.35,.006,.55);rug.receiveShadow=true;scene.add(rug);
+  // Rug: a plush checked wool (Poly Haven "Curly Teddy Checkered", CC0; public/textures/rug), bound
+  // with a navy edge and fringed.
+  {
+    const loader=new T.TextureLoader(),base=import.meta.env.BASE_URL+'textures/rug/curly_teddy_checkered_';
+    const map=(name,srgb)=>{const t=loader.load(base+name+'_1k.jpg');if(srgb)t.colorSpace=T.SRGBColorSpace;t.wrapS=t.wrapT=T.RepeatWrapping;t.repeat.set(1.1,.78);t.anisotropy=8;return t};
+    const woven=new T.MeshStandardMaterial({map:map('diff',true),normalMap:map('nor_gl'),roughnessMap:map('rough'),normalScale:new T.Vector2(1.2,1.2)});
+    const edge=new T.MeshStandardMaterial({map:fabricTex('#2c3a4e'),roughness:1});
+    const rug=new T.Group();rug.position.set(-2.35,0,.55);scene.add(rug);
+    rbox(rug,2.36,.016,1.72,0,.008,0,edge,.006).castShadow=false;
+    rbox(rug,2.2,.02,1.56,0,.012,0,woven,.004).castShadow=false;
+    const fringe=new T.MeshStandardMaterial({color:0xefe4cc,roughness:1});
+    for(const s of [-1,1])for(let i=0;i<26;i++){const f=new T.Mesh(new T.BoxGeometry(.06,.008,.012),fringe);f.position.set(s*1.21,.006,-.8+i*1.6/25);f.rotation.y=(rand()-.5)*.3;f.receiveShadow=true;rug.add(f)}
+  }
   const table=prop(-2.35,.55);
   rbox(table,.62,.06,1.0,0,.38,0,M.oak,.02);rbox(table,.56,.03,.94,0,.12,0,M.oak,.01);
   for(const [x,z] of [[-.26,-.44],[.26,-.44],[-.26,.44],[.26,.44]])rbox(table,.05,.38,.05,x,.19,z,M.walnut,.01);
@@ -242,22 +293,64 @@ export function createRoom({renderer,world,character,canvas,controls,hooks}){
   const bowl=new T.Mesh(new T.SphereGeometry(.11,16,8,0,Math.PI*2,Math.PI/2,Math.PI/2),M.ceramic);bowl.position.set(.06,.52,-.02);bowl.castShadow=true;table.add(bowl);
   for(let i=0;i<4;i++){const f=new T.Mesh(new T.SphereGeometry(.04,10,8),std({color:pick([0xd8402a,0xe8b53a,0x8cbf4a])}));f.position.set(.06+(rand()-.5)*.1,.47,-.02+(rand()-.5)*.1);f.castShadow=true;table.add(f)}
   colliders.box(-2.35,.55,.66,1.04,0,'table');
-  // Stone fireplace with a mantel, a chimney breast to the ceiling, logs and a fire.
-  const hearth=piece('fire','벽난로','🔥',{x:-.45,z:-1.15,face:Math.PI},-.45,Z0+.25);
+  // Stone fireplace: jambs and a lintel round an open, soot-blackened firebrick box, a mantel, a
+  // chimney breast to the ceiling, logs on an iron grate, and a fire of shader flames.
+  const hearth=piece('fire','벽난로','🔥',{x:-.45,z:-1.05,face:Math.PI},-.45,Z0+.25);
   const fs=new T.Group();hearth.add(fs);
-  box(fs,1.35,1.2,.42,0,.6,0,M.stone);box(fs,.95,H-1.2,.34,0,1.2+(H-1.2)/2,-.04,M.stone);
-  box(fs,.66,.62,.1,0,.31,.17,M.soot);rbox(fs,.72,.05,.06,0,.64,.2,M.iron,.01);
-  rbox(fs,1.55,.09,.5,0,1.24,.04,M.walnut,.02);rbox(fs,1.5,.06,.6,0,.03,.12,M.stone,.02);
+  const firebrick=std({map:canvasTexture(128,128,(g,w,h)=>{
+    g.fillStyle='#1c1612';g.fillRect(0,0,w,h);
+    for(let r=0;r<8;r++)for(let c=0;c<4;c++){const v=40+rand()*30;g.fillStyle=`rgb(${v+18},${v*.6},${v*.45})`;g.fillRect(c*32+(r%2)*16+1,r*16+1,30,14)}
+    const soot=g.createLinearGradient(0,0,0,h);soot.addColorStop(0,'rgba(8,6,5,.95)');soot.addColorStop(.7,'rgba(8,6,5,.45)');soot.addColorStop(1,'rgba(8,6,5,.2)');g.fillStyle=soot;g.fillRect(0,0,w,h);
+  }),roughness:1});
+  for(const s of [-1,1])box(fs,.34,1.2,.42,s*.505,.6,0,M.stone);
+  box(fs,.67,.42,.42,0,.99,0,M.stone);
+  box(fs,.68,.78,.04,0,.39,-.19,firebrick);
+  for(const s of [-1,1]){const side=box(fs,.04,.78,.38,s*.315,.39,0,firebrick);side.rotation.y=s*.12}
+  box(fs,.66,.03,.4,0,.015,0,M.soot);
+  box(fs,.95,H-1.2,.34,0,1.2+(H-1.2)/2,-.04,M.stone);
+  rbox(fs,1.55,.09,.5,0,1.24,.04,M.walnut,.02);rbox(fs,1.5,.06,.62,0,.03,.14,M.stone,.02);
   for(const [x,c] of [[-.5,0xc9a35a],[.48,0x5e8fa8]])cyl(fs,.05,.06,.18,x,1.37,.04,std({color:c,metalness:.5,roughness:.4}),12);
   rbox(fs,.36,.26,.03,0,1.42,-.18,M.walnut,.01);rbox(fs,.3,.2,.01,0,1.42,-.16,std({color:0xc98a5a}),.005);
-  for(const [x,r,y] of [[0,.3,.1],[0,-.28,.1],[0,0,.19]]){const log=cyl(fs,.05,.05,.44,x,y,.12,M.walnut,10);log.rotation.set(0,r,Math.PI/2)}
+  // Iron grate and logs; the log ends glow while the fire burns.
+  for(let i=0;i<5;i++)cyl(fs,.008,.008,.32,-.2+i*.1,.08,-.02,M.iron,6).rotation.x=Math.PI/2;
+  cyl(fs,.01,.01,.46,0,.08,-.15,M.iron,6).rotation.z=Math.PI/2;cyl(fs,.01,.01,.46,0,.08,.12,M.iron,6).rotation.z=Math.PI/2;
+  const ember=new T.MeshStandardMaterial({color:0x3a2416,roughness:.9,emissive:0xff4a10,emissiveIntensity:0});ember.userData.glow=true;
+  for(const [r,y,z] of [[.35,.13,-.06],[-.3,.13,.02],[0,.21,-.03]]){const log=cyl(fs,.048,.052,.46,0,y,z,ember,12);log.rotation.set(0,r,Math.PI/2)}
+  // Flames: camera-facing sheets drawn by a noise shader, additive.
+  const flameVertex='varying vec2 vUv;void main(){vUv=uv;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.);}';
+  const flameFragment=`varying vec2 vUv;uniform float time,seed,power;
+    float hash(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}
+    float noise(vec2 p){vec2 i=floor(p),f=fract(p);f=f*f*(3.-2.*f);return mix(mix(hash(i),hash(i+vec2(1,0)),f.x),mix(hash(i+vec2(0,1)),hash(i+vec2(1,1)),f.x),f.y);}
+    float fbm(vec2 p){float v=0.,a=.5;for(int i=0;i<5;i++){v+=a*noise(p);p=p*2.1+vec2(3.1,1.7);a*=.5;}return v;}
+    void main(){
+      vec2 uv=vUv;float y=uv.y,x=(uv.x-.5)*2.;
+      float n=fbm(vec2(uv.x*2.6+seed,y*2.2-time*2.3)),n2=fbm(vec2(uv.x*5.5-seed,y*4.8-time*3.6));
+      float width=mix(.9,.04,pow(y,.85));
+      float d=abs(x+(n-.5)*.75*y)/width;
+      float shape=(1.-smoothstep(.45,1.,d))*(1.-smoothstep(.5,.95,y+(n2-.5)*.45))*smoothstep(.0,.1,y);
+      float heat=shape*(1.15-y)*(.75+.5*n2);
+      vec3 col=mix(vec3(.85,.16,.02),vec3(1.,.5,.06),smoothstep(.12,.42,heat));
+      col=mix(col,vec3(1.,.9,.55),smoothstep(.55,.95,heat));
+      float a=smoothstep(.02,.3,shape)*power;
+      gl_FragColor=vec4(col*a*1.7,a);
+    }`;
   const flames=[];
-  for(const [x,h,c] of [[-.09,.3,0xff7a1a],[.08,.36,0xffa63a],[0,.24,0xffd36a],[.14,.2,0xff8a2a]]){
-    const f=new T.Mesh(new T.ConeGeometry(.075,h,10),new T.MeshBasicMaterial({color:c,transparent:true,opacity:.9,blending:T.AdditiveBlending,depthWrite:false}));
-    f.position.set(x,.2+h/2,.12);f.userData.h=h;fs.add(f);flames.push(f);
+  for(const [x,w,h,s] of [[0,.42,.62,1.3],[-.12,.3,.46,4.7],[.13,.28,.42,8.1],[.02,.24,.34,12.5]]){
+    const f=new T.Mesh(new T.PlaneGeometry(w,h),new T.ShaderMaterial({vertexShader:flameVertex,fragmentShader:flameFragment,
+      uniforms:{time:{value:0},seed:{value:s},power:{value:0}},transparent:true,depthWrite:false,blending:T.AdditiveBlending}));
+    f.position.set(x,.15+h/2,-.02);f.renderOrder=3;fs.add(f);flames.push(f);
   }
-  const fireLight=new T.PointLight(0xff8a3a,0,6,1.5);fireLight.position.set(0,.5,.5);hearth.add(fireLight);
-  colliders.box(-.45,Z0+.25,1.5,.62,0,'fire');
+  // A soft glow in the firebox and sparks rising up the flue.
+  const glowTex=canvasTexture(64,64,(g,w,h)=>{const r=g.createRadialGradient(32,32,0,32,32,32);r.addColorStop(0,'rgba(255,170,80,1)');r.addColorStop(.4,'rgba(255,110,30,.35)');r.addColorStop(1,'rgba(255,80,20,0)');g.fillStyle=r;g.fillRect(0,0,w,h)});
+  const glow=new T.Mesh(new T.PlaneGeometry(1.1,.9),new T.MeshBasicMaterial({map:glowTex,transparent:true,depthWrite:false,blending:T.AdditiveBlending,opacity:0}));
+  glow.position.set(0,.32,.0);glow.renderOrder=2;fs.add(glow);
+  const SPARKS=28,sparkPos=new Float32Array(SPARKS*3),sparkState=Array.from({length:SPARKS},()=>({t:Math.random(),x:0,z:0,v:.5+Math.random()*.6}));
+  const sparks=new T.Points(new T.BufferGeometry().setAttribute('position',new T.BufferAttribute(sparkPos,3)),
+    new T.PointsMaterial({color:0xffb050,size:3,sizeAttenuation:false,transparent:true,blending:T.AdditiveBlending,depthWrite:false}));
+  sparks.frustumCulled=false;fs.add(sparks);
+  const fireLight=new T.PointLight(0xff8a3a,0,7,1.4);fireLight.position.set(0,.45,.45);hearth.add(fireLight);
+  colliders.box(-.45,Z0+.25,1.5,.66,0,'fire');
+
   // Bookshelf on the back wall: books of every height, some leaning, a stack lying flat.
   const shelf=piece('books','책장','📚',{x:-1.75,z:-1.25,face:Math.PI},-1.75,Z0+.19);
   // An open case: back board, sides, top and plinth.
@@ -277,15 +370,15 @@ export function createRoom({renderer,world,character,canvas,controls,hooks}){
   }
   colliders.box(-1.75,Z0+.19,.94,.42,0,'shelf');
   // A potted fern by the door, pictures on the west wall.
-  const fern=prop(-3.75,1.05);cyl(fern,.17,.13,.32,0,.16,0,M.terracotta,18);
+  const fern=prop(-3.75,1.6);cyl(fern,.17,.13,.32,0,.16,0,M.terracotta,18);
   for(let i=0;i<14;i++){const a=i*2.4,leaf=shadow(new T.Mesh(new T.SphereGeometry(.2,10,6),M.leaf));leaf.scale.set(.25,.08,1);leaf.position.set(Math.sin(a)*.12,.42+rand()*.18,Math.cos(a)*.12);leaf.rotation.set(-.6,a,0);fern.add(leaf)}
-  colliders.circle(-3.75,1.05,.22,'fern');
+  colliders.circle(-3.75,1.6,.22,'fern');
   for(const [z,y,w,h,c] of [[.3,1.7,.55,.42,0x5e8a6a],[.95,1.62,.36,.46,0xc98a5a]]){
     const pic=new T.Group();pic.position.set(X0+.02,y,z);pic.rotation.y=Math.PI/2;scene.add(pic);
     rbox(pic,w+.08,h+.08,.035,0,0,0,M.walnut,.01);box(pic,w,h,.01,0,0,.02,std({color:c,roughness:1}));
   }
-  // Door out, in the west wall.
-  const door=piece('door','문','🚪',{x:-3.5,z:1.62,face:-Math.PI/2},X0+.03,1.62,Math.PI/2);
+  // Door out, in the west wall, clear of the sofa.
+  const door=piece('door','문','🚪',{x:-3.45,z:2.35,face:-Math.PI/2},X0+.03,2.35,Math.PI/2);
   rbox(door,1.04,2.12,.08,0,1.06,0,M.walnut,.01);
   rbox(door,.88,2.0,.05,0,1.0,.04,M.oak,.01);
   for(const [x,y,w,h] of [[-.2,1.45,.34,.8],[.2,1.45,.34,.8],[-.2,.5,.34,.65],[.2,.5,.34,.65]])rbox(door,w,h,.03,x,y,.075,M.walnut,.012);
@@ -337,7 +430,7 @@ export function createRoom({renderer,world,character,canvas,controls,hooks}){
     cyl(pan,.006,.006,.12,0,-.06,0,M.brass,6);const p=cyl(pan,r,r*.9,.04,0,-.15-r,0,M.copper,20);p.rotation.x=Math.PI/2;
   }
   // Kitchen table, two chairs, a vase and a bread basket.
-  const dine=prop(2.35,.75);
+  const dine=prop(2.35,1.15);
   rbox(dine,1.05,.06,.8,0,.74,0,M.oak,.02);
   for(const [x,z] of [[-.45,-.32],[.45,-.32],[-.45,.32],[.45,.32]])rbox(dine,.07,.72,.07,x,.36,z,M.walnut,.015);
   for(const s of [-1,1]){const ch=new T.Group();ch.position.set(s*.75,0,0);ch.rotation.y=-s*Math.PI/2;dine.add(ch);
@@ -347,7 +440,7 @@ export function createRoom({renderer,world,character,canvas,controls,hooks}){
   for(let i=0;i<6;i++){const fl=new T.Mesh(new T.SphereGeometry(.035,10,8),std({color:pick([0xe85a78,0xf2c430,0xf4f1e4])}));fl.position.set(-.2+(rand()-.5)*.14,1.0+rand()*.08,(rand()-.5)*.14);fl.castShadow=true;dine.add(fl)}
   const basket=cyl(dine,.14,.11,.1,.22,.82,0,std({color:0xb98a4a,roughness:1}),16);basket.castShadow=true;
   for(let i=0;i<3;i++){const loaf=new T.Mesh(new T.SphereGeometry(.07,12,8),std({color:0xc8843f,roughness:.8}));loaf.scale.set(1.3,.7,.8);loaf.position.set(.22+(i-1)*.06,.9,(i-1)*.04);loaf.castShadow=true;dine.add(loaf)}
-  colliders.box(2.35,.75,2.1,.9,0,'dine');
+  colliders.box(2.35,1.15,2.1,.9,0,'dine');
 
   // ---------- Pendant lamps: enamel shades on cords from the joists, spotlights that sway ----------
   const lamps=[];
@@ -355,14 +448,14 @@ export function createRoom({renderer,world,character,canvas,controls,hooks}){
     // Hung from a ceiling rose at ceiling height (the ceiling itself is cut away).
     const rose=cyl(scene,.07,.09,.04,x,H-.02,z,M.brass,16);rose.castShadow=false;
     const pivot=new T.Group();pivot.position.set(x,H-.04,z);scene.add(pivot);
-    const drop=.96;cyl(pivot,.006,.006,drop,0,-drop/2,0,M.iron,6);
+    const drop=.42;cyl(pivot,.006,.006,drop,0,-drop/2,0,M.iron,6);
     const shade=new T.Group();shade.position.y=-drop;pivot.add(shade);
     const pts=[];for(let i=0;i<=10;i++){const u=i/10;pts.push(new T.Vector2(.04+.24*Math.pow(u,1.6),-.03-u*.2))}
     const enamel=new T.MeshStandardMaterial({color:0x3f6a5a,roughness:.35,metalness:.2,side:T.DoubleSide});
     const sh=shadow(new T.Mesh(new T.LatheGeometry(pts,28),enamel));sh.castShadow=false;shade.add(sh);
     cyl(shade,.045,.045,.06,0,-.01,0,M.brass,12);
     const bulb=new T.Mesh(new T.SphereGeometry(.05,16,12),new T.MeshStandardMaterial({color:0xfff4e0,emissive:0xffcf8a,emissiveIntensity:0}));bulb.position.y=-.14;shade.add(bulb);
-    const spot=new T.SpotLight(0xffd6a0,0,9,.95,.55,1.4);spot.position.y=-.1;spot.castShadow=true;spot.shadow.mapSize.set(1024,1024);spot.shadow.bias=-.0006;spot.shadow.normalBias=.02;spot.shadow.camera.near=.1;
+    const spot=new T.SpotLight(0xffd6a0,0,12,1.18,.6,1.25);spot.position.y=-.1;spot.castShadow=true;spot.shadow.mapSize.set(1024,1024);spot.shadow.bias=-.0006;spot.shadow.normalBias=.02;spot.shadow.camera.near=.1;
     spot.target.position.set(0,-3,0);shade.add(spot,spot.target);
     // A pull-cord to switch it; the lamp group is what the player taps.
     const g=piece(key,name,'💡',{x,z:spotZ,face:Math.atan2(0,z-spotZ)},x,z);
@@ -371,8 +464,8 @@ export function createRoom({renderer,world,character,canvas,controls,hooks}){
     return g;
   }
   pendant('lamp','거실 전등',-2.35,.55,1.38);
-  pendant('lamp2','부엌 전등',2.35,.75,1.5);
-  for(const g of usable)g.traverse(o=>{if(o.isMesh&&o.material.isMeshStandardMaterial&&!o.material.userData.shared)o.material=o.material.clone()});
+  pendant('lamp2','부엌 전등',2.35,1.15,1.95);
+  for(const g of usable)g.traverse(o=>{if(o.isMesh&&o.material.isMeshStandardMaterial&&!o.material.userData.glow)o.material=o.material.clone()});
 
   // ---------- Base light: daylight from the open side, a soft sky fill ----------
   const hemi=new T.HemisphereLight(0xe6eef6,0x6a4c36,.6);scene.add(hemi);
@@ -382,11 +475,11 @@ export function createRoom({renderer,world,character,canvas,controls,hooks}){
   day.shadow.bias=-.0004;day.shadow.normalBias=.025;day.shadow.radius=3;scene.add(day,day.target);
 
   // ---------- Walking inside: the grid path finder over the furnished floor ----------
-  const inside=(x,z)=>x>X0+.22&&x<W/2-.15&&z>Z0+.22&&z<D/2-.12;
-  const paths=createGridPaths({x0:X0+.1,x1:W/2-.1,z0:Z0+.1,z1:D/2-.1,step:.15,open:(x,z)=>inside(x,z)&&!colliders.blocked(x,z,.22)});
+  const inside=(x,z)=>x>X0+.22&&x<W/2-.15&&z>Z0+.22&&z<Z1-.12;
+  const paths=createGridPaths({x0:X0+.1,x1:W/2-.1,z0:Z0+.1,z1:Z1-.1,step:.15,open:(x,z)=>inside(x,z)&&!colliders.blocked(x,z,.22)});
   const roomPlace={scene,
     route:(a,b)=>{const r=paths.route(a,b);return r.length?r:[{x:b.x,z:b.z}]},
-    resolve(b){colliders.resolve(b);b.x=Math.min(W/2-.18,Math.max(X0+.24,b.x));b.z=Math.min(D/2-.15,Math.max(Z0+.24,b.z))},
+    resolve(b){colliders.resolve(b);b.x=Math.min(W/2-.18,Math.max(X0+.24,b.x));b.z=Math.min(Z1-.15,Math.max(Z0+.24,b.z))},
     stand:()=>0,walkable:(x,z)=>paths.free(x,z),
     closest:p=>paths.closest(p)
   };
@@ -404,8 +497,8 @@ export function createRoom({renderer,world,character,canvas,controls,hooks}){
     if(active)return;
     await fadeTo(true);
     active=true;controls.enabled=false;hooks.indoor(true);
-    character.enterRoom(roomPlace,{x:-3.5,z:1.62,heading:Math.PI/2});
-    character.walkTo(-2.6,1.55);
+    character.enterRoom(roomPlace,{x:-3.45,z:2.35,heading:Math.PI/2});
+    character.walkTo(-2.7,2.1);
     exitHint.hidden=false;
     await fadeTo(false);
   }
@@ -490,7 +583,7 @@ export function createRoom({renderer,world,character,canvas,controls,hooks}){
   }
   function highlight(piece){
     if(hover===piece)return;
-    for(const g of [hover,piece])g?.traverse(o=>{if(o.isMesh&&o.material.emissive&&o.material.emissiveIntensity!==undefined&&!o.userData.glow)o.material.emissive.setHex(g===piece?0x2a2014:0)});
+    for(const g of [hover,piece])g?.traverse(o=>{if(o.isMesh&&o.material.emissive&&!o.material.userData.glow)o.material.emissive.setHex(g===piece?0x2a2014:0)});
     hover=piece;canvas.style.cursor=piece?'pointer':'';
   }
   let press=null;const touches=new Set();
@@ -519,11 +612,11 @@ export function createRoom({renderer,world,character,canvas,controls,hooks}){
   addEventListener('pointerup',release,{capture:true});addEventListener('pointercancel',release,{capture:true});
 
   function resize(w,h){
-    const aspect=w/h,span=Math.max(7.2,12.6/aspect);
+    const aspect=w/h,span=Math.max(7.8,13.4/aspect);
     camera.left=-span*aspect/2;camera.right=span*aspect/2;camera.top=span/2;camera.bottom=-span/2;camera.updateProjectionMatrix();
   }
   resize(innerWidth,innerHeight);
-  const anchor=new T.Vector3(),night=new T.Color(0x0e1424),base=new T.Color(0x1c1815);
+  const anchor=new T.Vector3(),night=new T.Color(0x0e1424),base=new T.Color(0x1c1815),sunDir=new T.Vector3();
   return {
     get active(){return active},
     enter,leave,resize,
@@ -538,23 +631,35 @@ export function createRoom({renderer,world,character,canvas,controls,hooks}){
       // Pendant lamps: on by themselves once it gets dark (unless switched), swaying a touch.
       lamps.forEach((l,i)=>{
         l.lit=env.night>.3||daylight<.25;const on=l.on??l.lit;
-        l.spot.intensity=on?26:0;l.bulb.material.emissiveIntensity=on?2.4:0;
+        l.spot.intensity=on?34:0;l.bulb.material.emissiveIntensity=on?2.4:0;
         l.pivot.rotation.z=.028*Math.sin(t*.83+l.phase)+.01*Math.sin(t*2.1+l.phase*2);
         l.pivot.rotation.x=.022*Math.sin(t*.67+l.phase*1.3);
       });
       flame.visible=env.night>.3;
       // Fire, steam from the pot, water from the tap.
       fireLeft=Math.max(0,fireLeft-dt);const burning=fireLeft>0;
-      flames.forEach((f,i)=>{f.visible=burning;const k=.85+.25*Math.sin(t*(9+i*3)+i)*Math.sin(t*5.3+i*2);f.scale.set(1,k,1);f.position.y=.2+f.userData.h*k/2});
-      fireLight.intensity=burning?4+1.1*Math.sin(t*13)*Math.sin(t*7.7):0;
+      // The fire: flames flicker in strength, the logs glow, sparks drift up, the light dances.
+      const flicker=.82+.18*Math.sin(t*11)*Math.sin(t*6.3+1.7);
+      flames.forEach((f,i)=>{f.visible=burning;f.quaternion.copy(camera.quaternion);const u=f.material.uniforms;u.time.value=t;u.power.value=burning?(.85+.15*Math.sin(t*(5+i*1.7)+i))*flicker:0});
+      glow.visible=burning;glow.material.opacity=.55*flicker;glow.quaternion.copy(camera.quaternion);
+      ember.emissiveIntensity=burning?1.6+.6*Math.sin(t*3.1):0;
+      sparks.visible=burning;
+      if(burning){sparkState.forEach((s,i)=>{s.t+=dt*s.v*.5;if(s.t>1){s.t=0;s.x=(Math.random()-.5)*.35;s.z=(Math.random()-.5)*.15}
+        sparkPos[i*3]=s.x+Math.sin(t*3+i)*.04*s.t;sparkPos[i*3+1]=.18+s.t*.9;sparkPos[i*3+2]=s.z-.05});
+        sparks.geometry.attributes.position.needsUpdate=true;sparks.material.opacity=.9*flicker}
+      fireLight.intensity=burning?5.5*flicker:0;
       for(const s of steam){s.t=(s.t+dt*.5)%1;s.mesh.position.set(-.18+Math.sin(s.t*9+s.mesh.id)*.04,1.08+s.t*.6,.04);s.mesh.scale.setScalar(.6+s.t*1.6);s.mesh.material.opacity=cooking?.35*(1-s.t)*Math.min(1,s.t*5):0}
       // The sky beyond the windows.
       const sky=env.sky,elev=sky.sunY;
+      // Sun (or moon) direction in the panes' frame: it climbs with its elevation and crosses the
+      // panes from left to right through the day (the moon through the night).
+      const across=(((sky.hour-6+24)%24)%12)/12;
+      sunDir.set((across-.5)*1.6,Math.max(.08,Math.abs(elev)*1.3),-1);
       for(const m of skies){
-        const u=m.uniforms;u.top.value.copy(sky.top);u.bottom.value.copy(sky.bottom);u.glow.value.copy(sky.glow);
-        u.sun.value.set(.15+.7*(((sky.hour-6+24)%24)%12)/12,.18+.75*Math.min(1,Math.abs(elev)*1.6));
+        const u=m.uniforms;u.top.value.copy(sky.top);u.bottom.value.copy(sky.bottom);u.glow.value.copy(sky.glow);u.sunDir.value.copy(sunDir);
         u.sunAmt.value=elev>0?(1-Math.min(1,env.cover*.6)):0;u.moonAmt.value=elev<0?env.night*(1-Math.min(1,env.cover*.7)):0;
-        u.stars.value=sky.stars;u.cover.value=env.cover;u.haze.value=env.haze;u.time.value=t;u.night.value=env.night;u.snow.value=env.snow;
+        u.stars.value=sky.stars;u.cover.value=env.cover;u.haze.value=env.haze;u.time.value=t;u.night.value=env.night;
+        u.snow.value=env.snow;u.rain.value=env.rain;u.whiteGround.value=env.snowDepth??0;u.day.value=Math.max(.06,daylight+.15*(1-env.night));
       }
       for(const w of wets){w.material.opacity=env.rain*.8;w.material.map.offset.y+=dt*.35}
       if(busy&&active){

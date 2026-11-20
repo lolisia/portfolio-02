@@ -369,6 +369,6 @@ renderer.setAnimationLoop(ms=>{
     pivot.rotation.z=gust*.11*atmosphere.breeze.value;
     pivot.rotation.x=.037*atmosphere.breeze.value*Math.sin(seconds*1.55-phase);
   }
-  if(room.active)room.render(elapsedFrame,{night:nightLevel,cover:weatherBlend.coverage,haze:T.MathUtils.clamp((weatherBlend.density-1)/2.8,0,1),rain:weatherBlend.rain,snow:weatherBlend.snow,sun:sun.color,sky:skyLook});
+  if(room.active)room.render(elapsedFrame,{night:nightLevel,cover:weatherBlend.coverage,haze:T.MathUtils.clamp((weatherBlend.density-1)/2.8,0,1),rain:weatherBlend.rain,snow:weatherBlend.snow,snowDepth:atmosphere.snowDepth.value,sun:sun.color,sky:skyLook});
   else volume.render(scene,camera,seconds);
 });
