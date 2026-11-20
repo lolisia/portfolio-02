@@ -137,7 +137,8 @@ export function createFarmLife(scene,world,prints,art){
       if(value>score){score=value;best=n}
     }
     f.route=best?paths.route(f,best):[];
-    if(!f.route.length)f.route=[{x:f.x+ax*1.4,z:f.z+az*1.4}];
+    // Nowhere mapped to run to: a short dash straight away, if the way is clear.
+    if(!f.route.length){const dash={x:f.x+ax*1.4,z:f.z+az*1.4};f.route=paths.clear(f,dash)?[dash]:[]}
     f.state='fleeing';f.wait=0;f.fleeCool=.7;f.legSpeed=1.15+random(f)*.3;
   }
   const update=(dt,seconds,hour,weather,wind,camera,night=0)=>{

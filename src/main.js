@@ -79,7 +79,9 @@ const farmLife=createFarmLife(scene,world,prints,actorArt);farmLife.onLay=farm.l
 let unityChanLoaded;const unityChanReady=new Promise(r=>unityChanLoaded=r);
 const unityChan=createUnityChan(scene,world,unityChanLoaded,prints,actorArt);farm.bind(unityChan);
 // The cottage interior, drawn instead of the island while she is inside (room.js).
-const room=createRoom({renderer,outdoor:scene,world,character:unityChan,canvas,controls,hooks:{
+// The sky as the island shows it, kept for the cottage windows.
+const skyLook={top:new T.Color(),bottom:new T.Color(),glow:new T.Color(),stars:0,sunY:1,hour:12};
+const room=createRoom({renderer,world,character:unityChan,canvas,controls,hooks:{
   indoor:flag=>farm.setIndoor(flag),earn:(...a)=>farm.earn(...a),spendWood:(...a)=>farm.spendWood(...a),toast:t=>farm.toast(t),
   isNight:()=>{const h=hourShown<0?hourShown+24:hourShown;return h>=19||h<5},
   // Sleeping through the night: morning at 7:00, the scene relit at once behind the fade.
@@ -214,6 +216,8 @@ function lighting(){
   const clear=1-Math.min(1,overcast*1.1),golden=t.golden*clear,nightCast=.35*t.night*(1-t.golden);
   const top=backdrop.clone().lerp(t.color([0x8fb3cc,0x7fa9cf,0x8f8bc0,0x0b1428,0x5f5498]),.6*clear).multiplyScalar(dimming);
   const bottom=backdrop.clone().lerp(t.color([0xd7dfd0,0xc6dae3,0xf6c4a4,0x223150,0xf4a066]),.55*clear).multiplyScalar(dimming);
+  skyLook.top.copy(top);skyLook.bottom.copy(bottom);skyLook.glow.copy(t.color([0xfff0d0,0xfff0d0,0xffb08a,0x000000,0xff8a48])).multiplyScalar(Math.max(.25,golden));
+  skyLook.stars=t.night*clear*clear*(1-t.golden);skyLook.sunY=t.direction.y;skyLook.hour=hour;
   const tint=(gold,cool)=>new T.Vector3(1,1,1).addScaledVector(gold,golden).addScaledVector(cool,nightCast);
   volume.grade({top,bottom,glow:t.color([0xfff0d0,0xfff0d0,0xffb08a,0x000000,0xff8a48]),glowAmount:2*golden*(1-t.night*.6),
     shadow:tint(t.dawn?new T.Vector3(-.12,-.08,.14):new T.Vector3(-.1,-.15,.12),new T.Vector3(-.12,-.06,.16)),
@@ -365,6 +369,6 @@ renderer.setAnimationLoop(ms=>{
     pivot.rotation.z=gust*.11*atmosphere.breeze.value;
     pivot.rotation.x=.037*atmosphere.breeze.value*Math.sin(seconds*1.55-phase);
   }
-  if(room.active)room.render(elapsedFrame,{night:nightLevel,cover:weatherBlend.coverage,rain:weatherBlend.rain,snow:weatherBlend.snow,sun:sun.color});
+  if(room.active)room.render(elapsedFrame,{night:nightLevel,cover:weatherBlend.coverage,haze:T.MathUtils.clamp((weatherBlend.density-1)/2.8,0,1),rain:weatherBlend.rain,snow:weatherBlend.snow,sun:sun.color,sky:skyLook});
   else volume.render(scene,camera,seconds);
 });
