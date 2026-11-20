@@ -5,7 +5,7 @@ import {builder,modules,COTTAGE,cottageSteps} from './modules.js';
 import {createColliders} from './colliders.js';
 
 export function buildWorld(scene,b){
-  const {rand:r,pick,place,part:p}=b, kit=modules(b);
+  const {rand:r,pick,place,part:p}=b, part=p, kit=modules(b);
   const clamp=n=>Math.min(1,Math.max(0,n)), smooth=n=>(n=clamp(n))*n*(3-2*n);
   const pond=(x,z)=>1-((x-10.7)/4.5)**2-((z-6.3)/3.5)**2 +.11*Math.sin(z*2+x*.4);
   const outlet=(x,z)=>Math.min((x-11)*.9,1-Math.abs(z-6.1)/1.38);
@@ -146,10 +146,14 @@ export function buildWorld(scene,b){
       });
     });
   }
-  // Flower garden on the terrace behind the cottage: four edged beds around a gravel cross,
-  // sunflowers and foxgloves at the back, tulips and lavender in front, roses at the corners.
+  // Flower garden on the terrace behind the cottage: four edged beds around a gravel cross with
+  // roses at the corners. The beds start bare; farm.js grows the flowers the player picks.
+  const flowerBeds=[];
   function garden(cx,cz){
     const bw=1.62,bd=.78,gap=.3;
+    // The flowers that used to fill the beds are still drawn from the random stream (and
+    // dropped), so everything placed after the garden keeps its layout.
+    const p=()=>{};
     const kinds=[
       (x,z,y)=>{const a=.6+(r()-.5)*.5,k=.9+r()*.2;p('sunflowerStem',x,y,z,k,k,k,'#6f9142',0,a);p('sunflowerBloom',x,y,z,k,k,k,pick(['#ffffff','#fff3d8','#ffe2b0']),0,a)},
       (x,z,y)=>{const s=1+r()*.4,a=r()*6.28;p('foxgloveStem',x,y,z,s,s,s,'#6b8c45',0,a);p('foxgloveBloom',x,y,z,s,s,s,pick(['#c76aa4','#e7a6cf','#f2eef2','#a676c8','#d9809a']),0,a)},
@@ -163,11 +167,12 @@ export function buildWorld(scene,b){
       let top=-Infinity,low=Infinity;
       for(const a of [-.5,0,.5])for(const c of [-.5,0,.5]){const g=height(x0+a*bw,z0+c*bd);top=Math.max(top,g);low=Math.min(low,g)}
       const soil=top+.08;
-      p('soil',x0,(soil+low-.2)/2,z0,bw,soil-low+.2,bd,'#5e3f2a');
+      flowerBeds.push({x:x0,z:z0,y:soil-.01,w:bw,d:bd});colliders.box(x0,z0,bw+.12,bd+.12,0,'bed');
+      part('soil',x0,(soil+low-.2)/2,z0,bw,soil-low+.2,bd,'#5e3f2a');
       // Plank edging, proud of the soil.
       for(const s of [-1,1]){
-        p('wood',x0,(soil+.05+low-.2)/2,z0+s*(bd/2+.03),bw+.12,soil+.05-low+.2,.06,pick(['#8a5f3d','#7d5636','#93683f']));
-        p('wood',x0+s*(bw/2+.03),(soil+.05+low-.2)/2,z0,.06,soil+.05-low+.2,bd,pick(['#8a5f3d','#7d5636','#93683f']));
+        part('wood',x0,(soil+.05+low-.2)/2,z0+s*(bd/2+.03),bw+.12,soil+.05-low+.2,.06,pick(['#8a5f3d','#7d5636','#93683f']));
+        part('wood',x0+s*(bw/2+.03),(soil+.05+low-.2)/2,z0,.06,soil+.05-low+.2,bd,pick(['#8a5f3d','#7d5636','#93683f']));
       }
       const step=spacing[kind];
       for(let a=-bw/2+step*.6;a<bw/2-step*.4;a+=step)for(let c=-bd/2+step*.6;c<bd/2-step*.4;c+=step)
@@ -177,13 +182,13 @@ export function buildWorld(scene,b){
     for(const [x,z,w,d] of [[cx,cz,gap,bd*2+gap+.1],[cx,cz,bw*2+gap+.1,gap]])
       for(let i=0;i<Math.ceil(Math.max(w,d)/.3);i++){
         const f=(i+.5)/Math.ceil(Math.max(w,d)/.3)-.5,gx=x+(w>d?f*w:0),gz=z+(d>w?f*d:0);
-        p('stone',gx,height(gx,gz)+.02,gz,(w>d?.3:gap)-.03,.06,(d>w?.3:gap)-.03,pick(['#c9b994','#bfb18e','#d2c4a0']),0,(r()-.5)*.1);
+        part('stone',gx,height(gx,gz)+.02,gz,(w>d?.3:gap)-.03,.06,(d>w?.3:gap)-.03,pick(['#c9b994','#bfb18e','#d2c4a0']),0,(r()-.5)*.1);
         paths.push([gx,gz]);
       }
     for(const sx of [-1,1])for(const sz of [-1,1]){
       const x=cx+sx*(bw+gap/2+.42),z=cz+sz*(bd+gap/2-.1),y=height(x,z)-.02,turn=r()*6.28;
-      p('bushALeaves',x,y,z,.62,.55,.62,pick(['#4f6e33','#5a7a3a']),0,turn);
-      for(let i=0;i<9;i++){const a=r()*6.28,u=.12+r()*.16;p('roseBloom',x+Math.cos(a)*u,y+.22+r()*.16,z+Math.sin(a)*u,1.2,1.2,1.2,pick(['#c8243a','#e85a78','#f3b3c0','#a51d2e']),0,r()*6.28)}
+      part('bushALeaves',x,y,z,.62,.55,.62,pick(['#4f6e33','#5a7a3a']),0,turn);
+      for(let i=0;i<9;i++){const a=r()*6.28,u=.12+r()*.16;part('roseBloom',x+Math.cos(a)*u,y+.22+r()*.16,z+Math.sin(a)*u,1.2,1.2,1.2,pick(['#c8243a','#e85a78','#f3b3c0','#a51d2e']),0,r()*6.28)}
     }
     for(let gx=-2.4;gx<=2.4;gx+=.8)for(const gz of [-.55,.55])occupy(cx+gx,cz+gz,.62);
   }
@@ -278,5 +283,5 @@ export function buildWorld(scene,b){
   ground.material.name='terrain';
   for(const [x,z,rad] of [...bushes,...stumps])colliders.circle(x,z,rad,'plant');
   return {water,floor,waterY,lamps,height,stand,roofs,cottage,perches,birdPerches,props,ground,colliders,beds,
-    walkable:(x,z)=>!colliders.blocked(x,z,.26)&&wet(x,z)<-.2};
+    flowerBeds,walkable:(x,z)=>!colliders.blocked(x,z,.26)&&wet(x,z)<-.2};
 }

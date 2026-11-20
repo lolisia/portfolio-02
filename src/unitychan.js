@@ -7,7 +7,7 @@ import {createFarmPaths} from './farm-paths.js';
 const URL=import.meta.env.BASE_URL+'models/unitychan/sd_unitychan.glb';
 const HEIGHT=1.02, RADIUS=.2;
 const LOOPS=new Set(['Standing','Walking','Running','Gathering','FishingLoop']);
-const BEDS=[[1.1,3.3],[2.7,3.3]], POND={x:10.7,z:6.3};
+const POND={x:10.7,z:6.3};
 
 function toonRamp(){
   const data=new Uint8Array([96,96,96,255, 182,182,182,255, 255,255,255,255]);
@@ -30,35 +30,31 @@ function tidy(clip){
   clip.resetDuration();return clip;
 }
 
-// Work spots on the shared path graph, each with a short final step off the graph
-// so she stands right at the bed edge or the shoreline.
-function findSpots(world,paths){
-  const facing=(n,x,z)=>Math.atan2(x-n.x,z-n.z);
-  // Step from the nearest graph nodes toward each bed until her body would touch the frame.
-  const beds=BEDS.flatMap(([bx,bz])=>paths.nodes
-    .map(n=>({n,d:Math.hypot(n.x-bx,n.z-bz)})).sort((a,b)=>a.d-b.d).slice(0,3)
-    .map(({n,d})=>{
-      let t=0;while(t<d&&!world.colliders.blocked(n.x+(bx-n.x)*(t+.02)/d,n.z+(bz-n.z)*(t+.02)/d,RADIUS+.03))t+=.02;
-      return {node:n,x:n.x+(bx-n.x)*t/d,z:n.z+(bz-n.z)*t/d,face:facing(n,bx,bz)};
-    }));
-  // The north bank is the stretch the default camera sees past the trees; she faces the viewer there.
-  const shore=[165,180,195,210,225].map(deg=>{
+// Fishing spots all round the pond bank, each facing the water.
+function shoreSpots(world){
+  const list=[];
+  for(let deg=0;deg<360;deg+=12){
     const a=deg*Math.PI/180,dx=Math.sin(a),dz=Math.cos(a);
     let t=.5;while(t<7&&world.height(POND.x+dx*t,POND.z+dz*t)<world.waterY+.1)t+=.05;
     const x=POND.x+dx*(t+.15),z=POND.z+dz*(t+.15);
-    const node=paths.nodes.reduce((best,n)=>Math.hypot(n.x-x,n.z-z)<Math.hypot(best.x-x,best.z-z)?n:best);
-    return {node,x,z,face:Math.atan2(-dx,-dz)};
-  });
-  return {beds,shore};
+    if(t>=7||Math.abs(x)>14.2||Math.abs(z)>14.2||world.colliders.blocked(x,z,RADIUS))continue;
+    list.push({x,z,face:Math.atan2(-dx,-dz)});
+  }
+  return list;
 }
 
+// SD Unity-chan is player-driven: she steps out of the cottage once, then waits for orders.
+// walkTo() sends her somewhere; tend() and fish() queue a job that only completes (onDone)
+// after she has walked there and played its animation through. Jobs run one at a time in the
+// order given; walking away cancels whatever is pending (onCancel).
 export function createUnityChan(scene,world,onReady,prints,art){
-  const paths=createFarmPaths(world),spots=findSpots(world,paths);
+  const paths=createFarmPaths(world,{island:true}),shore=shoreSpots(world);
   const {door,apron,threshold,doorLeaf}=world.cottage;
   const root=new T.Group();root.name='sd-unity-chan';root.visible=false;scene.add(root);
-  const s={state:'inside',x:door.x,z:door.z,heading:0,route:[],wait:0,pace:0,intent:false,reaction:2,
-    rng:90731,action:null,anchor:null,stuck:0,blink:2,blinkT:0,task:null,steps:[],stepTime:0,face:0,prop:null};
+  const s={state:'inside',x:door.x,z:door.z,heading:0,route:[],pace:0,speed:.75,
+    rng:90731,action:null,stuck:0,blink:2,blinkT:0,steps:[],stepTime:0,face:0,prop:null};
   let mixer=null,actions={},face=null,blinkIndex=-1,ready=false,hands=[];
+  const jobs=[];let job=null;
   const body=world.colliders.body(door.x,door.z,RADIUS,3);body.kind='unitychan';
   const random=()=>{s.rng=(Math.imul(s.rng,1664525)+1013904223)>>>0;return s.rng/4294967296};
 
@@ -111,61 +107,62 @@ export function createUnityChan(scene,world,onReady,prints,art){
     s.action=next;
   }
   const length=name=>actions[name]?actions[name].getClip().duration:0;
-  // Work spots sit just off the walking graph, so leave them via the node they came from.
-  function plan(goal){
-    const from=s.anchor||s,route=paths.route(from,goal);
-    if(route.length&&s.anchor)route.unshift({x:s.anchor.x,z:s.anchor.z});
-    if(route.length)s.anchor=null;
-    return route;
+  // Long trips are run, short ones walked.
+  function head(goal){
+    s.route=paths.route(s,goal);
+    if(!s.route.length)s.route=[{x:goal.x,z:goal.z}];
+    let distance=0,from=s;for(const p of s.route){distance+=Math.hypot(p.x-from.x,p.z-from.z);from=p}
+    s.speed=distance>5?1.45:.75;s.state='walking';s.stuck=0;
   }
-  function routeTo(target){
-    for(let i=0;i<8;i++){
-      const goal=target();if(!goal)return false;
-      s.route=plan(goal);if(s.route.length)return goal;
-    }
-    return false;
+  function stopActivity(){
+    if(s.state==='activity'){s.steps=[];s.prop=null;play('Standing',.25)}
   }
-  function setTrip(home=false){
-    s.task=null;
-    if(home){s.route=plan(apron);s.route.push(door,threshold);return}
-    const far=random()>.5;
-    const candidates=paths.nodes.filter(n=>{
-      const r=Math.hypot(n.x-apron.x,n.z-apron.z);
-      return r>(far?3.5:1.2)&&r<(far?8.5:4)&&Math.hypot(n.x-s.x,n.z-s.z)>1.2;
-    });
-    routeTo(()=>candidates[Math.floor(random()*candidates.length)]);
+  function cancel(task){
+    if(task===job){job=null;stopActivity();s.state=s.route.length?'walking':'idle';s.route=[];task.onCancel?.()}
+    else{const i=jobs.indexOf(task);if(i>=0){jobs.splice(i,1);task.onCancel?.()}}
   }
-  // Walk to a work spot, then run its clip sequence facing the bed / water.
-  function setTask(list,steps,prop=null){
-    const spot=list[Math.floor(random()*list.length)];
-    if(!spot||!routeTo(()=>spot.node))return false;
-    s.route.push({x:spot.x,z:spot.z});s.anchor=spot.node;
-    s.task={face:spot.face,steps,prop};return true;
+  function cancelAll(){if(job)cancel(job);while(jobs.length)cancel(jobs[0])}
+  function startNext(){
+    if(job||!jobs.length||!['idle','walking'].includes(s.state))return;
+    job=jobs.shift();
+    // The nearest approach to the work spot.
+    job.spot=job.spots.reduce((best,p)=>Math.hypot(p.x-s.x,p.z-s.z)<Math.hypot(best.x-s.x,best.z-s.z)?p:best);
+    head(job.spot);
   }
-  function begin(steps,faceAngle=s.heading,prop=null){
-    s.state='activity';s.steps=steps.slice();s.face=faceAngle;s.prop=prop;s.stepTime=0;nextStep();
+  function arrive(){
+    if(!job){s.state='idle';return}
+    s.state='activity';s.steps=job.steps.slice();s.face=job.spot.face;s.prop=job.prop??null;s.stepTime=0;
+    job.onStart?.();nextStep();
   }
   function nextStep(){
     const step=s.steps.shift();
-    if(!step){s.state='strolling';s.prop=null;s.wait=1.5+random()*3;play('Standing',.4);setTrip();return}
+    if(!step){
+      const done=job;job=null;s.state='idle';s.prop=null;play('Standing',.4);
+      done?.onDone?.();startNext();return;
+    }
     play(step.clip,step.fade??.3);s.stepTime=step.time??length(step.clip);
   }
-  function chooseNext(){
-    const r=random();
-    if(r<.3&&setTask(spots.beds,[{clip:'Gathering',time:5+random()*5}]))return;
-    const frozen=world.water.userData.freeze.value>.3;
-    if(r<.55&&!frozen&&setTask(spots.shore,[{clip:'FishingBegin'},{clip:'FishingLoop',time:12+random()*12,fade:.2},{clip:'FishingStop',fade:.2}],'rod'))return;
-    if(r<.75){
-      const kneel=random()<.45;
-      begin(kneel?[{clip:'KneelDown',fade:.25,time:length('KneelDown')+.2},{clip:'KneelDownToUp',fade:.15}]:[{clip:'Salute',fade:.25}]);
-      return;
-    }
-    s.wait=2+random()*5;setTrip();
+  function queue(task){
+    // A new job takes over from an idle pastime (fishing) instead of waiting for it.
+    if(job?.interruptible)cancel(job);
+    jobs.push(task);startNext();return task;
   }
-  function walk(dt,speed){
+  // Stand-off points round a bed (centre x,z, size w x d), each facing the bed.
+  const bedSpots=new Map();
+  function spotsAround({x,z,w,d}){
+    const key=x+','+z;if(bedSpots.has(key))return bedSpots.get(key);
+    const list=[];
+    for(const [u,v] of [[1,0],[-1,0],[0,1],[0,-1],[.5,1],[-.5,1],[.5,-1],[-.5,-1],[1,.5],[1,-.5],[-1,.5],[-1,-.5]]){
+      const px=x+u*(w/2+(Math.abs(u)===1?.3:0)),pz=z+v*(d/2+(Math.abs(v)===1?.3:0));
+      if(world.walkable(px,pz))list.push({x:px,z:pz,face:Math.atan2(x-px,z-pz)});
+    }
+    if(!list.length)list.push({x,z:z+d/2+.3,face:Math.PI});
+    bedSpots.set(key,list);return list;
+  }
+  function walk(dt){
     const target=s.route[0];if(!target){s.pace=T.MathUtils.damp(s.pace,0,6,dt);return true}
     const dx=target.x-s.x,dz=target.z-s.z,d=Math.hypot(dx,dz);
-    s.pace=T.MathUtils.damp(s.pace,speed,3,dt);
+    s.pace=T.MathUtils.damp(s.pace,s.speed,3,dt);
     const step=Math.min(d,dt*s.pace);
     if(d>.001){
       body.x=s.x+dx/d*step;body.z=s.z+dz/d*step;world.colliders.resolve(body);
@@ -224,49 +221,26 @@ export function createUnityChan(scene,world,onReady,prints,art){
     prints?.press('boot',s.x+Math.cos(h)*foot*.055+Math.sin(h)*.04,s.z-Math.sin(h)*foot*.055+Math.cos(h)*.04,h);
   }
   const inDoorway=()=>Math.abs(s.x-threshold.x)<.45&&s.z<door.z+.08;
-  return (dt,seconds,hour,weather,wind)=>{
+  const update=(dt,seconds)=>{
     if(!ready)return;
     swingDoor(dt);
-    // Light snow does not keep her in; rain, fog, a blizzard or a gale do.
-    const outside=hour>=7&&hour<19&&(weather<=1||weather===4)&&wind<11;
-    if(s.intent!==outside&&s.reaction<=0)s.reaction=2+random()*5;
-    s.reaction=Math.max(0,s.reaction-dt);
-    const want=s.reaction===0?outside:s.intent;s.intent=want;
-
-    if(s.state==='inside'){
-      root.visible=false;
-      if(want){s.state='opening';doorWant=1}
-      else doorWant=0;
-    }else if(s.state==='opening'){
-      // Step out once the door is most of the way open.
-      if(!want){s.state='inside';doorWant=0}
-      else if(doorOpen>.55){s.state='exiting';s.x=threshold.x;s.z=threshold.z;s.heading=0;s.route=[door,apron];s.pace=0;root.visible=true;play('Walking',0);
+    if(s.state==='inside'){s.state='opening';doorWant=1}
+    else if(s.state==='opening'){
+      if(doorOpen>.55){s.state='exiting';s.x=threshold.x;s.z=threshold.z;s.heading=0;s.route=[door,apron];s.pace=0;s.speed=.62;root.visible=true;play('Walking',0);
         root.position.set(s.x,world.stand(s.x,s.z),s.z);root.rotation.y=0}
     }else{
-      if(!want&&s.state!=='returning'){s.state='returning';s.wait=0;s.prop=null;s.steps=[];setTrip(true)}
-      let moving=false,speed=.62;
+      let moving=false;
       if(s.state==='activity'){
         turn(s.face,dt,4);
         s.stepTime-=dt;if(s.stepTime<=0)nextStep();
-      }else if(s.wait>0){s.wait-=dt;s.pace=T.MathUtils.damp(s.pace,0,6,dt)}
-      else if(s.state==='exiting'){
+      }else if(s.state==='exiting'){
         moving=true;
         if(Math.hypot(s.x-threshold.x,s.z-threshold.z)>.62)doorWant=0;
-        if(walk(dt,speed)){s.state='strolling';s.wait=1+random()*2;setTrip()}
-      }
-      else if(s.state==='returning'){
-        speed=weather>=2?1.45:.75;moving=true;
-        // Reach for the door a few steps out, so it is open by the time she gets there.
-        if(Math.hypot(s.x-door.x,s.z-door.z)<1.15&&s.route.length<=2)doorWant=1;
-        if(walk(dt,speed)){s.state='inside';root.visible=false;body.active=false;s.pace=0;play('Standing',0);doorWant=0}
-      }else if(s.state==='strolling'){
+        if(walk(dt)){s.state='idle';startNext()}
+      }else if(s.state==='walking'){
         moving=true;
-        if(walk(dt,speed)){
-          moving=false;
-          if(s.task){const {steps,face:f,prop}=s.task;s.task=null;begin(steps,f,prop)}
-          else chooseNext();
-        }
-      }
+        if(walk(dt)){moving=false;arrive()}
+      }else s.pace=T.MathUtils.damp(s.pace,0,6,dt);
       if(s.state!=='activity'){
         if(moving&&s.pace>.05){
           const running=s.pace>1.1;play(running?'Running':'Walking',.25);
@@ -289,4 +263,26 @@ export function createUnityChan(scene,world,onReady,prints,art){
       face.morphTargetInfluences[blinkIndex]=Math.sin(Math.PI*s.blinkT/.16);
     }
   };
+  return Object.assign(update,{
+    // Walk to a ground point (snapped to the walking graph when it is not walkable).
+    walkTo(x,z){
+      if(!['idle','walking','activity'].includes(s.state))return false;
+      cancelAll();stopActivity();
+      const goal=world.walkable(x,z)?{x,z}:paths.closest({x,z});
+      if(!goal)return false;
+      head(goal);return true;
+    },
+    tend(bed,{seconds=2.4,...callbacks}={}){
+      return queue({spots:spotsAround(bed),steps:[{clip:'Gathering',time:seconds}],...callbacks});
+    },
+    fish(point,{seconds=6+random()*5,...callbacks}={}){
+      if(!shore.length)return null;
+      const near=shore.slice().sort((a,b)=>Math.hypot(a.x-point.x,a.z-point.z)-Math.hypot(b.x-point.x,b.z-point.z)).slice(0,2);
+      return queue({spots:near,prop:'rod',interruptible:true,
+        steps:[{clip:'FishingBegin'},{clip:'FishingLoop',time:seconds,fade:.2},{clip:'FishingStop',fade:.2}],...callbacks});
+    },
+    cancel,
+    busy:()=>job!==null||jobs.length>0,
+    position:target=>target.set(s.x,root.position.y,s.z)
+  });
 }

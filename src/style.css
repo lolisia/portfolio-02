@@ -72,8 +72,8 @@ fieldset.control legend{background:none;padding:0;margin:0 0 8px}
 #panel{z-index:3}
 .farm-layer{position:fixed;inset:0;pointer-events:none;z-index:2;--card:#fff7e9f5;--card-ink:#3b3024;--leaf:#5e8f3c;--gold:#f2b632}
 .farm-layer>*{pointer-events:auto}
-.plot-tag{position:absolute;left:0;top:0;display:flex;align-items:center;gap:5px;height:28px;padding:0 9px 0 5px;margin:-14px 0 0;translate:-50% 0;border:2px solid #fff;border-radius:16px;background:var(--card);color:var(--card-ink);font-size:11px;font-weight:700;font-variant-numeric:tabular-nums;box-shadow:0 3px 10px #1b2a1a40;white-space:nowrap;transition:scale .15s,box-shadow .15s;will-change:transform}
-.plot-tag:hover,.plot-tag.hovered,.plot-tag.selected{scale:1.08;box-shadow:0 4px 14px #1b2a1a55}
+.plot-tag{position:absolute;left:0;top:0;display:flex;align-items:center;gap:5px;height:28px;padding:0 9px 0 5px;margin:-14px 0 0;translate:-50% 0;transform-origin:50% 50%;border:2px solid #fff;border-radius:16px;background:var(--card);color:var(--card-ink);font-size:11px;font-weight:700;font-variant-numeric:tabular-nums;box-shadow:0 3px 10px #1b2a1a40;white-space:nowrap;transition:transform .15s,box-shadow .15s}
+.plot-tag:hover,.plot-tag.hovered,.plot-tag.selected{transform:scale(1.08);box-shadow:0 4px 14px #1b2a1a55}
 .plot-icon{display:grid;place-items:center;width:20px;height:20px;font-size:14px;line-height:1}
 .plot-meter{display:block;width:34px;height:6px;border-radius:3px;background:#3b302422;overflow:hidden}.plot-meter i{display:block;height:100%;width:0;border-radius:3px;background:linear-gradient(90deg,#86bd4f,var(--leaf))}
 .plot-tag[data-state=empty]{width:28px;padding:0;justify-content:center;background:#fff7e9c4;border-style:dashed;color:var(--leaf);font-size:15px}
@@ -84,7 +84,7 @@ fieldset.control legend{background:none;padding:0;margin:0 0 8px}
 @keyframes ripe{0%,100%{margin-top:-14px}50%{margin-top:-20px}}
 .farm-popup{position:absolute;left:0;top:0;width:min(286px,calc(100vw - 20px));border-radius:16px;border:2px solid #fff;background:var(--card);color:var(--card-ink);box-shadow:0 10px 30px #1b2a1a4d;padding:10px 10px 12px;font-size:12px}
 .farm-popup.show{animation:pop .2s cubic-bezier(.2,.9,.3,1.3)}
-@keyframes pop{from{opacity:0;scale:.92}to{opacity:1;scale:1}}
+@keyframes pop{from{opacity:0;transform:scale(.92)}to{opacity:1;transform:none}}
 .farm-popup header{display:flex;align-items:center;gap:8px;padding:2px 2px 8px 6px}.farm-popup header strong{font-size:13px}
 .farm-plot-no{font-size:10px;opacity:.55}
 .farm-close{margin-left:auto;width:26px;height:26px;border:0;border-radius:50%;background:#3b302412;font-size:11px}.farm-close:hover{background:#3b302424}
@@ -111,9 +111,16 @@ fieldset.control legend{background:none;padding:0;margin:0 0 8px}
 .farm-level small{font-size:10px;font-weight:600;opacity:.65;font-variant-numeric:tabular-nums}
 .farm-coins{padding-left:9px!important;font-size:14px;font-variant-numeric:tabular-nums}.farm-coins span{font-size:16px}.farm-coins output{font-size:14px;font-weight:800;letter-spacing:0}
 .farm-coins.bump{animation:bump .4s ease}
-@keyframes bump{40%{scale:1.12}}
+@keyframes bump{40%{transform:scale(1.12)}}
+.plot-tag[data-state=pending]{background:#eaf4dc;border-color:#fff;color:#3f6a26}
+.plot-tag[data-state=pending] .plot-meter{display:none}
+.plot-tag[data-state=pending] .plot-icon{animation:bob .7s ease-in-out infinite}
+@keyframes bob{50%{transform:translateY(-2px) rotate(-8deg)}}
+.farm-layer.compact .plot-tag[data-state=pending]{background:#eaf4dc}
+.farm-note{padding:9px 18px}.farm-note span{font-size:13px}
 .farm-layer.compact .plot-tag:not([data-state=empty]){width:32px;height:32px;margin-top:-16px;padding:0;justify-content:center;border-radius:50%}
 .farm-layer.compact .plot-tag :is(.plot-meter,.plot-text){display:none}
+.farm-layer.compact .plot-tag[data-state=empty]:not(.hovered,.selected){display:none}
 .farm-layer.compact .plot-tag[data-state=growing]{border-color:transparent;background:radial-gradient(var(--card) 0 60%,transparent 62%),conic-gradient(var(--leaf) calc(var(--p,0)*1turn),#fff calc(var(--p,0)*1turn))}
 .farm-layer.compact .plot-tag[data-state=ready]{animation-name:ripe-round}
 @keyframes ripe-round{0%,100%{margin-top:-16px}50%{margin-top:-22px}}

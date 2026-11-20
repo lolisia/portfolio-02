@@ -1,8 +1,11 @@
 // A small shared walking graph keeps long excursions clear of houses, beds and water.
-export function createFarmPaths(world){
-  const nodes=[];
-  for(let x=-8.4;x<=8.4;x+=.6)for(let z=.6;z<=10.2;z+=.6){
-    if(world.walkable(x,z))nodes.push({x,z,edges:[]});
+// The default covers the front yard (the chickens' range); {island:true} spans the whole island,
+// stairs and terraces included, for the player-driven character.
+export function createFarmPaths(world,{island=false}={}){
+  const nodes=[],cells=new Map(),step=.6;
+  const [x0,x1,z0,z1]=island?[-14.1,14.1,-14.1,14.1]:[-8.4,8.4,.6,10.2];
+  for(let i=0,x=x0;x<=x1+1e-6;i++,x=x0+i*step)for(let j=0,z=z0;z<=z1+1e-6;j++,z=z0+j*step){
+    if(world.walkable(x,z)){cells.set(i+','+j,nodes.length);nodes.push({x,z,i,j,edges:[]})}
   }
   const clear=(a,b)=>{
     const length=Math.hypot(a.x-b.x,a.z-b.z),steps=Math.ceil(length/.18);
@@ -12,10 +15,14 @@ export function createFarmPaths(world){
     }
     return Math.abs(world.height(a.x,a.z)-world.height(b.x,b.z))<length*.55+.05;
   };
-  for(let i=0;i<nodes.length;i++)for(let j=i+1;j<nodes.length;j++){
-    const a=nodes[i],b=nodes[j],d=Math.hypot(a.x-b.x,a.z-b.z);
-    if(d<.9&&clear(a,b)){a.edges.push([j,d]);b.edges.push([i,d])}
-  }
+  // Grid neighbours only: at .6 spacing every pair closer than .9 is one of the eight around a node.
+  nodes.forEach((a,ia)=>{
+    for(const [di,dj] of [[1,0],[0,1],[1,1],[1,-1]]){
+      const ib=cells.get((a.i+di)+','+(a.j+dj));if(ib===undefined)continue;
+      const b=nodes[ib],d=Math.hypot(a.x-b.x,a.z-b.z);
+      if(clear(a,b)){a.edges.push([ib,d]);b.edges.push([ia,d])}
+    }
+  });
   const closest=p=>{
     // Nearest-first: only line-of-sight test the closest few nodes instead of the whole graph.
     const near=nodes.map((n,i)=>[Math.hypot(n.x-p.x,n.z-p.z),i]).sort((a,b)=>a[0]-b[0]);
@@ -40,5 +47,5 @@ export function createFarmPaths(world){
     }
     return [];
   }
-  return {nodes,route};
+  return {nodes,route,closest:p=>nodes[closest(p)]};
 }

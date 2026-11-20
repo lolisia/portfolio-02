@@ -75,7 +75,7 @@ const seasons=createSeasons(scene,world,atmosphere);
 const prints=createFootprints(scene,world,atmosphere);
 const farmLife=createFarmLife(scene,world,prints,actorArt);
 let unityChanLoaded;const unityChanReady=new Promise(r=>unityChanLoaded=r);
-const unityChan=createUnityChan(scene,world,unityChanLoaded,prints,actorArt);
+const unityChan=createUnityChan(scene,world,unityChanLoaded,prints,actorArt);farm.bind(unityChan);
 const trackedCharacter=scene.getObjectByName('sd-unity-chan'),followTarget=new T.Vector3(),followDelta=new T.Vector3();
 const homeLife=createInterior(world,surface('glass'),windowLight);
 const setSky=createSky(renderer,scene,world.water);
@@ -315,7 +315,7 @@ renderer.setAnimationLoop(ms=>{
   flyMoths(dt,ms/1000,mothLevel*.85);
   prints.update(dt,weatherBlend.snow*(1+weatherBlend.storm));
   farmLife(dt,ms/1000,hourShown,weatherIndex,windShown,camera,nightLevel);
-  unityChan(dt,ms/1000,hourShown,weatherIndex,windShown);
+  unityChan(dt,ms/1000);
   if(followCharacter.checked&&trackedCharacter?.visible){
     trackedCharacter.getWorldPosition(followTarget);followTarget.y+=.55;
     followDelta.copy(followTarget).sub(controls.target).multiplyScalar(1-Math.exp(-4*elapsedFrame));
