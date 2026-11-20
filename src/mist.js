@@ -132,10 +132,12 @@ export function createVolume(renderer,world,sun,clouds){
       shadowTint:{value:new T.Vector3(1,1,1)},highlightTint:{value:new T.Vector3(1,1,1)},saturation:{value:1},vignette:{value:.2},
       bloomMap:{value:blooms[0].texture},bloomAmount:{value:0},stars:{value:0},skyTurn:{value:0},clock:{value:0},
       moodTint:{value:new T.Vector3(1,1,1)},moodSaturation:{value:1},moodContrast:{value:1},moodBloom:{value:1},
+      pastel:{value:0},nightLevel:{value:0},
       glassRect:{value:new T.Vector4()},viewport:{value:new T.Vector2()},contact:{value:aoTarget.texture},sceneColor:{value:frame.texture},depthMap:{value:frame.depthTexture},volume:{value:fog.texture},fogSize:{value:new T.Vector2()},contactSize:{value:new T.Vector2()}},
     vertexShader:fullscreenVertex,fragmentShader:`
     varying vec2 screenUv;uniform sampler2D sceneColor,depthMap,volume,contact,bloomMap;uniform vec2 fogSize,contactSize;
     uniform float bloomAmount,stars,skyTurn,clock,moodSaturation,moodContrast,moodBloom;uniform vec3 moodTint;
+    uniform float pastel,nightLevel;
     float starHash(vec2 p){vec3 q=fract(p.xyx*vec3(.1031,.1030,.0973));q+=dot(q,q.yzx+33.33);return fract((q.x+q.y)*q.z);}
     uniform vec4 glassRect;uniform vec2 viewport,sunScreen;
     uniform vec3 bgTop,bgBottom,glowColor,shadowTint,highlightTint;uniform float glowAmount,saturation,vignette;
@@ -173,7 +175,7 @@ export function createVolume(renderer,world,sun,clouds){
       #else
         contactTotal=total;
       #endif
-      float contactLight=z>=1.?1.:mix(.68,1.,clamp(visibility/max(contactTotal,.00001),0.,1.));
+      float contactLight=z>=1.?1.:mix(mix(.68,.83,pastel),1.,clamp(visibility/max(contactTotal,.00001),0.,1.));
       vec3 base=texture2D(sceneColor,lensUv).rgb;
       if(z>=1.){
         // Behind the island: a vertical sky gradient with the low sun's glow toward its side.
@@ -195,7 +197,7 @@ export function createVolume(renderer,world,sun,clouds){
         }
       }
       vec3 color=base*contactLight*v.a+v.rgb;
-      color+=texture2D(bloomMap,lensUv).rgb*bloomAmount*moodBloom;
+      color+=texture2D(bloomMap,lensUv).rgb*bloomAmount*moodBloom*mix(1.,1.24,pastel);
       // Grade: split-tone shadows / highlights, a touch of saturation, soft vignette.
       float lum=dot(color,vec3(.2126,.7152,.0722));
       color*=mix(shadowTint,highlightTint,smoothstep(.02,.45,lum));
@@ -203,10 +205,24 @@ export function createVolume(renderer,world,sun,clouds){
       color=max(vec3(0.),mix(vec3(lum),color,saturation*moodSaturation))*moodTint;
       color=.18*pow(color/.18,vec3(moodContrast));  // weather contrast, pivoting on mid grey
       vec2 edge=(screenUv-.5)*vec2(viewport.x/viewport.y,1.);
-      color*=1.-vignette*smoothstep(.25,1.05,length(edge));
+      color*=1.-vignette*mix(1.,.45,pastel)*smoothstep(.25,1.05,length(edge));
       gl_FragColor=vec4(color,1.);
       #include <tonemapping_fragment>
       #include <colorspace_fragment>
+      if(pastel>.5){
+        // Lift shadows toward lavender and highlights toward cream in display space.
+        vec3 displayColor=clamp(gl_FragColor.rgb,0.,1.);
+        float lightness=dot(displayColor,vec3(.2126,.7152,.0722));
+        vec3 muted=mix(vec3(lightness),displayColor,.88);
+        vec3 paper=mix(vec3(.69,.58,.76),vec3(1.,.94,.82),smoothstep(.08,.66,lightness));
+        paper=mix(paper,vec3(.40,.37,.51),nightLevel*.8);
+        vec3 graded=mix(muted,paper,mix(.32,.12,nightLevel));
+        if(z>=1.){
+          vec3 skyPastel=mix(vec3(.98,.86,.77),vec3(.72,.81,.94),smoothstep(0.,1.,lensUv.y));
+          graded=mix(graded,skyPastel,.30*(1.-nightLevel));
+        }
+        gl_FragColor.rgb=graded;
+      }
     }`});
   const sunPoint=new T.Vector3(),sunOrigin=new T.Vector3();
   const quad=new T.Mesh(new T.PlaneGeometry(2,2),march),screen=new T.Scene(),ortho=new T.Camera();
@@ -241,6 +257,9 @@ export function createVolume(renderer,world,sun,clouds){
       u.shadowTint.value.copy(shadow);u.highlightTint.value.copy(highlight);u.saturation.value=saturation;u.vignette.value=vignette;
       u.bloomAmount.value=bloom;u.stars.value=stars;bright.uniforms.threshold.value=threshold;
     },
+    setGraphicsStyle(style){
+      composite.uniforms.pastel.value=style==='pastel'?1:0;
+    },
     // Weather mood, eased every frame: rain and snowstorms mute colour, fog flattens contrast,
     // snow cover cools the picture, and damp or misty air spreads light further.
     mood(snow,wet,rain,fog,storm,night){
@@ -248,6 +267,7 @@ export function createVolume(renderer,world,sun,clouds){
       u.moodTint.value.set(1-.035*rain-.03*snow*day-.02*storm,1-.005*snow*day,1+.03*rain+.04*snow*day+.02*storm);
       u.moodSaturation.value=1-.15*rain-.1*fog-.14*storm-.04*snow;
       u.moodContrast.value=1+.05*rain-.07*fog-.05*storm;
+      u.nightLevel.value=night;
       u.moodBloom.value=(1+1.1*fog+.5*wet+.2*storm)*(1-.5*snow);  // lit snow is bright enough already
     },
     render(scene,camera,seconds){

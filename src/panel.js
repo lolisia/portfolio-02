@@ -15,6 +15,28 @@ document.querySelector('#panel').addEventListener('keydown',event=>{
 
 export {drawHorizon,drawWind,drawWeather} from './motion.js';
 
+export function bindGraphicsStyle(apply){
+  const options=document.querySelector('#graphicsStyle');
+  const key='forest-farm.graphics-style';
+  const showStyle=style=>{
+    options.closest('#panel').dataset.graphicsStyle=style;
+    apply(style);
+  };
+  let style='original';
+  try{
+    if(localStorage.getItem(key)==='pastel')style='pastel';
+  }catch{
+    // The setting still works in the current session when storage is unavailable.
+  }
+  options.querySelector(`input[value="${style}"]`).checked=true;
+  showStyle(style);
+  options.addEventListener('change',event=>{
+    style=event.target.value;
+    showStyle(style);
+    try{localStorage.setItem(key,style)}catch{}
+  });
+}
+
 // The clock is anchored to elapsed real time so skipped frames do not slow the day.
 export function createDayClock(slider,apply){
   const auto=document.querySelector('#autoTime');

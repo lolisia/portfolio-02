@@ -5,7 +5,7 @@ import {createAtmosphere,surface} from './surfaces.js';
 import {makeCascade} from './cascade.js';
 import {createSky} from './sky.js';
 import {createVolume} from './mist.js';
-import {createDayClock,drawHorizon,drawWind,drawWeather} from './panel.js';
+import {bindGraphicsStyle,createDayClock,drawHorizon,drawWind,drawWeather} from './panel.js';
 import {createSeasons} from './seasons.js';
 import {daylight} from './daylight.js';
 import {createRain} from './rain.js';
@@ -71,6 +71,7 @@ const trackedCharacter=scene.getObjectByName('sd-unity-chan'),followTarget=new T
 const homeLife=createInterior(world,surface('glass'),windowLight);
 const setSky=createSky(renderer,scene,world.water);
 const volume=createVolume(renderer,world,sun,atmosphere.cloudMap);
+bindGraphicsStyle(volume.setGraphicsStyle);
 const glowCanvas=document.createElement('canvas');glowCanvas.width=glowCanvas.height=128;
 const glowContext=glowCanvas.getContext('2d');
 const halo=glowContext.createRadialGradient(64,64,0,64,64,64);

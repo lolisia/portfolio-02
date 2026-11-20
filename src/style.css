@@ -62,3 +62,9 @@ fieldset.control legend{background:none;padding:0;margin:0 0 8px}
 .slider .thumb{position:absolute;top:50%;left:calc(9px + (100% - 18px)*var(--f));width:11px;height:11px;margin:-5.5px 0 0 -5.5px;border:2px solid #fff;border-radius:50%;background:#ffffff38;box-shadow:0 0 0 3px #ffffff1c,0 1px 3px #0f1d2666;pointer-events:none;transition:box-shadow .2s}
 .slider:hover .thumb{box-shadow:0 0 0 5px #ffffff2e,0 1px 3px #0f1d2666}
 @media(prefers-reduced-motion:reduce){#panelBody{transition:none}}
+
+#panel[data-graphics-style="pastel"]{--ink:#40354b;--line:#40354b45;color:var(--ink);background:#fff5ebed;border-color:#fff8f2;text-shadow:none}
+#panel[data-graphics-style="pastel"] .options input:checked+span{background:#6b507221;border-color:#6b507280}
+#panel[data-graphics-style="pastel"] :is(.options label:hover span,#reset:hover){background:#6b507214}
+#panel[data-graphics-style="pastel"] .auto input{accent-color:var(--ink)}
+#panel[data-graphics-style="pastel"] .slider .thumb{border-color:var(--ink);background:#fff5eb}
