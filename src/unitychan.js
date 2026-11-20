@@ -3,10 +3,12 @@ import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';
 import {createFarmPaths} from './farm-paths.js';
 
 // SD Unity-chan © Unity Technologies Japan/UCL — see public/models/unitychan/.
-// Gathering / Fishing clips are retargeted from Kevin Iglesias "Human Crafting Animations FREE".
+// Gathering / Fishing / Chopping clips are retargeted from Kevin Iglesias "Human Crafting Animations FREE"
+// (Chopping is its one-handed "Mining - Ground" swing, played with an axe in her right hand).
 const URL=import.meta.env.BASE_URL+'models/unitychan/sd_unitychan.glb';
 const HEIGHT=1.02, RADIUS=.2;
-const LOOPS=new Set(['Standing','Walking','Running','Gathering','FishingLoop']);
+
+const LOOPS=new Set(['Standing','Walking','Running','Gathering','FishingLoop','Chopping']);
 const POND={x:10.7,z:6.3};
 
 function toonRamp(){
@@ -53,7 +55,7 @@ export function createUnityChan(scene,world,onReady,prints,art){
   const root=new T.Group();root.name='sd-unity-chan';root.visible=false;scene.add(root);
   const s={state:'inside',x:door.x,z:door.z,heading:0,route:[],pace:0,speed:.75,
     rng:90731,action:null,stuck:0,blink:2,blinkT:0,steps:[],stepTime:0,face:0,prop:null};
-  let mixer=null,actions={},face=null,blinkIndex=-1,ready=false,hands=[];
+  let mixer=null,actions={},face=null,blinkIndex=-1,ready=false,hands=[];const fingers={};
   const jobs=[];let job=null;
   const body=world.colliders.body(door.x,door.z,RADIUS,3);body.kind='unitychan';
   const random=()=>{s.rng=(Math.imul(s.rng,1664525)+1013904223)>>>0;return s.rng/4294967296};
@@ -66,11 +68,21 @@ export function createUnityChan(scene,world,onReady,prints,art){
   const line=new T.Line(lineGeo,new T.LineBasicMaterial({color:0xe9e4d2,transparent:true,opacity:.7}));line.frustumCulled=false;scene.add(line);
   const bobber=new T.Mesh(new T.SphereGeometry(.035,8,6),new T.MeshStandardMaterial({color:0xd84a32,roughness:.5}));scene.add(bobber);
   line.visible=bobber.visible=false;
+  // Felling axe: an ash handle with a steel head, held in her right hand.
+  const axe=new T.Group();axe.visible=false;scene.add(axe);
+  {
+    const handle=new T.Mesh(new T.CylinderGeometry(.011,.014,.42,6),new T.MeshStandardMaterial({color:0x8a6236,roughness:.75}));
+    handle.position.y=.12;handle.castShadow=true;axe.add(handle);
+    const steel=new T.MeshStandardMaterial({color:0x8d949a,metalness:.7,roughness:.35});
+    const head=new T.Mesh(new T.BoxGeometry(.03,.07,.11),steel);head.position.set(0,.29,.045);head.castShadow=true;axe.add(head);
+    const edge=new T.Mesh(new T.BoxGeometry(.012,.1,.03),steel);edge.position.set(0,.29,.105);axe.add(edge);
+  }
 
   new GLTFLoader().load(URL,gltf=>{
     const model=gltf.scene,ramp=toonRamp(),cache=new Map();
     model.traverse(o=>{
       if(/^Character1_(Left|Right)Hand$/.test(o.name))hands.push(o);
+      if(/^Character1_RightHand(Middle1|Thumb2)$/.test(o.name))fingers[o.name.endsWith('Thumb2')?'thumb':'middle']=o;
       if(!o.isMesh)return;
       o.castShadow=true;o.receiveShadow=true;o.frustumCulled=false;
       const list=(Array.isArray(o.material)?o.material:[o.material]).map(m=>{
@@ -131,6 +143,8 @@ export function createUnityChan(scene,world,onReady,prints,art){
   }
   function arrive(){
     if(!job){s.state='idle';return}
+    // Could not get there (the spot is cut off): drop the job rather than work it from afar.
+    if(Math.hypot(s.x-job.spot.x,s.z-job.spot.z)>.6){const failed=job;cancel(job);failed.onFail?.();startNext();return}
     s.state='activity';s.steps=job.steps.slice();s.face=job.spot.face;s.prop=job.prop??null;s.stepTime=0;
     job.onStart?.();nextStep();
   }
@@ -181,6 +195,20 @@ export function createUnityChan(scene,world,onReady,prints,art){
   }
 
   const v=new T.Vector3(),w=new T.Vector3(),up=new T.Vector3(0,1,0),dir=new T.Vector3(),fwd=new T.Vector3(),tip=new T.Vector3(),q=new T.Quaternion();
+  // The axe is set in her fist from the hand bones: the handle runs out along her thumb and the
+  // blade faces the way her fingers point, which is the way the swing strikes.
+  const palm=new T.Vector3(),knuckle=new T.Vector3(),thumb=new T.Vector3(),basis=new T.Matrix4(),side=new T.Vector3();
+  function updateAxe(){
+    const hand=hands.find(h=>/Right/.test(h.name));
+    axe.visible=s.prop==='axe'&&root.visible&&!!hand&&!!fingers.middle&&!!fingers.thumb;
+    if(!axe.visible)return;
+    hand.getWorldPosition(palm);fingers.middle.getWorldPosition(knuckle);fingers.thumb.getWorldPosition(thumb);
+    knuckle.sub(palm);const reach=knuckle.length();knuckle.normalize();
+    thumb.sub(palm);thumb.addScaledVector(knuckle,-thumb.dot(knuckle)).normalize();
+    side.crossVectors(thumb,knuckle);
+    basis.makeBasis(side,thumb,knuckle);axe.quaternion.setFromRotationMatrix(basis);
+    axe.position.copy(palm).addScaledVector(knuckle,reach*.65);
+  }
   function updateRod(seconds){
     const show=s.prop==='rod'&&root.visible&&hands.length===2;
     rod.visible=show;
@@ -254,7 +282,7 @@ export function createUnityChan(scene,world,onReady,prints,art){
       root.position.set(s.x,world.stand(s.x,s.z),s.z);root.rotation.y=s.heading;
     }
     mixer.update(dt);
-    updateRod(seconds);
+    updateRod(seconds);updateAxe();
     // Blink on a loose rhythm so the face never freezes.
     if(face){
       s.blink-=dt;
@@ -275,6 +303,9 @@ export function createUnityChan(scene,world,onReady,prints,art){
     tend(bed,{seconds=2.4,...callbacks}={}){
       return queue({spots:spotsAround(bed),steps:[{clip:'Gathering',time:seconds}],...callbacks});
     },
+    // Any job: stand at the nearest of spots ({x,z,face}) and play steps ([{clip,time?,fade?}]).
+    work(job){return queue(job)},
+    reachable:(x,z)=>world.walkable(x,z),
     fish(point,{seconds=6+random()*5,...callbacks}={}){
       if(!shore.length)return null;
       const near=shore.slice().sort((a,b)=>Math.hypot(a.x-point.x,a.z-point.z)-Math.hypot(b.x-point.x,b.z-point.z)).slice(0,2);

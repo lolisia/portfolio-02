@@ -283,5 +283,7 @@ export function buildWorld(scene,b){
   ground.material.name='terrain';
   for(const [x,z,rad] of [...bushes,...stumps])colliders.circle(x,z,rad,'plant');
   return {water,floor,waterY,lamps,height,stand,roofs,cottage,perches,birdPerches,props,ground,colliders,beds,
-    flowerBeds,walkable:(x,z)=>!colliders.blocked(x,z,.26)&&wet(x,z)<-.2};
+    flowerBeds,
+    trees:treeList.map(([x,z,s],i)=>({x,z,s,y:height(x,z),kind:treeKinds[i].kind,angle:treeKinds[i].angle})),
+    walkable:(x,z)=>!colliders.blocked(x,z,.26)&&wet(x,z)<-.2};
 }

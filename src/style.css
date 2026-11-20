@@ -117,6 +117,9 @@ fieldset.control legend{background:none;padding:0;margin:0 0 8px}
 .plot-tag[data-state=pending] .plot-icon{animation:bob .7s ease-in-out infinite}
 @keyframes bob{50%{transform:translateY(-2px) rotate(-8deg)}}
 .farm-layer.compact .plot-tag[data-state=pending]{background:#eaf4dc}
+.farm-note-tag{pointer-events:none}
+.farm-layer.compact .farm-note-tag :is(.plot-text){display:inline}
+.farm-layer.compact .farm-note-tag{width:auto;height:28px;margin-top:-14px;padding:0 9px 0 5px;border-radius:16px}
 .farm-note{padding:9px 18px}.farm-note span{font-size:13px}
 .farm-layer.compact .plot-tag:not([data-state=empty]){width:32px;height:32px;margin-top:-16px;padding:0;justify-content:center;border-radius:50%}
 .farm-layer.compact .plot-tag :is(.plot-meter,.plot-text){display:none}

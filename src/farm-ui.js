@@ -13,12 +13,13 @@ export function createFarmUI({crops,levels,levelOf,plant,clear,cancel,wallet}){
   const layer=el('div','farm-layer');layer.id='farmLayer';
   const hud=el('div','farm-hud',`
     <div class="farm-level" aria-label="레벨"><b>Lv.1</b><span class="farm-xp"><i></i></span><small></small></div>
-    <div class="farm-coins" aria-label="코인"><span aria-hidden="true">🪙</span><output>0</output></div>`);
+    <div class="farm-coins" aria-label="코인"><span aria-hidden="true">🪙</span><output>0</output></div>
+    <div class="farm-coins farm-wood" aria-label="목재"><span aria-hidden="true">🪵</span><output>0</output></div>`);
   hud.id='farmHud';
   const popup=el('div','farm-popup');popup.hidden=true;popup.setAttribute('role','dialog');
   layer.append(popup);
   document.querySelector('main').append(layer,hud);
-  const tags=[],spots=[],picking={kind:'veg'};let openType='',openIndex=-1,state=null,api;
+  const notes=new Map(),tags=[],spots=[],picking={kind:'veg'};let openType='',openIndex=-1,state=null,api;
   const coins=hud.querySelector('output');let shownCoins=null;
 
   function tagFor(index){
@@ -59,6 +60,9 @@ export function createFarmUI({crops,levels,levelOf,plant,clear,cancel,wallet}){
       hud.querySelector('.farm-level small').textContent=to===undefined?'MAX':`${state.xp-from} / ${to-from} XP`;
       if(shownCoins!==null&&state.coins>shownCoins){coins.parentElement.classList.remove('bump');void coins.offsetWidth;coins.parentElement.classList.add('bump')}
       shownCoins=state.coins;coins.textContent=state.coins.toLocaleString('ko-KR');
+      const wood=hud.querySelector('.farm-wood output');
+      if(Number(wood.dataset.value??state.wood)<state.wood){wood.parentElement.classList.remove('bump');void wood.offsetWidth;wood.parentElement.classList.add('bump')}
+      wood.dataset.value=state.wood;wood.textContent=state.wood.toLocaleString('ko-KR');
       if(openIndex>=0&&popup.querySelector('.seed-list'))api.openPicker(openIndex,picking.kind,wallet(),true);
     },
     openPicker(index,kind,current,refresh=false){
@@ -89,6 +93,17 @@ export function createFarmUI({crops,levels,levelOf,plant,clear,cancel,wallet}){
         if(button.dataset.confirm){clear(index);close()}
         else{button.dataset.confirm='1';button.textContent='씨앗값은 돌려받지 못해요. 정말 갈아엎을까요?'}
       });
+    },
+    // Free-standing status tags (trees being felled): note(key,{x,y,on,icon,text}) or note(key,null).
+    note(key,info){
+      let tag=notes.get(key);
+      if(!info){if(tag){tag.remove();notes.delete(key)}return}
+      if(!tag){
+        tag=el('div','plot-tag farm-note-tag','<span class="plot-icon"></span><span class="plot-text"></span>');tag.dataset.state='pending';
+        layer.insertBefore(tag,popup);notes.set(key,tag);
+      }
+      tag.hidden=!info.on;tag.style.left=Math.round(info.x)+'px';tag.style.top=Math.round(info.y)+'px';
+      if(tag.dataset.text!==info.icon+info.text){tag.dataset.text=info.icon+info.text;tag.children[0].textContent=info.icon;tag.children[1].textContent=info.text}
     },
     compact(on){if(layer.classList.contains('compact')!==on)layer.classList.toggle('compact',on)},
     openPending(index,pending){
@@ -131,8 +146,8 @@ export function createFarmUI({crops,levels,levelOf,plant,clear,cancel,wallet}){
       }
     },
     reward(index,icon,coins,xp){const spot=spots[index];if(spot)api.rewardAt(spot.x,spot.y,icon,coins,xp)},
-    rewardAt(x,y,label,coins,xp){
-      const float=el('div','farm-float',`<span>${label} +${coins} 🪙</span><small>+${xp} XP</small>`);
+    rewardAt(x,y,label,coins,xp,plain=false){
+      const float=el('div','farm-float',`<span>${plain?label:label+' +'+coins+' 🪙'}</span><small>+${xp} XP</small>`);
       float.style.left=x+'px';float.style.top=y+'px';
       layer.append(float);float.addEventListener('animationend',()=>float.remove());
     },

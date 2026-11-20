@@ -1,6 +1,7 @@
 import * as T from 'three';
 import {builder} from './modules.js';
 import {createFarmUI} from './farm-ui.js';
+import {createForestry,STUMP_SECONDS as STUMP,REGROW_SECONDS as REGROW} from './forestry.js';
 
 // Farming game on the vegetable beds and the flower garden. Every bed starts empty; tapping it
 // opens the seed picker and Unity-chan walks over to plant. The crop grows in real time (saved
@@ -57,7 +58,7 @@ export const FISH=[
 // Total experience needed to reach each level (index = level - 1).
 export const LEVELS=[0,10,30,60,100,160,240,340,460,600];
 export function levelOf(xp){let level=1;while(level<LEVELS.length&&xp>=LEVELS[level])level++;return level}
-const KEY='forest-farm.farm.v1',START={coins:40,xp:0};
+const KEY='forest-farm.farm.v1',START={coins:40,xp:0,wood:0};
 const POND={x:10.7,z:6.3,rx:4.5,rz:3.5};
 
 function load(count){
@@ -66,11 +67,12 @@ function load(count){
     if(query==='reset')localStorage.removeItem(KEY);
     const saved=JSON.parse(localStorage.getItem(KEY)||'null');
     if(saved&&Number.isFinite(saved.coins)&&Number.isFinite(saved.xp)&&Array.isArray(saved.plots))
-      return {coins:saved.coins,xp:saved.xp,plots:Array.from({length:count},(_,i)=>{
+      return {coins:saved.coins,xp:saved.xp,wood:Number.isFinite(saved.wood)?saved.wood:0,
+        trees:saved.trees&&typeof saved.trees==='object'?saved.trees:{},plots:Array.from({length:count},(_,i)=>{
         const p=saved.plots[i];return p&&byId.has(p.crop)&&Number.isFinite(p.planted)?{crop:p.crop,planted:p.planted}:null;
       })};
   }catch{}
-  return {...START,plots:Array(count).fill(null)};
+  return {...START,trees:{},plots:Array(count).fill(null)};
 }
 
 export function createFarm(scene,world,assets,camera,canvas){
@@ -78,7 +80,7 @@ export function createFarm(scene,world,assets,camera,canvas){
   const state=load(beds.length);
   const save=()=>{try{localStorage.setItem(KEY,JSON.stringify(state))}catch{}};
   const matrix=new T.Matrix4(),scale=new T.Matrix4(),lift=new T.Matrix4(),tint=new T.Color(),ripe=new T.Color();
-  let character=null;
+  let character=null,forestry=null;
   // Every bed gets one hidden instanced set per crop it can take, built with the shared builder
   // so the plants sway in the wind and take the scene's surfaces; only the planted set is shown.
   const plots=beds.map((bed,index)=>{
@@ -180,6 +182,49 @@ export function createFarm(scene,world,assets,camera,canvas){
   }
   ui.onTag=tap;
 
+  // Felling: she chops at the trunk until it topples away from her, then cuts up the log for
+  // wood. Each stage is a job of its own, pending until she has worked it through.
+  const clock=s=>Math.floor(s/60)+':'+String(Math.ceil(s%60)%60).padStart(2,'0');
+  function chopLog(tree){
+    tree.job={stage:'log',phase:'walk'};
+    tree.job.task=character.work({spots:forestry.logSpots(tree),prop:'axe',steps:[{clip:'Chopping',time:2.2,fade:.2}],
+      onStart(){tree.job.phase='work'},
+      onDone(){
+        tree.job=null;forestry.clear(tree);
+        state.trees[tree.index]=tree.felledAt;
+        const wood=Math.round((tree.pine?3.4:2.6)*tree.s+1),xp=3;
+        state.wood+=wood;
+        const at=anchorOf(tree.x+tree.dir.x*1.5*tree.s,tree.y+.9,tree.z+tree.dir.z*1.5*tree.s);
+        ui.rewardAt(at.x,at.y,'🪵 목재 +'+wood,0,xp,true);
+        earn(0,xp);
+      },
+      onCancel(){tree.job=null},
+      onFail(){ui.toast('🚧 통나무 곁으로 갈 수 없어요')}});
+  }
+  function tapTree(index){
+    const tree=forestry.trees[index];
+    if(tree.job){ui.toast('🪓 이미 작업이 예약되어 있어요');return}
+    if(tree.state==='fallen'){chopLog(tree);return}
+    if(tree.state==='stump'||tree.state==='growing'){
+      const left=STUMP+REGROW-(Date.now()-tree.felledAt)/1000;
+      ui.toast(tree.state==='stump'?'🌱 그루터기에서 새싹이 돋기를 기다리는 중 · '+clock(Math.max(0,left-REGROW)):'🌳 나무가 다시 자라는 중 · '+clock(Math.max(0,left)));
+      return;
+    }
+    if(tree.state!=='standing')return;
+    const spots=forestry.trunkSpots(tree);
+    if(!spots.length){ui.toast('🚧 이 나무에는 다가갈 수 없어요');return}
+    tree.job={stage:'chop',phase:'walk'};
+    tree.job.task=character.work({spots,prop:'axe',steps:[{clip:'Chopping',time:3.2,fade:.2}],
+      onStart(){tree.job.phase='work'},
+      onDone(){
+        tree.job={stage:'fall',phase:'work'};
+        character.position(hit);
+        forestry.fell(tree,{x:tree.x-hit.x,z:tree.z-hit.z},()=>{tree.job=null;chopLog(tree)});
+      },
+      onCancel(){if(tree.job?.stage==='chop')tree.job=null},
+      onFail(){ui.toast('🚧 이 나무에는 다가갈 수 없어요')}});
+  }
+
   // Fishing: one cast per tap, a random catch when she reels in.
   let fishing=null;
   const head=new T.Vector3();
@@ -238,6 +283,8 @@ export function createFarm(scene,world,assets,camera,canvas){
     if(index>=0){tap(index);return}
     if(ui.isOpen()){ui.close();return}
     if(!character)return;
+    const tree=forestry?forestry.pick(raycaster.ray):-1;
+    if(tree>=0){tapTree(tree);return}
     const pond=overPond();
     if(pond)fish(pond);else walk();
   }
@@ -251,7 +298,7 @@ export function createFarm(scene,world,assets,camera,canvas){
     if(press?.id===e.pointerId&&Math.hypot(e.clientX-press.x,e.clientY-press.y)>8)press=null;
     if(e.pointerType==='mouse'&&e.target===canvas&&!e.buttons){
       aim(e.clientX,e.clientY);
-      const over=pickPlot(),point=over<0&&overPond()!==null;
+      const over=pickPlot(),point=over<0&&(overPond()!==null||(forestry?.pick(raycaster.ray)??-1)>=0);
       canvas.style.cursor=over>=0||point?'pointer':'';
       if(over!==hover){hover=over;ui.hover(over)}
     }
@@ -265,7 +312,12 @@ export function createFarm(scene,world,assets,camera,canvas){
   addEventListener('pointerup',release,{capture:true});
   addEventListener('pointercancel',release,{capture:true});
 
-  const anchor=new T.Vector3(),spots=plots.map(()=>({x:0,y:0,on:false}));
+  const anchor=new T.Vector3(),spots=plots.map(()=>({x:0,y:0,on:false})),screen={x:0,y:0,on:false};
+  function anchorOf(x,y,z){
+    const rect=canvas.getBoundingClientRect();anchor.set(x,y,z).project(camera);
+    screen.x=rect.left+(anchor.x+1)/2*rect.width;screen.y=rect.top+(1-anchor.y)/2*rect.height;
+    screen.on=anchor.z<1&&Math.abs(anchor.x)<1.1&&Math.abs(anchor.y)<1.1;return screen;
+  }
   const update=dt=>{
     const now=Date.now(),rect=canvas.getBoundingClientRect();
     if(markerLife>0){
@@ -294,11 +346,24 @@ export function createFarm(scene,world,assets,camera,canvas){
       spot.on=anchor.z<1&&Math.abs(anchor.x)<1.1&&Math.abs(anchor.y)<1.1;
       ui.place(plot.index,spot.x,spot.y,spot.on,info,plot.pending);
     }
+    if(forestry){
+      forestry.update(dt,now);
+      for(const t of forestry.trees){
+        const job=t.job,key='tree'+t.index;
+        if(!job){ui.note(key,null);continue}
+        const lying=job.stage==='log'||job.stage==='fall',at=lying?anchorOf(t.x+t.dir.x*1.5*t.s,t.y+1.3*t.s,t.z+t.dir.z*1.5*t.s):anchorOf(t.x,t.y+1.9*t.s,t.z);
+        ui.note(key,{x:at.x,y:at.y,on:at.on,icon:'🪓',text:job.stage==='fall'?'쿵!':job.phase==='walk'?'이동 중':job.stage==='log'?'통나무 자르는 중':'벌목 중'});
+      }
+    }
     // Zoomed out, neighbouring beds are too close for full tags: show round icon badges instead.
     let closest=Infinity;
     for(let i=0;i<spots.length;i++)for(let j=i+1;j<spots.length;j++)
       if(spots[i].on&&spots[j].on)closest=Math.min(closest,Math.hypot(spots[i].x-spots[j].x,(spots[i].y-spots[j].y)*2.5));
     ui.compact(closest<128);
   };
-  return Object.assign(update,{bind(next){character=next}});
+  return Object.assign(update,{    bind(next){
+      character=next;
+      // The storybook crowns exist by now, so every copy of a tree is found and felled together.
+      forestry=createForestry(scene,world,assets);forestry.restore(state.trees);
+    }});
 }

@@ -50,8 +50,8 @@ if(view==='water'||view==='falls'){
   }
   camera.zoom=3.25;camera.updateProjectionMatrix();controls.update();
 }
-// Close-ups for checking details: ?view=house|coop|stairs|garden|pond|farm, optionally &zoom=N.
-const closeUps={farm:[1.9,.5,3.3,4.2],house:[-1,1.6,-1.2,3],garden:[-1.1,3.2,-7.65,5],coop:[2.25,1.7,-1.6,3.3],stairs:[-5.4,2.2,-4.4,3],pond:[10.2,.4,6.3,5]};
+// Close-ups for checking details: ?view=house|coop|stairs|garden|pond|farm|grove, optionally &zoom=N.
+const closeUps={grove:[-3.95,1.6,2.0,9],farm:[1.9,.5,3.3,4.2],house:[-1,1.6,-1.2,3],garden:[-1.1,3.2,-7.65,5],coop:[2.25,1.7,-1.6,3.3],stairs:[-5.4,2.2,-4.4,3],pond:[10.2,.4,6.3,5]};
 if(closeUps[view]){
   const [x,y,z,zoom]=closeUps[view],yaw=Number(new URLSearchParams(location.search).get('yaw'))||0;
   controls.target.set(x,y,z);camera.position.copy(controls.target).add(new T.Vector3(24,18,30).applyAxisAngle(new T.Vector3(0,1,0),yaw*Math.PI/180));

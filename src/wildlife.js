@@ -70,7 +70,8 @@ export function createWildlife(scene,world,art){
   let state='away',since=0,duration=2.5,perch=null,seat='crown';
   const perches=world.birdPerches,trees=perches.filter(p=>p.kind==='tree'),lamps=perches.filter(p=>p.kind==='lamp');
   const start=new T.Vector3(),end=new T.Vector3(),pos=new T.Vector3(),ahead=new T.Vector3(),c1=new T.Vector3(),c2=new T.Vector3();
-  const choose=()=>{perch=Math.random()<.5?lamps[Math.floor(Math.random()*lamps.length)]:trees[Math.floor(Math.random()*trees.length)]};
+  // Felled trees (forestry.js marks their perch gone) are skipped until they regrow.
+  const choose=()=>{const standing=trees.filter(t=>!t.gone);perch=Math.random()<.5||!standing.length?lamps[Math.floor(Math.random()*lamps.length)]:standing[Math.floor(Math.random()*standing.length)]};
   choose();
   // Where the seat is right now: the canopy bends in the wind (surfaces.js windVertex), and
   // the bird rides along with the branch it sits on.
@@ -128,6 +129,8 @@ export function createWildlife(scene,world,art){
     }
     if((state==='perched'||state==='landing')&&(wind>=10||night>.85||(state==='perched'&&age>=duration))){state='takeoff';since=seconds;age=0}
     if(state==='arriving'&&wind>=10){launch(true,seconds,wind);age=0}
+    if(perch.gone&&(state==='perched'||state==='landing')){state='takeoff';since=seconds;age=0}
+    if(perch.gone&&state==='arriving'){launch(true,seconds,wind);age=0}
     if(state==='arriving'){
       const t=age/duration;
       // The seat keeps swaying; steer the end of the path onto it.
