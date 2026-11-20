@@ -118,6 +118,7 @@ fieldset.control legend{background:none;padding:0;margin:0 0 8px}
 @keyframes bob{50%{transform:translateY(-2px) rotate(-8deg)}}
 .farm-layer.compact .plot-tag[data-state=pending]{background:#eaf4dc}
 .farm-note-tag{pointer-events:none}
+.farm-fly{position:fixed;left:0;top:0;font-size:22px;line-height:1;pointer-events:none;z-index:4;filter:drop-shadow(0 2px 2px #2b1d0666)}
 .farm-layer.compact .farm-note-tag :is(.plot-text){display:inline}
 .farm-layer.compact .farm-note-tag{width:auto;height:28px;margin-top:-14px;padding:0 9px 0 5px;border-radius:16px}
 .farm-note{padding:9px 18px}.farm-note span{font-size:13px}

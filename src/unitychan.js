@@ -7,6 +7,8 @@ import {createFarmPaths} from './farm-paths.js';
 // (Chopping is its one-handed "Mining - Ground" swing, played with an axe in her right hand).
 const URL=import.meta.env.BASE_URL+'models/unitychan/sd_unitychan.glb';
 const HEIGHT=1.02, RADIUS=.2;
+// Chopping: fraction of the swing where the blade lands (the hand's sharp drop, sampled from the clip).
+const IMPACT=.41;
 
 const LOOPS=new Set(['Standing','Walking','Running','Gathering','FishingLoop','Chopping']);
 const POND={x:10.7,z:6.3};
@@ -197,7 +199,7 @@ export function createUnityChan(scene,world,onReady,prints,art){
   const v=new T.Vector3(),w=new T.Vector3(),up=new T.Vector3(0,1,0),dir=new T.Vector3(),fwd=new T.Vector3(),tip=new T.Vector3(),q=new T.Quaternion();
   // The axe is set in her fist from the hand bones: the handle runs out along her thumb and the
   // blade faces the way her fingers point, which is the way the swing strikes.
-  const palm=new T.Vector3(),knuckle=new T.Vector3(),thumb=new T.Vector3(),basis=new T.Matrix4(),side=new T.Vector3();
+  const blade=new T.Vector3(),palm=new T.Vector3(),knuckle=new T.Vector3(),thumb=new T.Vector3(),basis=new T.Matrix4(),side=new T.Vector3();
   function updateAxe(){
     const hand=hands.find(h=>/Right/.test(h.name));
     axe.visible=s.prop==='axe'&&root.visible&&!!hand&&!!fingers.middle&&!!fingers.thumb;
@@ -283,6 +285,13 @@ export function createUnityChan(scene,world,onReady,prints,art){
     }
     mixer.update(dt);
     updateRod(seconds);updateAxe();
+    // Tell the job each time the axe lands, with where the blade is.
+    const chop=actions.Chopping;
+    if(s.state==='activity'&&job&&s.action===chop){
+      const t=chop.time/chop.getClip().duration,prev=s.chopPrev??t;
+      if(prev<=t?prev<IMPACT&&t>=IMPACT:prev<IMPACT||t>=IMPACT){axe.updateMatrixWorld();job.onHit?.(axe.localToWorld(blade.set(0,.29,.1)).clone())}
+      s.chopPrev=t;
+    }else s.chopPrev=undefined;
     // Blink on a loose rhythm so the face never freezes.
     if(face){
       s.blink-=dt;

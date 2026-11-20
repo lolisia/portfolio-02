@@ -21,6 +21,11 @@ export function createFarmUI({crops,levels,levelOf,plant,clear,cancel,wallet}){
   document.querySelector('main').append(layer,hud);
   const notes=new Map(),tags=[],spots=[],picking={kind:'veg'};let openType='',openIndex=-1,state=null,api;
   const coins=hud.querySelector('output');let shownCoins=null;
+  const woodOut=hud.querySelector('.farm-wood output');let woodShown=0,woodHeld=false;
+  function showWood(value,bump=value>woodShown){
+    if(bump){woodOut.parentElement.classList.remove('bump');void woodOut.offsetWidth;woodOut.parentElement.classList.add('bump')}
+    woodShown=value;woodOut.textContent=value.toLocaleString('ko-KR');
+  }
 
   function tagFor(index){
     if(tags[index])return tags[index];
@@ -52,7 +57,8 @@ export function createFarmUI({crops,levels,levelOf,plant,clear,cancel,wallet}){
 
   api={
     onTag:null,close,isOpen:()=>openIndex>=0,
-    refresh(next){
+    // opts.woodDelay: the wood counter waits for the flying firewood (collect) to arrive.
+    refresh(next,opts={}){
       state=next;
       const level=levelOf(state.xp),from=levels[level-1],to=levels[level];
       hud.querySelector('.farm-level b').textContent='Lv.'+level;
@@ -60,9 +66,8 @@ export function createFarmUI({crops,levels,levelOf,plant,clear,cancel,wallet}){
       hud.querySelector('.farm-level small').textContent=to===undefined?'MAX':`${state.xp-from} / ${to-from} XP`;
       if(shownCoins!==null&&state.coins>shownCoins){coins.parentElement.classList.remove('bump');void coins.offsetWidth;coins.parentElement.classList.add('bump')}
       shownCoins=state.coins;coins.textContent=state.coins.toLocaleString('ko-KR');
-      const wood=hud.querySelector('.farm-wood output');
-      if(Number(wood.dataset.value??state.wood)<state.wood){wood.parentElement.classList.remove('bump');void wood.offsetWidth;wood.parentElement.classList.add('bump')}
-      wood.dataset.value=state.wood;wood.textContent=state.wood.toLocaleString('ko-KR');
+      if(opts.woodDelay)woodHeld=true;
+      if(!woodHeld)showWood(state.wood);
       if(openIndex>=0&&popup.querySelector('.seed-list'))api.openPicker(openIndex,picking.kind,wallet(),true);
     },
     openPicker(index,kind,current,refresh=false){
@@ -112,6 +117,26 @@ export function createFarmUI({crops,levels,levelOf,plant,clear,cancel,wallet}){
         <div class="farm-info"><div class="farm-info-row"><span>${pending.phase==='walk'?'유니티짱이 밭으로 가는 중이에요':'작업하는 중이에요'}</span></div>
         <button type="button" class="farm-clear">작업 취소</button></div>`,'pending');
       popup.querySelector('.farm-clear').addEventListener('click',()=>{cancel(index);close()});
+    },
+    // A piece of loot flies from (x,y) along an arc into its HUD counter, which ticks up on arrival.
+    collect(x,y,kind,amount,last){
+      const target=hud.querySelector('.farm-'+kind)?.getBoundingClientRect();if(!target)return;
+      const piece=el('div','farm-fly',kind==='wood'?'🪵':'🪙');layer.append(piece);
+      const tx=target.left+22,ty=target.top+target.height/2,lift=Math.min(160,Math.max(60,(y-ty)*.35));
+      const frames=[];
+      for(let i=0;i<=12;i++){
+        const u=i/12,e=u*u*(3-2*u),px=x+(tx-x)*e,py=y+(ty-y)*u*u-lift*4*u*(1-u)*(1-u*.4);
+        frames.push({transform:`translate(${px}px,${py}px) translate(-50%,-50%) scale(${1.25-.55*u}) rotate(${u*540}deg)`,opacity:u>.92?.6:1});
+      }
+      const flight=piece.animate(frames,{duration:720+Math.random()*160,delay:Math.random()*90,easing:'ease-in',fill:'forwards'});
+      flight.onfinish=()=>{
+        piece.remove();
+        if(kind==='wood'){
+          woodShown=Math.min(state.wood,woodShown+amount);
+          if(last){woodHeld=false;woodShown=state.wood}
+          showWood(woodShown,true);
+        }
+      };
     },
     toast(text){
       const toast=el('div','farm-toast farm-note',`<span>${text}</span>`);toast.setAttribute('role','status');

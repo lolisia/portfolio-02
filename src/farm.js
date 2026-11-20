@@ -1,7 +1,8 @@
 import * as T from 'three';
 import {builder} from './modules.js';
 import {createFarmUI} from './farm-ui.js';
-import {createForestry,STUMP_SECONDS as STUMP,REGROW_SECONDS as REGROW} from './forestry.js';
+import {createForestry} from './forestry.js';
+import {createWoodFx} from './fx.js';
 
 // Farming game on the vegetable beds and the flower garden. Every bed starts empty; tapping it
 // opens the seed picker and Unity-chan walks over to plant. The crop grows in real time (saved
@@ -80,7 +81,7 @@ export function createFarm(scene,world,assets,camera,canvas){
   const state=load(beds.length);
   const save=()=>{try{localStorage.setItem(KEY,JSON.stringify(state))}catch{}};
   const matrix=new T.Matrix4(),scale=new T.Matrix4(),lift=new T.Matrix4(),tint=new T.Color(),ripe=new T.Color();
-  let character=null,forestry=null;
+  let character=null,forestry=null,wood=null,forestry_onGrown=null;
   // Every bed gets one hidden instanced set per crop it can take, built with the shared builder
   // so the plants sway in the wind and take the scene's surfaces; only the planted set is shown.
   const plots=beds.map((bed,index)=>{
@@ -182,47 +183,76 @@ export function createFarm(scene,world,assets,camera,canvas){
   }
   ui.onTag=tap;
 
-  // Felling: she chops at the trunk until it topples away from her, then cuts up the log for
-  // wood. Each stage is a job of its own, pending until she has worked it through.
-  const clock=s=>Math.floor(s/60)+':'+String(Math.ceil(s%60)%60).padStart(2,'0');
-  function chopLog(tree){
-    tree.job={stage:'log',phase:'walk'};
-    tree.job.task=character.work({spots:forestry.logSpots(tree),prop:'axe',steps:[{clip:'Chopping',time:2.2,fade:.2}],
+  // Felling: she chops at the trunk (it shudders and sheds chips at every blow) until it topples
+  // away from her with a thud that shakes the camera, then cuts the log into firewood that flies
+  // up to the wood counter. Tapping the stump digs it out and plants a sapling of the same kind.
+  // Every stage is a job of its own, pending until she has worked it through.
+  const clock=s=>{s=Math.ceil(s);return Math.floor(s/60)+':'+String(s%60).padStart(2,'0')};
+  const saveTree=(tree,entry)=>{if(entry)state.trees[tree.index]=entry;else delete state.trees[tree.index];save()};
+  const swing=(tree,shudder=true)=>point=>{
+    character.position(hit);
+    wood.chips(point,{x:tree.x-hit.x,z:tree.z-hit.z},shudder?10:6);
+    if(shudder)forestry.hit(tree,hit);
+  };
+  function stage(tree,name,job){
+    tree.job={stage:name,phase:'walk'};
+    tree.job.task=character.work({prop:'axe',...job,
       onStart(){tree.job.phase='work'},
-      onDone(){
-        tree.job=null;forestry.clear(tree);
-        state.trees[tree.index]=tree.felledAt;
-        const wood=Math.round((tree.pine?3.4:2.6)*tree.s+1),xp=3;
-        state.wood+=wood;
-        const at=anchorOf(tree.x+tree.dir.x*1.5*tree.s,tree.y+.9,tree.z+tree.dir.z*1.5*tree.s);
-        ui.rewardAt(at.x,at.y,'🪵 목재 +'+wood,0,xp,true);
-        earn(0,xp);
-      },
+      onDone(){tree.job=null;job.done()},
       onCancel(){tree.job=null},
-      onFail(){ui.toast('🚧 통나무 곁으로 갈 수 없어요')}});
+      onFail(){ui.toast('🚧 그곳으로 갈 수 없어요')}});
   }
+  function chopLog(tree){
+    stage(tree,'log',{spots:forestry.logSpots(tree),steps:[{clip:'Chopping',time:2.4,fade:.2}],onHit:swing(tree),done(){
+      const count=Math.round((tree.pine?3.4:2.6)*tree.s+1),xp=3;
+      forestry.clear(tree);saveTree(tree,{stump:true});
+      state.wood+=count;save();ui.refresh(state,{woodDelay:true});
+      // The log splits into billets that hop up and fly off to the wood counter.
+      let landed=0;
+      wood.firewood(forestry.logPoints(tree,count),position=>{
+        const at=anchorOf(position.x,position.y,position.z);
+        ui.collect(at.x,at.y,'wood',1,++landed===count);
+      });
+      const top=anchorOf(tree.x+tree.dir.x*1.5*tree.s,tree.y+1.2,tree.z+tree.dir.z*1.5*tree.s);
+      ui.rewardAt(top.x,top.y,'🪵 목재 +'+count,0,xp,true);
+      earn(0,xp);
+    }});
+  }
+  function plantSapling(tree){
+    stage(tree,'plant',{prop:null,spots:forestry.trunkSpots(tree),steps:[{clip:'Gathering',time:2.2}],done(){
+      forestry.plant(tree);saveTree(tree,{planted:tree.plantedAt});
+      const at=anchorOf(tree.x,tree.y+.6,tree.z);ui.rewardAt(at.x,at.y,'🌱 묘목 심기',0,1,true);earn(0,1);
+    }});
+  }
+  forestry_onGrown=tree=>saveTree(tree,null);
   function tapTree(index){
     const tree=forestry.trees[index];
     if(tree.job){ui.toast('🪓 이미 작업이 예약되어 있어요');return}
+    const spots=forestry.trunkSpots(tree);
     if(tree.state==='fallen'){chopLog(tree);return}
-    if(tree.state==='stump'||tree.state==='growing'){
-      const left=STUMP+REGROW-(Date.now()-tree.felledAt)/1000;
-      ui.toast(tree.state==='stump'?'🌱 그루터기에서 새싹이 돋기를 기다리는 중 · '+clock(Math.max(0,left-REGROW)):'🌳 나무가 다시 자라는 중 · '+clock(Math.max(0,left)));
+    if(tree.state==='growing'){ui.toast((tree.pine?'🌲':'🌳')+' 묘목이 자라는 중 · '+clock(forestry.left(tree)));return}
+    if(!spots.length){ui.toast('🚧 이 나무에는 다가갈 수 없어요');return}
+    if(tree.state==='bare'){plantSapling(tree);return}
+    if(tree.state==='stump'){
+      stage(tree,'stump',{spots,steps:[{clip:'Chopping',time:2,fade:.2}],onHit:swing(tree,false),done(){forestry.uproot(tree);plantSapling(tree)}});
       return;
     }
     if(tree.state!=='standing')return;
-    const spots=forestry.trunkSpots(tree);
-    if(!spots.length){ui.toast('🚧 이 나무에는 다가갈 수 없어요');return}
-    tree.job={stage:'chop',phase:'walk'};
-    tree.job.task=character.work({spots,prop:'axe',steps:[{clip:'Chopping',time:3.2,fade:.2}],
-      onStart(){tree.job.phase='work'},
-      onDone(){
-        tree.job={stage:'fall',phase:'work'};
-        character.position(hit);
-        forestry.fell(tree,{x:tree.x-hit.x,z:tree.z-hit.z},()=>{tree.job=null;chopLog(tree)});
-      },
-      onCancel(){if(tree.job?.stage==='chop')tree.job=null},
-      onFail(){ui.toast('🚧 이 나무에는 다가갈 수 없어요')}});
+    stage(tree,'chop',{spots,steps:[{clip:'Chopping',time:3.3,fade:.2}],onHit:swing(tree),done(){
+      tree.job={stage:'fall',phase:'work'};
+      forestry.fell(tree,()=>{shake(.45,7);tree.job=null;chopLog(tree)});
+    }});
+  }
+  // A short decaying camera shake, done with the projection's view offset so the orbit
+  // controls never see it.
+  let shakeTime=0,shakeLength=1,shakeSize=0;
+  function shake(seconds,pixels){shakeTime=shakeLength=seconds;shakeSize=pixels}
+  function updateShake(dt){
+    if(shakeTime<=0)return;
+    shakeTime=Math.max(0,shakeTime-dt);
+    const w=canvas.clientWidth,h=canvas.clientHeight,k=(shakeTime/shakeLength)**2*shakeSize,t=performance.now()/1000;
+    if(shakeTime===0){camera.clearViewOffset();return}
+    camera.setViewOffset(w,h,Math.sin(t*61)*k,Math.sin(t*47+1.3)*k*.8,w,h);
   }
 
   // Fishing: one cast per tap, a random catch when she reels in.
@@ -346,13 +376,15 @@ export function createFarm(scene,world,assets,camera,canvas){
       spot.on=anchor.z<1&&Math.abs(anchor.x)<1.1&&Math.abs(anchor.y)<1.1;
       ui.place(plot.index,spot.x,spot.y,spot.on,info,plot.pending);
     }
+    updateShake(dt);
     if(forestry){
-      forestry.update(dt,now);
+      forestry.update(dt,now);wood.update(dt);
       for(const t of forestry.trees){
         const job=t.job,key='tree'+t.index;
         if(!job){ui.note(key,null);continue}
         const lying=job.stage==='log'||job.stage==='fall',at=lying?anchorOf(t.x+t.dir.x*1.5*t.s,t.y+1.3*t.s,t.z+t.dir.z*1.5*t.s):anchorOf(t.x,t.y+1.9*t.s,t.z);
-        ui.note(key,{x:at.x,y:at.y,on:at.on,icon:'🪓',text:job.stage==='fall'?'쿵!':job.phase==='walk'?'이동 중':job.stage==='log'?'통나무 자르는 중':'벌목 중'});
+        const text=job.stage==='fall'?'쿵!':job.phase==='walk'?'이동 중':({log:'장작 패는 중',stump:'그루터기 캐는 중',plant:'묘목 심는 중',chop:'벌목 중'})[job.stage];
+        ui.note(key,{x:at.x,y:at.y,on:at.on,icon:job.stage==='plant'?'🌱':'🪓',text});
       }
     }
     // Zoomed out, neighbouring beds are too close for full tags: show round icon badges instead.
@@ -364,6 +396,7 @@ export function createFarm(scene,world,assets,camera,canvas){
   return Object.assign(update,{    bind(next){
       character=next;
       // The storybook crowns exist by now, so every copy of a tree is found and felled together.
-      forestry=createForestry(scene,world,assets);forestry.restore(state.trees);
+      forestry=createForestry(scene,world,assets);forestry.restore(state.trees);forestry.onGrown=forestry_onGrown;
+      wood=createWoodFx(scene,world);
     }});
 }
