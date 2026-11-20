@@ -60,6 +60,14 @@ export function createUnityChan(scene,world,onReady,prints,art){
   let mixer=null,actions={},face=null,blinkIndex=-1,ready=false,hands=[];const fingers={};
   const jobs=[];let job=null;
   const body=world.colliders.body(door.x,door.z,RADIUS,3);body.kind='unitychan';
+  // Where she is: the island (walking graph, colliders, footprints) or a room (room.js), which
+  // supplies its own route, collision, floor and scene.
+  const island={route:(a,b)=>paths.route(a,b),resolve:b=>world.colliders.resolve(b),stand:(x,z)=>world.stand(x,z),
+    walkable:(x,z)=>world.walkable(x,z),closest:p=>paths.closest(p),scene};
+  let place=island,stayIn=false,homing=null;
+  const roomBody={x:0,z:0,r:RADIUS,mass:3,active:true,ignore:''};
+  const solid=()=>place===island?body:roomBody;
+  root.rotation.order='YXZ';
   const random=()=>{s.rng=(Math.imul(s.rng,1664525)+1013904223)>>>0;return s.rng/4294967296};
 
   // Fishing rod, line and float are simple props kept in world space.
@@ -123,7 +131,7 @@ export function createUnityChan(scene,world,onReady,prints,art){
   const length=name=>actions[name]?actions[name].getClip().duration:0;
   // Long trips are run, short ones walked.
   function head(goal){
-    s.route=paths.route(s,goal);
+    s.route=place.route(s,goal);
     if(!s.route.length)s.route=[{x:goal.x,z:goal.z}];
     let distance=0,from=s;for(const p of s.route){distance+=Math.hypot(p.x-from.x,p.z-from.z);from=p}
     s.speed=distance>5?1.45:.75;s.state='walking';s.stuck=0;
@@ -159,6 +167,8 @@ export function createUnityChan(scene,world,onReady,prints,art){
     play(step.clip,step.fade??.3);s.stepTime=step.time??length(step.clip);
   }
   function queue(task){
+    if(s.state==='inside'&&stayIn&&place===island)stayIn=false;  // a job outdoors calls her out
+    s.pose=null;
     // A new job takes over from an idle pastime (fishing) instead of waiting for it.
     if(job?.interruptible)cancel(job);
     jobs.push(task);startNext();return task;
@@ -181,9 +191,9 @@ export function createUnityChan(scene,world,onReady,prints,art){
     s.pace=T.MathUtils.damp(s.pace,s.speed,3,dt);
     const step=Math.min(d,dt*s.pace);
     if(d>.001){
-      body.x=s.x+dx/d*step;body.z=s.z+dz/d*step;world.colliders.resolve(body);
-      const moved=Math.hypot(body.x-s.x,body.z-s.z);
-      s.x=body.x;s.z=body.z;
+      const b=solid();b.x=s.x+dx/d*step;b.z=s.z+dz/d*step;place.resolve(b);
+      const moved=Math.hypot(b.x-s.x,b.z-s.z);
+      s.x=b.x;s.z=b.z;
       turn(Math.atan2(dx,dz),dt);
       // Blocked (another walker parked on the waypoint): give up on it after a moment.
       s.stuck=moved<step*.3?s.stuck+dt:0;
@@ -254,7 +264,8 @@ export function createUnityChan(scene,world,onReady,prints,art){
   const update=(dt,seconds)=>{
     if(!ready)return;
     swingDoor(dt);
-    if(s.state==='inside'){s.state='opening';doorWant=1}
+    // Indoors she stays in until sent out (stayIn); otherwise she opens the door and steps out.
+    if(s.state==='inside'){if(stayIn){root.visible=false;body.active=false}else{s.state='opening';doorWant=1}}
     else if(s.state==='opening'){
       if(doorOpen>.55){s.state='exiting';s.x=threshold.x;s.z=threshold.z;s.heading=0;s.route=[door,apron];s.pace=0;s.speed=.62;root.visible=true;play('Walking',0);
         root.position.set(s.x,world.stand(s.x,s.z),s.z);root.rotation.y=0}
@@ -269,7 +280,13 @@ export function createUnityChan(scene,world,onReady,prints,art){
         if(walk(dt)){s.state='idle';startNext()}
       }else if(s.state==='walking'){
         moving=true;
-        if(walk(dt)){moving=false;arrive()}
+        // Heading home: reach for the door a few steps out, so it is open when she gets there.
+        if(homing&&Math.hypot(s.x-door.x,s.z-door.z)<1.15&&s.route.length<=2)doorWant=1;
+        if(walk(dt)){
+          moving=false;
+          if(homing){const h=homing;homing=null;s.state='inside';stayIn=true;root.visible=false;body.active=false;s.pace=0;play('Standing',0);doorWant=0;h()}
+          else arrive();
+        }
       }else s.pace=T.MathUtils.damp(s.pace,0,6,dt);
       if(s.state!=='activity'){
         if(moving&&s.pace>.05){
@@ -278,10 +295,15 @@ export function createUnityChan(scene,world,onReady,prints,art){
         }else{play('Standing',.35);if(s.action)s.action.timeScale=1}
       }else if(s.action)s.action.timeScale=1;
       // Standing still she is still solid: chickens bump off her and she never ends inside a prop.
-      body.active=root.visible;body.x=s.x;body.z=s.z;body.ignore=inDoorway()?'house':'';world.colliders.resolve(body);
-      if(s.state!=='activity'){s.x=body.x;s.z=body.z;trackFeet(Math.hypot(s.x-(s.px??s.x),s.z-(s.pz??s.z)),s.pace>1.1)}
+      if(place===island){body.active=root.visible;body.x=s.x;body.z=s.z;body.ignore=inDoorway()?'house':'';world.colliders.resolve(body)}
+      else if(!s.pose){roomBody.x=s.x;roomBody.z=s.z;place.resolve(roomBody)}
+      const b=solid();
+      if(s.state!=='activity'&&!s.pose){s.x=b.x;s.z=b.z;if(place===island)trackFeet(Math.hypot(s.x-(s.px??s.x),s.z-(s.pz??s.z)),s.pace>1.1)}
       s.px=s.x;s.pz=s.z;
-      root.position.set(s.x,world.stand(s.x,s.z),s.z);root.rotation.y=s.heading;
+      // A pose (lying in bed, sitting on the sofa) places her outright.
+      const p=s.pose;
+      if(p){root.position.set(p.x,p.y,p.z);root.rotation.set(p.tilt??0,p.heading,0)}
+      else{root.position.set(s.x,place.stand(s.x,s.z),s.z);root.rotation.set(0,s.heading,0)}
     }
     mixer.update(dt);
     updateRod(seconds);updateAxe();
@@ -297,15 +319,17 @@ export function createUnityChan(scene,world,onReady,prints,art){
       s.blink-=dt;
       if(s.blink<=0){s.blinkT=.16;s.blink=2.2+random()*3.5}
       s.blinkT=Math.max(0,s.blinkT-dt);
-      face.morphTargetInfluences[blinkIndex]=Math.sin(Math.PI*s.blinkT/.16);
+      face.morphTargetInfluences[blinkIndex]=s.pose?.sleep?1:Math.sin(Math.PI*s.blinkT/.16);
     }
   };
   return Object.assign(update,{
     // Walk to a ground point (snapped to the walking graph when it is not walkable).
     walkTo(x,z){
+      // Sent off while she is at home: she comes back out first.
+      if(s.state==='inside'&&stayIn&&place===island){stayIn=false;return true}
       if(!['idle','walking','activity'].includes(s.state))return false;
-      cancelAll();stopActivity();
-      const goal=world.walkable(x,z)?{x,z}:paths.closest({x,z});
+      cancelAll();stopActivity();homing=null;s.pose=null;
+      const goal=place.walkable(x,z)?{x,z}:place.closest({x,z});
       if(!goal)return false;
       head(goal);return true;
     },
@@ -322,6 +346,33 @@ export function createUnityChan(scene,world,onReady,prints,art){
         steps:[{clip:'FishingBegin'},{clip:'FishingLoop',time:seconds,fade:.2},{clip:'FishingStop',fade:.2}],...callbacks});
     },
     cancel,
+    // Walk home and go in; onInside fires once the door has shut behind her.
+    goHome(onInside){
+      if(place!==island)return false;
+      if(s.state==='inside'&&stayIn){onInside();return true}
+      // Still in the doorway on her way out: she just stays in.
+      if(s.state==='inside'||s.state==='opening'){s.state='inside';stayIn=true;doorWant=0;onInside();return true}
+      if(!['idle','walking','activity','exiting'].includes(s.state))return false;
+      cancelAll();stopActivity();s.pose=null;
+      head(apron);s.route.push(door,threshold);homing=onInside;return true;
+    },
+    isHome:()=>s.state==='inside'&&stayIn&&place===island,
+    homeward:()=>!!homing,
+    // Move her into a room ({scene,route,resolve,stand,walkable,closest}) at a start point.
+    enterRoom(room,start){
+      cancelAll();stopActivity();homing=null;s.pose=null;
+      place=room;room.scene.add(root);
+      s.x=start.x;s.z=start.z;s.heading=start.heading??0;s.route=[];s.pace=0;s.state='idle';
+      root.visible=true;body.active=false;stayIn=true;play('Standing',0);
+    },
+    // Back to the island: she is behind the cottage door and walks out on her own.
+    leaveRoom(){
+      cancelAll();stopActivity();s.pose=null;
+      place=island;scene.add(root);root.visible=false;
+      s.state='inside';stayIn=false;s.route=[];
+    },
+    setPose(pose){s.pose=pose},
+    play(name,fade){play(name,fade)},
     busy:()=>job!==null||jobs.length>0,
     position:target=>target.set(s.x,root.position.y,s.z)
   });

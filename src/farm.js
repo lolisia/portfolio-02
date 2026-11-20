@@ -87,7 +87,7 @@ export function createFarm(scene,world,assets,camera,canvas){
   const state=load(beds.length);
   const save=()=>{try{localStorage.setItem(KEY,JSON.stringify(state))}catch{}};
   const matrix=new T.Matrix4(),scale=new T.Matrix4(),lift=new T.Matrix4(),tint=new T.Color(),ripe=new T.Color();
-  let character=null,forestry=null,wood=null,forestry_onGrown=null;
+  let character=null,forestry=null,wood=null,forestry_onGrown=null,room=null,indoor=false;
   // Every bed gets one hidden instanced set per crop it can take, built with the shared builder
   // so the plants sway in the wind and take the scene's surfaces; only the planted set is shown.
   const plots=beds.map((bed,index)=>{
@@ -373,13 +373,26 @@ export function createFarm(scene,world,assets,camera,canvas){
     if(!ground||!character?.walkTo(ground.point.x,ground.point.z))return;
     marker.position.set(ground.point.x,world.stand(ground.point.x,ground.point.z)+.03,ground.point.z);markerLife=1;
   }
+  // The cottage: a tap sends her home; once she is in, a tag by the door offers the way inside.
+  const [hx,hz]=world.props[0];
+  function pickHouse(){
+    const y=world.height(hx,hz);
+    box.min.set(hx-1.85,y-.2,hz-1.9);box.max.set(hx+1.85,y+4.6,hz+2.1);
+    return raycaster.ray.intersectBox(box,hit)!==null;
+  }
+  function goHome(){
+    if(character.isHome()){room?.enter();return}
+    character.goHome(()=>{});
+  }
   function tapAt(x,y){
+    if(indoor)return;
     aim(x,y);
     const index=pickPlot();
     if(index>=0){tap(index);return}
     if(ui.isOpen()){ui.close();return}
     if(!character)return;
     if(pickNest()){gatherEggs();return}
+    if(pickHouse()){goHome();return}
     const tree=forestry?forestry.pick(raycaster.ray):-1;
     if(tree>=0){tapTree(tree);return}
     const pond=overPond();
@@ -393,9 +406,9 @@ export function createFarm(scene,world,assets,camera,canvas){
   },{capture:true});
   addEventListener('pointermove',e=>{
     if(press?.id===e.pointerId&&Math.hypot(e.clientX-press.x,e.clientY-press.y)>8)press=null;
-    if(e.pointerType==='mouse'&&e.target===canvas&&!e.buttons){
+    if(e.pointerType==='mouse'&&e.target===canvas&&!e.buttons&&!indoor){
       aim(e.clientX,e.clientY);
-      const over=pickPlot(),point=over<0&&(overPond()!==null||pickNest()||(forestry?.pick(raycaster.ray)??-1)>=0);
+      const over=pickPlot(),point=over<0&&(overPond()!==null||pickNest()||pickHouse()||(forestry?.pick(raycaster.ray)??-1)>=0);
       canvas.style.cursor=over>=0||point?'pointer':'';
       if(over!==hover){hover=over;ui.hover(over)}
     }
@@ -444,6 +457,11 @@ export function createFarm(scene,world,assets,camera,canvas){
       ui.place(plot.index,spot.x,spot.y,spot.on,info,plot.pending);
     }
     updateShake(dt);
+    {
+      const home=character?.isHome(),at=anchorOf(world.cottage.door.x,world.height(hx,hz)+2.4,world.cottage.door.z);
+      ui.note('house',indoor?null:home?{x:at.x,y:at.y,on:at.on,icon:'🏠',text:'집 안으로 들어가기',ready:true,onClick:()=>room?.enter()}
+        :character?.homeward()?{x:at.x,y:at.y,on:at.on,icon:'🏠',text:'집으로 가는 중'}:null);
+    }
     // A fresh egg pops into the nest; the nest's tag shows how many are waiting.
     for(const egg of eggs)if(egg.userData.pop!==undefined){
       egg.userData.pop=Math.min(1,egg.userData.pop+dt/.4);const k=egg.userData.pop;
@@ -472,6 +490,16 @@ export function createFarm(scene,world,assets,camera,canvas){
     ui.compact(closest<128);
   };
   return Object.assign(update,{    layEgg,
+    bindRoom(next){room=next},
+    // Indoors the island's tags are hidden and its taps ignored; the room handles its own.
+    setIndoor(flag){indoor=flag;document.querySelector('#farmLayer').style.display=flag?'none':'';if(flag)canvas.style.cursor=''},
+    earn(coins,xp,label){
+      if(label){const r=canvas.getBoundingClientRect();ui.rewardAt(r.left+r.width/2,r.top+r.height*.35,label,coins,xp,!coins)}
+      earn(coins,xp);
+    },
+    // Spend wood (or only check, with dryRun) for the fireplace.
+    spendWood(n,dryRun=false){if(state.wood<n)return false;if(!dryRun){state.wood-=n;save();ui.refresh(state)}return true},
+    toast:text=>ui.toast(text),
     bind(next){
       character=next;
       // The storybook crowns exist by now, so every copy of a tree is found and felled together.

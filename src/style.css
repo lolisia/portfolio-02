@@ -133,3 +133,11 @@ fieldset.control legend{background:none;padding:0;margin:0 0 8px}
 @keyframes ripe-round{0%,100%{margin-top:-16px}50%{margin-top:-22px}}
 @media(max-width:500px){.farm-xp{width:44px}.farm-level small{display:none}}
 @media(prefers-reduced-motion:reduce){.plot-tag[data-state=ready],.farm-popup.show,.farm-coins.bump{animation:none}}
+
+/* ---- Cottage interior ---- */
+.room-fade{position:fixed;inset:0;z-index:20;background:#0d0b0a;opacity:0;pointer-events:none;transition:opacity .45s ease;display:grid;place-items:center;color:#f6e8c8;font-size:46px;letter-spacing:.2em}
+.room-fade.on{opacity:1;pointer-events:auto}
+.room-label{position:fixed;z-index:6;translate:12px -130%;padding:5px 10px;border-radius:10px;background:#fff7e9f0;color:#3b3024;font-size:12px;font-weight:700;box-shadow:0 3px 10px #1b2a1a40;pointer-events:none;white-space:nowrap}
+.room-status{position:fixed;z-index:6;pointer-events:none}
+.room-exit{position:fixed;z-index:6;right:max(14px,env(safe-area-inset-right));top:max(14px,env(safe-area-inset-top));height:34px;padding:0 14px;border:2px solid #fff;border-radius:18px;background:#fff7e9eb;color:#3b3024;font-size:12px;font-weight:700;box-shadow:0 3px 12px #1b2a1a33}
+.room-exit:hover{background:#fff}

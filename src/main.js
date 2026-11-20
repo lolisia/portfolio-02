@@ -25,6 +25,7 @@ import {attachMapControls} from './map-controls.js';
 import {createStorybook,paintClouds} from './storybook.js';
 import {createActorArt} from './actor-art.js';
 import {createShedding} from './shed.js';
+import {createRoom} from './room.js';
 
 const canvas=document.querySelector('#world');
 const scene=new T.Scene(), renderer=new T.WebGLRenderer({canvas,antialias:false,powerPreference:'high-performance'});
@@ -77,6 +78,14 @@ const prints=createFootprints(scene,world,atmosphere);
 const farmLife=createFarmLife(scene,world,prints,actorArt);farmLife.onLay=farm.layEgg;
 let unityChanLoaded;const unityChanReady=new Promise(r=>unityChanLoaded=r);
 const unityChan=createUnityChan(scene,world,unityChanLoaded,prints,actorArt);farm.bind(unityChan);
+// The cottage interior, drawn instead of the island while she is inside (room.js).
+const room=createRoom({renderer,outdoor:scene,world,character:unityChan,canvas,controls,hooks:{
+  indoor:flag=>farm.setIndoor(flag),earn:(...a)=>farm.earn(...a),spendWood:(...a)=>farm.spendWood(...a),toast:t=>farm.toast(t),
+  isNight:()=>{const h=hourShown<0?hourShown+24:hourShown;return h>=19||h<5},
+  // Sleeping through the night: morning at 7:00, the scene relit at once behind the fade.
+  sleep:()=>{time.value=7;time.dispatchEvent(new Event('input'));hourShown=hourTarget=7;lighting()}
+}});
+farm.bindRoom(room);
 const trackedCharacter=scene.getObjectByName('sd-unity-chan'),followTarget=new T.Vector3(),followDelta=new T.Vector3();
 const homeLife=createInterior(world,surface('glass'),windowLight);
 const setSky=createSky(renderer,scene,world.water);
@@ -279,7 +288,7 @@ function trample(dt){
 weather.onchange=e=>{weatherIndex=Number(e.target.value);weatherBlend.select(weatherIndex);drawWeather(weatherIndex)};
 document.querySelector('#season').onchange=e=>{seasonIndex=Number(e.target.value);lighting()};
 document.querySelector('#reset').onclick=home;
-function resize(){const w=innerWidth,h=innerHeight,aspect=w/h,span=Math.max(31.5,46/aspect);camera.left=-span*aspect/2;camera.right=-camera.left;camera.top=span/2;camera.bottom=-camera.top;camera.updateProjectionMatrix();renderer.setSize(w,h,false);volume.resize(w,h)}
+function resize(){const w=innerWidth,h=innerHeight,aspect=w/h,span=Math.max(31.5,46/aspect);camera.left=-span*aspect/2;camera.right=-camera.left;camera.top=span/2;camera.bottom=-camera.top;camera.updateProjectionMatrix();renderer.setSize(w,h,false);volume.resize(w,h);room.resize(w,h)}
 window.addEventListener('resize',resize);resize();
 // Shader warm-up: anything that only appears later (lantern spotlights at dusk, rain, snow,
 // petals, fireflies, Unity-chan) changes light counts or adds materials, which makes three.js
@@ -356,5 +365,6 @@ renderer.setAnimationLoop(ms=>{
     pivot.rotation.z=gust*.11*atmosphere.breeze.value;
     pivot.rotation.x=.037*atmosphere.breeze.value*Math.sin(seconds*1.55-phase);
   }
-  volume.render(scene,camera,seconds);
+  if(room.active)room.render(elapsedFrame,{night:nightLevel,cover:weatherBlend.coverage,rain:weatherBlend.rain,snow:weatherBlend.snow,sun:sun.color});
+  else volume.render(scene,camera,seconds);
 });
