@@ -24,6 +24,7 @@ import {quality} from './mobile-quality.js';
 import {attachMapControls} from './map-controls.js';
 import {createStorybook,paintClouds} from './storybook.js';
 import {createActorArt} from './actor-art.js';
+import {createShedding} from './shed.js';
 
 const canvas=document.querySelector('#world');
 const scene=new T.Scene(), renderer=new T.WebGLRenderer({canvas,antialias:false,powerPreference:'high-performance'});
@@ -73,7 +74,7 @@ const cascade=makeCascade(world,storybook);scene.add(cascade);
 const atmosphere=createAtmosphere(scene,world,storybook);
 const seasons=createSeasons(scene,world,atmosphere);
 const prints=createFootprints(scene,world,atmosphere);
-const farmLife=createFarmLife(scene,world,prints,actorArt);
+const farmLife=createFarmLife(scene,world,prints,actorArt);farmLife.onLay=farm.layEgg;
 let unityChanLoaded;const unityChanReady=new Promise(r=>unityChanLoaded=r);
 const unityChan=createUnityChan(scene,world,unityChanLoaded,prints,actorArt);farm.bind(unityChan);
 const trackedCharacter=scene.getObjectByName('sd-unity-chan'),followTarget=new T.Vector3(),followDelta=new T.Vector3();
@@ -124,6 +125,29 @@ function particles(count,material,initializer,lines=false){
 }
 const rand=b.rand;
 const rain=createRain(scene,world),wildlife=createWildlife(scene,world,actorArt);
+// A bird landing shakes loose a clump of snow, or a few leaves in the season's colours; on snowy
+// days the roofs and branches also drop their load now and then.
+const shed=createShedding(scene,world);
+const LEAF_COLOURS=[['#9cc25a','#b6d36c','#ffc6d6','#f7dce4'],['#6f8d40','#86a24c','#9cb35c'],['#bb602b','#e79a40','#a83e26','#ddbb56'],[]];
+wildlife.onPerch=(at,perch)=>{
+  if(atmosphere.snowDepth.value>.35){shed.snow(at,perch.kind==='tree'?3:2);return}
+  if(perch.kind==='tree'&&atmosphere.winterBare.value<.5)shed.leaves(at,LEAF_COLOURS[seasonIndex],4+Math.floor(Math.random()*4));
+};
+let snowSlide=3;
+function slideSnow(dt){
+  if(atmosphere.snowDepth.value<.5)return;
+  snowSlide-=dt;if(snowSlide>0)return;
+  snowSlide=2.5+Math.random()*4.5;
+  const trees=world.birdPerches.filter(p=>p.kind==='tree'&&!p.gone);
+  if(Math.random()<.5||!trees.length){
+    // Off a roof edge: the roofs slope down to their eaves at x = centre +/- rx.
+    const roof=world.roofs[Math.floor(Math.random()*world.roofs.length)],side=Math.random()<.5?-1:1;
+    shed.snow(new T.Vector3(roof.x+side*(roof.rx+.05),roof.y+.05,roof.z+(Math.random()*2-1)*roof.rz*.85),4,new T.Vector3(side*.55,0,0));
+  }else{
+    const tree=trees[Math.floor(Math.random()*trees.length)],seat=Math.random()<.5?tree.limb:tree.crown;
+    shed.snow(seat.clone().add(new T.Vector3((Math.random()-.5)*1.2,-.25,(Math.random()-.5)*1.2)),3);
+  }
+}
 // Moths and midges whirl around each lit lamp on mild nights.
 const MOTHS=16,mothCount=MOTHS*lanterns.length;
 const moths=particles(mothCount,new T.PointsMaterial({color:0xfff4e4,size:2.6,transparent:true,depthWrite:false,blending:T.AdditiveBlending,toneMapped:false}),(a,i)=>{a[i]=0;a[i+1]=-99;a[i+2]=0});
@@ -308,6 +332,7 @@ renderer.setAnimationLoop(ms=>{
   seasons(seasonIndex,weatherIndex,Math.min(elapsedFrame,.15),Math.min(elapsedFrame,4),ms/1000,windShown,weatherBlend);
   cascade.userData.update(ms/1000,atmosphere.breeze.value,1-.85*nightLevel);
   wildlife(ms/1000,windShown,nightLevel,atmosphere.breeze.value,atmosphere.winterBare.value);
+  slideSnow(Math.min(elapsedFrame,.5));shed.update(dt,windShown);
   flickerLamps(dt,ms/1000);homeLife(dt,ms/1000,nightLevel);
   // Insects: warm, calm, dry-ish nights only; none in winter or snow.
   const mild=seasonIndex!==3&&[0,1,3].includes(weatherIndex)&&windShown<8;

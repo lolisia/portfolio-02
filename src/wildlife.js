@@ -119,7 +119,7 @@ export function createWildlife(scene,world,art){
   }
   const legPose=a=>legs.forEach(l=>l.rotation.x=a);
   let last=0,nextLeap=5,bare=0;
-  return (seconds,wind,night,breeze=0,bareness=0)=>{
+  const update=(seconds,wind,night,breeze=0,bareness=0)=>{
     bare=bareness;
     if(!last){since=seconds;nextLeap=seconds+4}
     const dt=Math.min(.1,last?seconds-last:0);last=seconds;
@@ -143,7 +143,7 @@ export function createWildlife(scene,world,art){
       const glide=t<.72&&Math.sin(seconds*1.9)>.55?.25:1;
       flap(seconds,T.MathUtils.lerp(24,13,flare),T.MathUtils.lerp(.76*glide,1.05,flare),-.35*flare);
       legPose(T.MathUtils.lerp(1.3,-.5,flare));
-      if(t>=1){state='landing';since=seconds;age=0;bird.position.copy(end)}
+      if(t>=1){state='landing';since=seconds;age=0;bird.position.copy(end);update.onPerch?.(end,perch)}
     }
     if(state==='landing'){
       // Touchdown: the body rocks forward and settles with a damped bob, the wings close.
@@ -216,4 +216,6 @@ export function createWildlife(scene,world,art){
     }
     bird.userData.state=state;
   };
+  // onPerch(position, perch): set by main.js, which shakes snow or leaves off the seat.
+  return update;
 }

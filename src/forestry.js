@@ -6,7 +6,7 @@ import {builder} from './modules.js';
 // shudders under each axe blow, topples away from the axe, lies as a log until it is cut up,
 // and leaves a stump. Uprooting the stump plants a sapling of the same kind, which grows back
 // into the full tree over a long while.
-export const SAPLING_SECONDS=720;
+export const SAPLING_SECONDS=3600;
 const PARTS=['oakABark','oakALeaves','oakBBark','oakBLeaves','pineABark','pineANeedles'];
 const ease=t=>t*t*(3-2*t);
 const LIE=1.42;

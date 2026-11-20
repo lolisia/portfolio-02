@@ -78,7 +78,10 @@ export function createFarmLife(scene,world,prints,art){
     const body=world.colliders.body(2.25,-1.45,chick?.09:.15,chick?.35:1);body.ignore='coop';
     return {group,head,legs,chick,index,body,state:'inside',x:2.25,z:-1.45,
       wait:0,step:seed,rng:1297+index*7919,gait:seed,pace:0,baseSpeed:(chick?.31:.27)+(.5+.5*Math.sin(seed*3.7))*.24,
-      reaction:0,intent:false,noticed:null,route:[],trip:0,legSpeed:1,walked:0};
+      reaction:0,intent:false,noticed:null,route:[],trip:0,legSpeed:1,walked:0,
+      // Hens slip back into the coop now and then to lay; one that has been out and comes back
+      // out of the coop leaves an egg in the nest (onLay).
+      layIn:chick?Infinity:40+index*35+Math.random()*40,laying:false,stay:0,beenOut:false};
   }
   const flock=[chicken(false,0),chicken(false,1),...Array.from({length:4},(_,i)=>chicken(true,i+2))];
   const door={x:2.25,z:-1.12},apron={x:2.25,z:.38};
@@ -137,7 +140,7 @@ export function createFarmLife(scene,world,prints,art){
     if(!f.route.length)f.route=[{x:f.x+ax*1.4,z:f.z+az*1.4}];
     f.state='fleeing';f.wait=0;f.fleeCool=.7;f.legSpeed=1.15+random(f)*.3;
   }
-  return (dt,seconds,hour,weather,wind,camera,night=0)=>{
+  const update=(dt,seconds,hour,weather,wind,camera,night=0)=>{
     const gust=Math.sin(seconds*1.37)+.42*Math.sin(seconds*2.31);
     const target=windHeading+gust*.11*Math.min(1,wind/8);
     const delta=Math.atan2(Math.sin(target-arrow.rotation.y),Math.cos(target-arrow.rotation.y));
@@ -156,11 +159,18 @@ export function createFarmLife(scene,world,prints,art){
       f.reaction=Math.max(0,f.reaction-dt);
       if(f.reaction===0)f.intent=outside;
       if(f.state==='inside'){
-        f.group.visible=false;f.body.active=false;f.group.userData.activity=hour>=18||hour<6?'sleeping':'sheltered';
-        if(f.intent){f.state='exiting';f.x=door.x;f.z=door.z;f.route=[apron];f.group.visible=true;f.wait=0;f.pace=0}
+        f.group.visible=false;f.body.active=false;f.group.userData.activity=f.laying?'laying':hour>=18||hour<6?'sleeping':'sheltered';
+        if(f.stay>0){f.stay-=dt;continue}
+        if(f.intent){
+          if(f.beenOut&&!f.chick)update.onLay?.();
+          f.beenOut=false;f.laying=false;f.layIn=70+Math.random()*80;
+          f.state='exiting';f.x=door.x;f.z=door.z;f.route=[apron];f.group.visible=true;f.wait=0;f.pace=0}
         continue;
       }
       if(!f.intent&&f.state!=='returning'){f.state='returning';f.wait=.4+random(f)*1.8;setTrip(f,true)}
+      if(f.state==='foraging')f.beenOut=true;
+      f.layIn-=dt;
+      if(f.state==='foraging'&&f.intent&&f.layIn<=0&&!f.laying){f.laying=true;f.state='returning';f.wait=0;setTrip(f,true)}
       let moving=false;
       f.retry=Math.max(0,(f.retry||0)-dt);
       if(f.state==='foraging'&&f.wait>0&&inEntrance(f)){f.wait=0;if(!f.route.length)setTrip(f)}
@@ -170,7 +180,7 @@ export function createFarmLife(scene,world,prints,art){
       else if(f.state==='exiting'){
         moving=true;if(walk(f,dt,.85)){f.state='foraging';f.wait=0;setTrip(f)}
       }else if(f.state==='returning'){
-        moving=true;if(walk(f,dt,1.25)){f.state='inside';f.group.visible=false;f.pace=0}
+        moving=true;if(walk(f,dt,1.25)){f.state='inside';f.group.visible=false;f.pace=0;if(f.laying)f.stay=4+random(f)*5}
       }else if(f.state==='fleeing'){
         moving=true;
         if(walk(f,dt,3)){f.state='foraging';f.wait=.4+random(f)*1.2;f.legSpeed=.7+random(f)*.65}
@@ -198,4 +208,5 @@ export function createFarmLife(scene,world,prints,art){
       Object.assign(f.group.userData,{activity:f.state,speed:f.pace,walked:f.walked,trip:f.trip});
     }
   };
+  return update;
 }

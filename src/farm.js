@@ -22,31 +22,34 @@ const grid=(cols,rows,dx,dz,y,size=[1,1])=>(rand)=>{
 // level: player level that unlocks it. Each part scales up over its growth window [from,to];
 // young/ripe tint the instances as it ripens (palette: a ripe colour per plant).
 export const CROPS=[
-  {id:'carrot',bed:'veg',name:'당근',icon:'🥕',seconds:30,cost:5,sell:12,xp:2,level:1,height:.3,
+  {id:'carrot',bed:'veg',name:'당근',icon:'🥕',seconds:60,cost:5,sell:12,xp:2,level:1,height:.3,
     layout:grid(3,5,.36,.29,.18,[.85,1.12]),parts:[{kind:'carrot',ripe:'#7ea946',young:'#9cc964'}]},
-  {id:'wheat',bed:'veg',name:'밀',icon:'🌾',seconds:60,cost:10,sell:24,xp:4,level:1,height:.5,
+  {id:'wheat',bed:'veg',name:'밀',icon:'🌾',seconds:300,cost:10,sell:30,xp:5,level:1,height:.5,
     layout:grid(4,6,.27,.245,.17,[.85,1.1]),parts:[{kind:'wheatStalks',ripe:'#f2c45c',young:'#8fbf58'}]},
-  {id:'cabbage',bed:'veg',name:'양배추',icon:'🥬',seconds:90,cost:15,sell:38,xp:6,level:2,height:.3,
+  {id:'cabbage',bed:'veg',name:'양배추',icon:'🥬',seconds:600,cost:15,sell:50,xp:8,level:2,height:.3,
     layout:grid(3,4,.36,.37,.19,[1,1.2]),parts:[{kind:'cabbage',ripe:'#a3c063',young:'#b9d77c'}]},
-  {id:'tomato',bed:'veg',name:'토마토',icon:'🍅',seconds:120,cost:20,sell:55,xp:8,level:3,height:.6,
+  {id:'tomato',bed:'veg',name:'토마토',icon:'🍅',seconds:1800,cost:25,sell:110,xp:15,level:3,height:.6,
     layout:grid(2,3,.46,.46,.17,[1.05,1.2]),parts:[{kind:'tomatoBush',ripe:'#ffffff',young:'#d8f0b8'},
       {kind:'tomatoFruit',ripe:'#e2402c',young:'#93c25a',from:.5}]},
-  {id:'sunflower',bed:'veg',name:'해바라기',icon:'🌻',seconds:180,cost:30,sell:85,xp:12,level:4,height:.95,
-    layout:grid(2,3,.46,.46,.17,[.72,.84]),parts:[{kind:'sunflowerStem',ripe:'#6f9142',young:'#86b05a'},
-      {kind:'sunflowerBloom',ripe:'#ffffff',young:'#b6d07a',from:.6}]},
-  {id:'pumpkin',bed:'veg',name:'호박',icon:'🎃',seconds:300,cost:45,sell:140,xp:18,level:5,height:.4,
+  {id:'corn',bed:'veg',name:'옥수수',icon:'🌽',seconds:3600,cost:40,sell:200,xp:25,level:4,height:1,
+    layout:grid(2,4,.46,.38,.17,[.85,.98]),parts:[{kind:'cornStalk',ripe:'#ffffff',young:'#d9efb0'},
+      {kind:'cornEar',ripe:'#ffffff',young:'#b7d68a',from:.55}]},
+  {id:'pumpkin',bed:'veg',name:'호박',icon:'🎃',seconds:18000,cost:80,sell:600,xp:60,level:5,height:.4,
     layout:grid(2,2,.5,.74,.17,[1.25,1.4]),parts:[{kind:'pumpkinVine',ripe:'#ffffff',young:'#e6f5c8',to:.7},
       {kind:'pumpkinFruit',ripe:'#f08a24',young:'#9cc25a',from:.4,offset:[.07,.06]}]},
-  {id:'daisy',bed:'flower',name:'데이지',icon:'🌼',seconds:45,cost:6,sell:15,xp:3,level:1,height:.25,
+  {id:'daisy',bed:'flower',name:'데이지',icon:'🌼',seconds:180,cost:6,sell:18,xp:3,level:1,height:.25,
     layout:grid(6,3,.25,.22,0,[.6,.85]),parts:[{kind:'flowerStem',ripe:'#6f8f45',young:'#8fb35e'},
       {kind:'flowerHead',palette:['#f4f1e4','#f2d25a','#f7f3ea'],young:'#c9dea0',from:.5}]},
-  {id:'tulip',bed:'flower',name:'튤립',icon:'🌷',seconds:90,cost:14,sell:34,xp:5,level:2,height:.4,
+  {id:'tulip',bed:'flower',name:'튤립',icon:'🌷',seconds:900,cost:15,sell:50,xp:8,level:2,height:.4,
     layout:grid(7,3,.21,.21,0,[.9,1.15]),parts:[{kind:'tulipStem',ripe:'#73964a',young:'#8db35c'},
       {kind:'tulipBloom',palette:['#e0362f','#f2c430','#f08bb0','#f7f1e6','#f07a2a','#b0367a'],young:'#bcd88f',from:.55}]},
-  {id:'lavender',bed:'flower',name:'라벤더',icon:'💜',seconds:150,cost:22,sell:60,xp:9,level:3,height:.4,
+  {id:'lavender',bed:'flower',name:'라벤더',icon:'💜',seconds:3600,cost:30,sell:140,xp:18,level:3,height:.4,
     layout:grid(5,2,.3,.32,0,[.85,1.2]),parts:[{kind:'lavenderStem',ripe:'#7d9468',young:'#93b278'},
       {kind:'lavenderBloom',palette:['#8a6cc4','#9b7fd1','#7a5fb5'],young:'#a9c48c',from:.5}]},
-  {id:'foxglove',bed:'flower',name:'디기탈리스',icon:'🌸',seconds:240,cost:35,sell:100,xp:14,level:4,height:.7,
+  {id:'sunflower',bed:'flower',name:'해바라기',icon:'🌻',seconds:7200,cost:45,sell:260,xp:30,level:4,height:.95,
+    layout:grid(4,2,.38,.36,0,[.68,.8]),parts:[{kind:'sunflowerStem',ripe:'#6f9142',young:'#86b05a'},
+      {kind:'sunflowerBloom',ripe:'#ffffff',young:'#b6d07a',from:.6}]},
+  {id:'foxglove',bed:'flower',name:'디기탈리스',icon:'🌸',seconds:14400,cost:70,sell:480,xp:45,level:5,height:.7,
     layout:grid(6,2,.25,.34,0,[1,1.3]),parts:[{kind:'foxgloveStem',ripe:'#6b8c45',young:'#86a95a'},
       {kind:'foxgloveBloom',palette:['#c76aa4','#e7a6cf','#f2eef2','#a676c8','#d9809a'],young:'#b5d08a',from:.55}]}
 ];
@@ -59,7 +62,9 @@ export const FISH=[
 // Total experience needed to reach each level (index = level - 1).
 export const LEVELS=[0,10,30,60,100,160,240,340,460,600];
 export function levelOf(xp){let level=1;while(level<LEVELS.length&&xp>=LEVELS[level])level++;return level}
-const KEY='forest-farm.farm.v1',START={coins:40,xp:0,wood:0};
+const KEY='forest-farm.farm.v1',START={coins:40,xp:0,wood:0,eggs:0};
+// The straw nest beside the coop ramp, where the hens' eggs collect, and what an egg fetches.
+const NEST={x:1.5,z:-.5,max:6,coins:10,xp:2};
 const POND={x:10.7,z:6.3,rx:4.5,rz:3.5};
 
 function load(count){
@@ -68,9 +73,10 @@ function load(count){
     if(query==='reset')localStorage.removeItem(KEY);
     const saved=JSON.parse(localStorage.getItem(KEY)||'null');
     if(saved&&Number.isFinite(saved.coins)&&Number.isFinite(saved.xp)&&Array.isArray(saved.plots))
-      return {coins:saved.coins,xp:saved.xp,wood:Number.isFinite(saved.wood)?saved.wood:0,
+      return {coins:saved.coins,xp:saved.xp,wood:Number.isFinite(saved.wood)?saved.wood:0,eggs:Math.min(NEST.max,Number.isFinite(saved.eggs)?saved.eggs:0),
         trees:saved.trees&&typeof saved.trees==='object'?saved.trees:{},plots:Array.from({length:count},(_,i)=>{
-        const p=saved.plots[i];return p&&byId.has(p.crop)&&Number.isFinite(p.planted)?{crop:p.crop,planted:p.planted}:null;
+        const p=saved.plots[i],crop=byId.get(p?.crop),kind=i<4?'veg':'flower';
+        return crop&&crop.bed===kind&&Number.isFinite(p.planted)?{crop:p.crop,planted:p.planted}:null;
       })};
   }catch{}
   return {...START,trees:{},plots:Array(count).fill(null)};
@@ -187,7 +193,7 @@ export function createFarm(scene,world,assets,camera,canvas){
   // away from her with a thud that shakes the camera, then cuts the log into firewood that flies
   // up to the wood counter. Tapping the stump digs it out and plants a sapling of the same kind.
   // Every stage is a job of its own, pending until she has worked it through.
-  const clock=s=>{s=Math.ceil(s);return Math.floor(s/60)+':'+String(s%60).padStart(2,'0')};
+  const clock=s=>{s=Math.ceil(s);const h=Math.floor(s/3600),m=Math.floor(s/60)%60,r=String(s%60).padStart(2,'0');return h?h+':'+String(m).padStart(2,'0')+':'+r:m+':'+r};
   const saveTree=(tree,entry)=>{if(entry)state.trees[tree.index]=entry;else delete state.trees[tree.index];save()};
   const swing=(tree,shudder=true)=>point=>{
     character.position(hit);
@@ -255,6 +261,66 @@ export function createFarm(scene,world,assets,camera,canvas){
     camera.setViewOffset(w,h,Math.sin(t*61)*k,Math.sin(t*47+1.3)*k*.8,w,h);
   }
 
+  // Eggs: a straw nest with up to six eggs in it; she gathers them all at once.
+  const nest=new T.Group();nest.name='egg-nest';
+  {
+    // A plank nest box raised above the grass, straw on top.
+    const ny=world.height(NEST.x,NEST.z),LIFT=.3;nest.position.set(NEST.x,ny,NEST.z);
+    const plank=new T.MeshStandardMaterial({color:0x8a5f3d,roughness:.85});
+    const crate=new T.Mesh(new T.BoxGeometry(.5,LIFT,.5),plank);crate.position.y=LIFT/2;crate.castShadow=crate.receiveShadow=true;nest.add(crate);
+    for(const [x,z,w,d] of [[0,.24,.54,.04],[0,-.24,.54,.04],[.24,0,.04,.46],[-.24,0,.04,.46]]){
+      const rim=new T.Mesh(new T.BoxGeometry(w,.07,d),plank);rim.position.set(x,LIFT+.02,z);rim.castShadow=true;nest.add(rim);
+    }
+    const straw=new T.MeshStandardMaterial({color:0xd8b860,roughness:1});
+    const ring=new T.Mesh(new T.TorusGeometry(.16,.055,6,14),straw);ring.rotation.x=-Math.PI/2;ring.position.y=LIFT+.04;ring.castShadow=true;
+    const bed=new T.Mesh(new T.CylinderGeometry(.19,.19,.03,12),new T.MeshStandardMaterial({color:0xb99a52,roughness:1}));bed.position.y=LIFT+.015;
+    nest.add(ring,bed);
+    for(let i=0;i<10;i++){
+      const wisp=new T.Mesh(new T.BoxGeometry(.012,.012,.14),straw),a=i*.63;
+      wisp.position.set(Math.cos(a)*.19,.36,Math.sin(a)*.19);wisp.rotation.set(.4,a,0);nest.add(wisp);
+    }
+    const shell=new T.MeshStandardMaterial({color:0xf3e6cf,roughness:.55});
+    for(let i=0;i<NEST.max;i++){
+      const egg=new T.Mesh(new T.SphereGeometry(.035,10,8),shell);egg.scale.set(1,1.3,1);
+      const a=i*2.4,r=i?.075:0;egg.position.set(Math.cos(a)*r,.37+(i>3?.03:0),Math.sin(a)*r);egg.rotation.z=(i%3-1)*.6;
+      egg.castShadow=true;egg.name='egg';egg.visible=false;nest.add(egg);
+    }
+    scene.add(nest);world.colliders.circle(NEST.x,NEST.z,.3,'nest');
+  }
+  const eggs=nest.children.filter(o=>o.name==='egg');
+  const showEggs=()=>eggs.forEach((egg,i)=>egg.visible=i<state.eggs);
+  showEggs();
+  let eggJob=null;
+  function layEgg(){
+    if(state.eggs>=NEST.max)return;
+    state.eggs++;save();showEggs();
+    const egg=eggs[state.eggs-1];egg.userData.pop=0;
+  }
+  function gatherEggs(){
+    if(eggJob){ui.toast('🥚 이미 달걀을 모으러 가는 중이에요');return}
+    if(!state.eggs){ui.toast('🐔 아직 달걀이 없어요. 암탉이 닭장에 들렀다 나오면 낳아요');return}
+    const spots=[];
+    for(let k=0;k<10;k++){
+      const a=k/10*Math.PI*2,x=NEST.x+Math.sin(a)*.6,z=NEST.z+Math.cos(a)*.6;
+      if(world.walkable(x,z))spots.push({x,z,face:Math.atan2(NEST.x-x,NEST.z-z)});
+    }
+    eggJob={phase:'walk'};
+    eggJob.task=character.work({spots,steps:[{clip:'Gathering',time:1.8}],
+      onStart(){eggJob.phase='work'},
+      onDone(){
+        eggJob=null;const count=state.eggs;state.eggs=0;showEggs();
+        const at=anchorOf(NEST.x,nest.position.y+.15,NEST.z);
+        for(let i=0;i<count;i++)ui.collect(at.x+(i-count/2)*10,at.y,'coins',0,i===count-1,'🥚');
+        ui.rewardAt(at.x,at.y-20,'🥚 달걀 '+count+'개',count*NEST.coins,count*NEST.xp);
+        earn(count*NEST.coins,count*NEST.xp);
+      },
+      onCancel(){eggJob=null},onFail(){ui.toast('🚧 둥지로 갈 수 없어요')}});
+  }
+  const pickNest=()=>{
+    box.min.set(NEST.x-.4,nest.position.y-.1,NEST.z-.4);box.max.set(NEST.x+.4,nest.position.y+.7,NEST.z+.4);
+    return raycaster.ray.intersectBox(box,hit)!==null;
+  };
+
   // Fishing: one cast per tap, a random catch when she reels in.
   let fishing=null;
   const head=new T.Vector3();
@@ -313,6 +379,7 @@ export function createFarm(scene,world,assets,camera,canvas){
     if(index>=0){tap(index);return}
     if(ui.isOpen()){ui.close();return}
     if(!character)return;
+    if(pickNest()){gatherEggs();return}
     const tree=forestry?forestry.pick(raycaster.ray):-1;
     if(tree>=0){tapTree(tree);return}
     const pond=overPond();
@@ -328,7 +395,7 @@ export function createFarm(scene,world,assets,camera,canvas){
     if(press?.id===e.pointerId&&Math.hypot(e.clientX-press.x,e.clientY-press.y)>8)press=null;
     if(e.pointerType==='mouse'&&e.target===canvas&&!e.buttons){
       aim(e.clientX,e.clientY);
-      const over=pickPlot(),point=over<0&&(overPond()!==null||(forestry?.pick(raycaster.ray)??-1)>=0);
+      const over=pickPlot(),point=over<0&&(overPond()!==null||pickNest()||(forestry?.pick(raycaster.ray)??-1)>=0);
       canvas.style.cursor=over>=0||point?'pointer':'';
       if(over!==hover){hover=over;ui.hover(over)}
     }
@@ -377,6 +444,17 @@ export function createFarm(scene,world,assets,camera,canvas){
       ui.place(plot.index,spot.x,spot.y,spot.on,info,plot.pending);
     }
     updateShake(dt);
+    // A fresh egg pops into the nest; the nest's tag shows how many are waiting.
+    for(const egg of eggs)if(egg.userData.pop!==undefined){
+      egg.userData.pop=Math.min(1,egg.userData.pop+dt/.4);const k=egg.userData.pop;
+      egg.scale.set(1,1.3,1).multiplyScalar(k<1?Math.sin(k*Math.PI*.5)*(1+.3*Math.sin(k*Math.PI)):1);
+      if(k>=1)delete egg.userData.pop;
+    }
+    {
+      const at=anchorOf(NEST.x,nest.position.y+.8,NEST.z);
+      ui.note('nest',eggJob?{x:at.x,y:at.y,on:at.on,icon:'🥚',text:eggJob.phase==='walk'?'이동 중':'달걀 모으는 중'}
+        :state.eggs?{x:at.x,y:at.y,on:at.on,icon:'🥚',text:'×'+state.eggs,ready:true,onClick:gatherEggs}:null);
+    }
     if(forestry){
       forestry.update(dt,now);wood.update(dt);
       for(const t of forestry.trees){
@@ -393,7 +471,8 @@ export function createFarm(scene,world,assets,camera,canvas){
       if(spots[i].on&&spots[j].on)closest=Math.min(closest,Math.hypot(spots[i].x-spots[j].x,(spots[i].y-spots[j].y)*2.5));
     ui.compact(closest<128);
   };
-  return Object.assign(update,{    bind(next){
+  return Object.assign(update,{    layEgg,
+    bind(next){
       character=next;
       // The storybook crowns exist by now, so every copy of a tree is found and felled together.
       forestry=createForestry(scene,world,assets);forestry.restore(state.trees);forestry.onGrown=forestry_onGrown;

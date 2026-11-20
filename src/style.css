@@ -117,7 +117,8 @@ fieldset.control legend{background:none;padding:0;margin:0 0 8px}
 .plot-tag[data-state=pending] .plot-icon{animation:bob .7s ease-in-out infinite}
 @keyframes bob{50%{transform:translateY(-2px) rotate(-8deg)}}
 .farm-layer.compact .plot-tag[data-state=pending]{background:#eaf4dc}
-.farm-note-tag{pointer-events:none}
+.farm-note-tag{pointer-events:none}.farm-note-tag.clickable{pointer-events:auto;cursor:pointer}
+.farm-layer.compact .farm-note-tag[data-state=ready]{width:auto;padding:0 10px 0 6px;border-radius:16px}
 .farm-fly{position:fixed;left:0;top:0;font-size:22px;line-height:1;pointer-events:none;z-index:4;filter:drop-shadow(0 2px 2px #2b1d0666)}
 .farm-layer.compact .farm-note-tag :is(.plot-text){display:inline}
 .farm-layer.compact .farm-note-tag{width:auto;height:28px;margin-top:-14px;padding:0 9px 0 5px;border-radius:16px}
@@ -125,7 +126,9 @@ fieldset.control legend{background:none;padding:0;margin:0 0 8px}
 .farm-layer.compact .plot-tag:not([data-state=empty]){width:32px;height:32px;margin-top:-16px;padding:0;justify-content:center;border-radius:50%}
 .farm-layer.compact .plot-tag :is(.plot-meter,.plot-text){display:none}
 .farm-layer.compact .plot-tag[data-state=empty]:not(.hovered,.selected){display:none}
-.farm-layer.compact .plot-tag[data-state=growing]{border-color:transparent;background:radial-gradient(var(--card) 0 60%,transparent 62%),conic-gradient(var(--leaf) calc(var(--p,0)*1turn),#fff calc(var(--p,0)*1turn))}
+/* Growing badge: a progress ring (conic gradient on the badge, no border) round an icon disc. */
+.farm-layer.compact .plot-tag[data-state=growing]{border:0;background:conic-gradient(var(--leaf) calc(var(--p,0)*1turn),#ffffffe6 0)}
+.farm-layer.compact .plot-tag[data-state=growing] .plot-icon{width:25px;height:25px;border-radius:50%;background:var(--card)}
 .farm-layer.compact .plot-tag[data-state=ready]{animation-name:ripe-round}
 @keyframes ripe-round{0%,100%{margin-top:-16px}50%{margin-top:-22px}}
 @media(max-width:500px){.farm-xp{width:44px}.farm-level small{display:none}}

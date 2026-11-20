@@ -4,16 +4,21 @@ const el=(tag,cls,html)=>{const e=document.createElement(tag);if(cls)e.className
 export function duration(seconds){
   seconds=Math.ceil(seconds);
   if(seconds<60)return seconds+'초';
-  const m=Math.floor(seconds/60),s=seconds%60;
+  const h=Math.floor(seconds/3600),m=Math.floor(seconds/60)%60,s=seconds%60;
+  if(h)return m?h+'시간 '+m+'분':h+'시간';
   return s?m+'분 '+s+'초':m+'분';
 }
-const clock=seconds=>{seconds=Math.ceil(seconds);return Math.floor(seconds/60)+':'+String(seconds%60).padStart(2,'0')};
+// Countdown: m:ss under an hour, h:mm:ss above.
+const clock=seconds=>{
+  seconds=Math.ceil(seconds);const h=Math.floor(seconds/3600),m=Math.floor(seconds/60)%60,s=String(seconds%60).padStart(2,'0');
+  return h?h+':'+String(m).padStart(2,'0')+':'+s:m+':'+s;
+};
 
 export function createFarmUI({crops,levels,levelOf,plant,clear,cancel,wallet}){
   const layer=el('div','farm-layer');layer.id='farmLayer';
   const hud=el('div','farm-hud',`
     <div class="farm-level" aria-label="레벨"><b>Lv.1</b><span class="farm-xp"><i></i></span><small></small></div>
-    <div class="farm-coins" aria-label="코인"><span aria-hidden="true">🪙</span><output>0</output></div>
+    <div class="farm-coins farm-coin" aria-label="코인"><span aria-hidden="true">🪙</span><output>0</output></div>
     <div class="farm-coins farm-wood" aria-label="목재"><span aria-hidden="true">🪵</span><output>0</output></div>`);
   hud.id='farmHud';
   const popup=el('div','farm-popup');popup.hidden=true;popup.setAttribute('role','dialog');
@@ -104,9 +109,11 @@ export function createFarmUI({crops,levels,levelOf,plant,clear,cancel,wallet}){
       let tag=notes.get(key);
       if(!info){if(tag){tag.remove();notes.delete(key)}return}
       if(!tag){
-        tag=el('div','plot-tag farm-note-tag','<span class="plot-icon"></span><span class="plot-text"></span>');tag.dataset.state='pending';
+        tag=el('button','plot-tag farm-note-tag','<span class="plot-icon"></span><span class="plot-text"></span>');tag.type='button';
+        tag.addEventListener('click',e=>{e.stopPropagation();tag.onClickNote?.()});
         layer.insertBefore(tag,popup);notes.set(key,tag);
       }
+      tag.dataset.state=info.ready?'ready':'pending';tag.onClickNote=info.onClick;tag.classList.toggle('clickable',!!info.onClick);
       tag.hidden=!info.on;tag.style.left=Math.round(info.x)+'px';tag.style.top=Math.round(info.y)+'px';
       if(tag.dataset.text!==info.icon+info.text){tag.dataset.text=info.icon+info.text;tag.children[0].textContent=info.icon;tag.children[1].textContent=info.text}
     },
@@ -119,9 +126,9 @@ export function createFarmUI({crops,levels,levelOf,plant,clear,cancel,wallet}){
       popup.querySelector('.farm-clear').addEventListener('click',()=>{cancel(index);close()});
     },
     // A piece of loot flies from (x,y) along an arc into its HUD counter, which ticks up on arrival.
-    collect(x,y,kind,amount,last){
-      const target=hud.querySelector('.farm-'+kind)?.getBoundingClientRect();if(!target)return;
-      const piece=el('div','farm-fly',kind==='wood'?'🪵':'🪙');layer.append(piece);
+    collect(x,y,kind,amount,last,icon=kind==='wood'?'🪵':'🪙'){
+      const target=hud.querySelector('.farm-'+(kind==='coins'?'coin':kind))?.getBoundingClientRect();if(!target)return;
+      const piece=el('div','farm-fly',icon);layer.append(piece);
       const tx=target.left+22,ty=target.top+target.height/2,lift=Math.min(160,Math.max(60,(y-ty)*.35));
       const frames=[];
       for(let i=0;i<=12;i++){
@@ -135,7 +142,7 @@ export function createFarmUI({crops,levels,levelOf,plant,clear,cancel,wallet}){
           woodShown=Math.min(state.wood,woodShown+amount);
           if(last){woodHeld=false;woodShown=state.wood}
           showWood(woodShown,true);
-        }
+        }else{const pill=hud.querySelector('.farm-coin');pill.classList.remove('bump');void pill.offsetWidth;pill.classList.add('bump')}
       };
     },
     toast(text){

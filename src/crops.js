@@ -104,5 +104,34 @@ export function cropKinds(){
     }
     kinds.set('tomatoFruit',{geometry:build(fruit),material:'petal',plant:true,sway:.15});
   }
+  // Corn: a tall stalk of long arching leaves under a tassel, with husked ears set on later.
+  {
+    const stalk=[];
+    stem(stalk,.95,.016,.015,.01,[.3,.46,.17]);
+    for(let i=0;i<8;i++){
+      const a=i*2.3+rng()*.4,y=.12+i*.095,len=.36-i*.02;
+      const leaf=new T.PlaneGeometry(.06,len,1,5);leaf.translate(0,len/2,0);
+      const p=leaf.attributes.position;
+      for(let k=0;k<p.count;k++){const v=p.getY(k)/len;p.setX(k,p.getX(k)*(1-v*.75));p.setZ(k,Math.sin(v*2.2)*len*.55);p.setY(k,p.getY(k)*(1-.35*v))}
+      leaf.computeVertexNormals();
+      stalk.push(piece(leaf,[.24,.42,.13],at(0,y,0,-.35,a,0)));
+    }
+    for(let i=0;i<6;i++){
+      const spike=new T.CylinderGeometry(.002,.003,.12,3);spike.translate(0,.06,0);
+      stalk.push(piece(spike,[.86,.76,.46],at(.015,.94,.01,.45,i*1.05,0)));
+    }
+    kinds.set('cornStalk',{geometry:build(stalk),material:'grass',plant:true,sway:.14});
+    const ears=[];
+    for(const [y,a] of [[.42,.5],[.56,3.4]]){
+      const ear=new T.SphereGeometry(.03,8,6);ear.scale(1,2.7,1);ear.translate(0,.08,0);
+      ears.push(piece(ear,[.98,.7,.12],at(0,y,0,.42,a,0)));
+      // Husk leaves wrap the lower half and peel open at the top.
+      for(let k=0;k<3;k++){
+        const husk=new T.SphereGeometry(.035,6,5,0,Math.PI*.8,Math.PI*.42,Math.PI*.58);husk.scale(1,2.6,1);husk.translate(0,.07,0);
+        ears.push(piece(husk,[.4,.58,.24],at(0,y,0,.42,a,0).multiply(at(0,0,0,0,k*2.1,0))));
+      }
+    }
+    kinds.set('cornEar',{geometry:build(ears),material:'petal',plant:true,sway:.14});
+  }
   return kinds;
 }
