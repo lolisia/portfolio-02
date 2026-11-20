@@ -1,7 +1,7 @@
 import * as T from 'three';
 import {quality} from './mobile-quality.js';
 
-export function makeCascade({height,waterY,floor,water}){
+export function makeCascade({height,waterY,floor,water},storybook){
   const group=new T.Group(),outlets=[];
   for(let z=4.25;z<=7.95;z+=.018)if(height(15,z)<waterY-.018)outlets.push(z);
   const left=outlets[0],width=outlets.at(-1)-left,drop=waterY-floor;
@@ -111,6 +111,17 @@ export function makeCascade({height,waterY,floor,water}){
   foam.rotation.x=-Math.PI/2;foam.renderOrder=3;
   {const [x,,z]=path(.5,1);foam.position.set(x,footY+.01,z);foam.scale.set(width*.55+.2,width*.5+.18,1)}
   group.add(foam);
+  const foamClumps=new T.InstancedMesh(new T.IcosahedronGeometry(1,1),
+    new T.MeshBasicMaterial(),22);
+  const shape=new T.Object3D(),shade=new T.Color();
+  for(let i=0;i<foamClumps.count;i++){
+    const across=(i%11)/10,outer=i>=11,scale=.11+.11*Math.sin(i*5.13)**2;
+    shape.position.set(15.87+(outer?.21:0)+.11*Math.sin(i*3.1),footY+.04+.08*Math.sin(i*2.5),left+across*width);
+    shape.scale.set(scale*1.7,scale*.74,scale*1.2);shape.updateMatrix();
+    foamClumps.setMatrixAt(i,shape.matrix);
+    foamClumps.setColorAt(i,shade.setHex([0xd2e6ea,0xf3f7ed,0xa2c5cf,0xe4eff2][i%4]));
+  }
+  foamClumps.visible=false;foamClumps.userData.styleVariant=true;group.add(foamClumps);
   const vapor=Array.from({length:quality.cascadeMist},(_,i)=>{
     const sprite=new T.Sprite(new T.SpriteMaterial({map:fogMap,transparent:true,depthWrite:false,color:0xb5cdd4}));
     sprite.renderOrder=4;group.add(sprite);return sprite;
@@ -118,7 +129,10 @@ export function makeCascade({height,waterY,floor,water}){
   group.userData.update=(seconds,wind,light=1)=>{
     const flow=1-T.MathUtils.smoothstep(water.userData.freeze.value,.08,.92);
     falls.visible=spray.visible=foam.visible=flow>.002;
-    vapor.forEach(sprite=>sprite.visible=flow>.002);
+    foamClumps.visible=storybook.value>0&&flow>.05;
+    foamClumps.material.color.setScalar(.19+.81*light);
+    foamClumps.position.y=.028*Math.sin(seconds*5.8);
+    vapor.forEach(sprite=>sprite.visible=flow>.002&&storybook.value===0);
     group.userData.flow=flow;
     if(flow<=.002)return;
     const dt=Math.min(.05,Math.max(0,seconds-(group.userData.last??seconds)));group.userData.last=seconds;
@@ -169,6 +183,13 @@ export function shadeCascade(shader,water){
     float edge=smoothstep(0.,.09+.1*large,across)*smoothstep(1.,.91-.1*fleck,across);
     float sheet=.38+.36*fold;
     diffuseColor.a=mix(sheet,.95,bubbles)*edge*(1.-smoothstep(.82+.1*fleck,1.,f))*(1.-breakup*.5)*mix(1.,.75,backLayer);
+    if(storybook>.5){
+      float ribbon=fract(across*9.+.08*sin(f*5.+across*22.)+large*.30);
+      float streak=1.-smoothstep(.07,.18,abs(ribbon-.3));
+      float chalk=max(streak*.88,smoothstep(.62,.95,f)*smoothstep(.38,.64,fleck));
+      diffuseColor.rgb=mix(vec3(.06,.26,.35),vec3(.87,.96,.99),chalk);
+      diffuseColor.a=mix(diffuseColor.a,.88*edge,storyDay);
+    }
     diffuseColor.a*=1.-smoothstep(.08,.92,fallIce);
     if(diffuseColor.a<.03)discard;`);
   shader.fragmentShader=shader.fragmentShader.replace('#include <normal_fragment_maps>',`
@@ -179,5 +200,6 @@ export function shadeCascade(shader,water){
     vec3 reflectedSky=texture2D(fallSky,equirectUv(inverseTransformDirection(ray,viewMatrix))).rgb;
     float fresnel=.025+.80*pow(1.-clamp(normal.z,0.,1.),5.);
     outgoingLight=mix(outgoingLight,reflectedSky,fresnel*(1.-bubbles*.78));
+    if(storybook>.5)outgoingLight=mix(outgoingLight,diffuseColor.rgb,storyDay*.91);
     #include <opaque_fragment>`);
 }

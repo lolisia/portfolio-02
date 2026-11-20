@@ -107,6 +107,7 @@ export function surface(name){
   }
   // Blender nature meshes carry smooth custom normals and a baked shading gradient.
   if(['bark','spray','needle','grass','petal','cabbage'].includes(name)){mat.flatShading=false;mat.vertexColors=true}
+  if(name==='story-oak'||name==='story-pine')mat.flatShading=false;
   if(['grass','petal','cabbage'].includes(name)){mat.side=T.DoubleSide;mat.shadowSide=T.DoubleSide;mat.roughness=name==='petal'?.6:.82}
   if(name==='iron'){mat.metalness=.55;mat.roughness=.55}
   if(name==='glass'){mat.roughness=.23;mat.emissive.set(0xffac46);mat.emissiveIntensity=.025}
@@ -114,12 +115,13 @@ export function surface(name){
   cache.set(name,mat);return mat;
 }
 
-export function createAtmosphere(scene,world){
+export function createAtmosphere(scene,world,storybook){
   const water=world.water;
   const clock={value:0},cloudAmount={value:.72},wind={value:new T.Vector2()},wet={value:0},breeze={value:.3};
   const clouds=texture(256,(u,v)=>{const n=255*(.60*coarse(u,v)+.25*coarse(2*u,2*v)+.12*coarse(4*u,4*v)+.03*fine(u,v));return [n,n,n]});
   const cloudMap={value:clouds};
   const snowDepth={value:0},winterBare={value:0},foliageTint={value:new T.Vector3(1,1,1)};
+  const storyDay={value:1};
   const rainNow={value:0},WATER=world.waterY.toFixed(3);
   const trample={value:Array.from({length:TRAMPLE_SLOTS},()=>new T.Vector4(0,0,1,0))};
   const windVertex=`
@@ -197,7 +199,7 @@ uniform vec4 trample[${TRAMPLE_SLOTS}];
           }
           #endif`);
       }
-      Object.assign(shader.uniforms,{cloudMap,cloudAmount,wind,elapsed:clock,breeze,wet,snowDepth,foliageTint,rainNow});
+      Object.assign(shader.uniforms,{cloudMap,cloudAmount,wind,elapsed:clock,breeze,wet,snowDepth,foliageTint,rainNow,storybook,storyDay});
       shader.vertexShader='varying vec3 landPosition;\n'+shader.vertexShader.replace('#include <project_vertex>',`
         vec4 land=vec4(transformed,1.);
         #ifdef USE_INSTANCING
@@ -205,7 +207,7 @@ uniform vec4 trample[${TRAMPLE_SLOTS}];
         #endif
         landPosition=(modelMatrix*land).xyz;
         #include <project_vertex>`);
-      shader.fragmentShader='varying vec3 landPosition; uniform sampler2D cloudMap; uniform float cloudAmount,elapsed,wet,breeze,rainNow; uniform vec2 wind;\n'+shader.fragmentShader;
+      shader.fragmentShader='varying vec3 landPosition; uniform sampler2D cloudMap; uniform float cloudAmount,elapsed,wet,breeze,rainNow,storybook,storyDay; uniform vec2 wind;\n'+shader.fragmentShader;
       shader.fragmentShader=shader.fragmentShader.replace('#include <lights_fragment_begin>',T.ShaderChunk.lights_fragment_begin.replace('getDirectionalLightInfo( directionalLight, directLight );',`
         getDirectionalLightInfo( directionalLight, directLight );
         #if UNROLLED_LOOP_INDEX == 0
@@ -227,9 +229,21 @@ uniform vec4 trample[${TRAMPLE_SLOTS}];
           #include <color_fragment>
           float wetFoot=(1.-smoothstep(.44,.83,landPosition.y))*smoothstep(5.5,7.,landPosition.x)
             *(1.-smoothstep(3.3,4.7,abs(landPosition.z-6.1)));
-          diffuseColor.rgb*=1.-wetFoot*.38;`).replace('roughnessFactor *=','roughnessFactor=mix(roughnessFactor,.28,wetFoot);roughnessFactor *=');
+          diffuseColor.rgb*=1.-wetFoot*.38;
+          if(storybook>.5&&max(abs(landPosition.x),abs(landPosition.z))>14.95&&diffuseColor.r<diffuseColor.b*1.35){
+            float along=abs(landPosition.x)>abs(landPosition.z)?landPosition.z:landPosition.x;
+            vec2 course=vec2(along/1.07,(landPosition.y+2.48)/.66);
+            course.x+=.47*mod(floor(course.y),2.);
+            vec2 tile=fract(course);
+            float block=fract(sin(dot(floor(course),vec2(43.3,17.4)))*4235.76);
+            float joint=1.-smoothstep(.013,.041,min(min(tile.x,1.-tile.x),min(tile.y,1.-tile.y)));
+            vec3 shale=mix(vec3(.050,.075,.086),vec3(.114,.145,.152),block);
+            float flecks=texture2D(cloudMap,vec2(along*.39,landPosition.y*.75)).r;
+            float moss=smoothstep(.61,.72,flecks+smoothstep(-.85,1.,landPosition.y)*.11);
+            diffuseColor.rgb=mix(shale*(.89+.23*flecks),vec3(.16,.24,.042),moss*.68)*(1.-.54*joint);
+          }`).replace('roughnessFactor *=','roughnessFactor=mix(roughnessFactor,.28,wetFoot);roughnessFactor *=');
       }
-      if(['spray','leaf','cone','rock','needle','terrain','grass','cabbage'].includes(mat.name)){
+      if(['spray','leaf','cone','rock','needle','terrain','grass','cabbage','story-oak','story-pine'].includes(mat.name)){
         const influence=mat.name==='needle'?.19:mat.name==='terrain'?.42:1;
         shader.fragmentShader='uniform vec3 foliageTint;\n'+shader.fragmentShader.replace('#include <color_fragment>',
           '#include <color_fragment>\ndiffuseColor.rgb*=mix(vec3(1.),foliageTint,'+influence.toFixed(2)+');');
@@ -240,6 +254,12 @@ uniform vec4 trample[${TRAMPLE_SLOTS}];
           #include <color_fragment>
           float trailMask=texture2D(roughnessMap,vRoughnessMapUv).b;
           vec3 soilDetail=texture2D(soilMap,vBumpMapUv).rgb*2.;
+          if(storybook>.5){
+            float patches=texture2D(cloudMap,landPosition.xz*.074).r;
+            vec3 meadow=mix(vec3(.078,.146,.029),vec3(.20,.295,.050),smoothstep(.25,.67,patches));
+            diffuseColor.rgb=mix(meadow*mix(vec3(1.),foliageTint,.42),diffuseColor.rgb,clamp(trailMask*1.35,0.,1.));
+            soilDetail=mix(vec3(1.),soilDetail,.24);
+          }
           diffuseColor.rgb*=mix(vec3(1.),soilDetail,.25+.75*trailMask);
           float soilGrain=dot(diffuseColor.rgb,vec3(.3,.5,.2));
           diffuseColor.rgb=mix(diffuseColor.rgb,vec3(.36,.235,.135)*(soilGrain*1.8+.25),winterBare);`);
@@ -325,6 +345,44 @@ uniform vec4 trample[${TRAMPLE_SLOTS}];
       }
       if(isWater)shadeWater(shader,water);
       if(mat.name==='cascade')shadeCascade(shader,water);
+      if(!isWater&&mat.name!=='cascade'&&mat.name!=='glass'&&mat.name!=='lampglass'&&!mat.transparent){
+        // Read the shadowed sun at the first directional light. Small smoothstep
+        // ranges soften band boundaries during camera movement without washing them out.
+        const direct='RE_Direct( directLight, geometryPosition, geometryNormal, geometryViewDir, geometryClearcoatNormal, material, reflectedLight );';
+        const index=shader.fragmentShader.indexOf(direct,shader.fragmentShader.indexOf('getDirectionalLightInfo( directionalLight, directLight );'));
+        shader.fragmentShader=shader.fragmentShader.slice(0,index)+`
+          #if UNROLLED_LOOP_INDEX == 0
+          if(storybook>.5){
+            vec3 paintNormal=normalize(mix(nonPerturbedNormal,normal,.18));
+            float facing=dot(paintNormal,directLight.direction);
+            float bands=.20*smoothstep(.03,.13,facing)+.43*smoothstep(.36,.46,facing)+.37*smoothstep(.72,.81,facing);
+            float lit=clamp(max(directLight.color.r,max(directLight.color.g,directLight.color.b))*.62,0.,1.);
+            paintSun=bands*lit;
+          }
+          #endif
+        `+shader.fragmentShader.slice(index);
+        shader.fragmentShader=shader.fragmentShader.replace('IncidentLight directLight;', 'IncidentLight directLight; float paintSun=0.;');
+        shader.fragmentShader=shader.fragmentShader.replace('#include <opaque_fragment>',`
+          if(storybook>.5){
+            vec3 painted=diffuseColor.rgb*(vec3(.46,.58,.68)+paintSun*vec3(1.27,1.06,.61));
+            ${mat.name==='story-oak'||mat.name==='story-pine'?`
+            // Treat the lit tops and shaded undersides as separate pigments.
+            float brush=texture2D(cloudMap,landPosition.xz*.86+vec2(.61,-.3)*landPosition.y).r;
+            float value=paintSun+.24*(brush-.51);
+            float middle=smoothstep(.13,.29,value),tip=smoothstep(.49,.71,value);
+            vec3 foliage=${mat.name==='story-oak'
+              ?'mix(mix(vec3(.027,.073,.045),vec3(.082,.163,.048),middle),vec3(.47,.43,.056),tip)'
+              :'mix(mix(vec3(.011,.043,.041),vec3(.032,.113,.090),middle),vec3(.126,.248,.128),tip)'};
+            painted=mix(painted,foliage*(.84+.25*brush)*mix(vec3(1.),foliageTint,.75),1.-coverSnow);
+            `:mat.name==='bark'?`
+            float grain=texture2D(cloudMap,landPosition.xz*1.4+landPosition.y*.051).r;
+            vec3 barkPaint=mix(vec3(.052,.028,.018),vec3(.33,.146,.062),smoothstep(.07,.65,paintSun+grain*.18));
+            painted=mix(painted,barkPaint*(.73+.48*grain),.69*(1.-coverSnow));
+            `:''}
+            outgoingLight=mix(outgoingLight,painted+totalEmissiveRadiance,storyDay*.89);
+          }
+          #include <opaque_fragment>`);
+      }
     };
     mat.customProgramCacheKey=()=>isWater?'pond':mat.name;
   }
@@ -335,5 +393,6 @@ uniform vec4 trample[${TRAMPLE_SLOTS}];
       wet.value=rain>wet.value?wet.value+(rain-wet.value)*(1-Math.exp(-dt*.5)):Math.max(rain,wet.value-dt*.035);
     },
     set(t,w){
+    storyDay.value=(1-.91*t.night)*(1-.23*Math.min(1,w));
     cloudAmount.value=(.80-.54*t.night)*(w<1?T.MathUtils.lerp(.85,1.18,w):T.MathUtils.lerp(1.18,1.22,w-1))}};
 }

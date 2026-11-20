@@ -9,7 +9,7 @@ const fullscreenVertex=`
     gl_Position=vec4(position.xy,0.,1.);
   }`;
 
-export function createVolume(renderer,world,sun,clouds){
+export function createVolume(renderer,world,sun,clouds,storybook,paintedClouds){
   const frame=new T.WebGLRenderTarget(1,1,{type:T.HalfFloatType});
   frame.depthTexture=new T.DepthTexture(1,1,T.UnsignedIntType);
   const fog=new T.WebGLRenderTarget(1,1,{type:T.HalfFloatType,depthBuffer:false});
@@ -21,6 +21,7 @@ export function createVolume(renderer,world,sun,clouds){
   ao.uniforms.radius.value=.58;ao.uniforms.thickness.value=.42;
   const uniforms={
     depthMap:{value:frame.depthTexture}, shadowDepth:{value:null}, cloudMap:clouds,
+    storybook,storyFog:{value:0},
     toWorld:{value:new T.Matrix4()},lightMatrix:{value:sun.shadow.matrix},
     sunDir:{value:new T.Vector3()},sunColor:{value:new T.Color()},density:{value:.046},
     scatterColor:{value:new T.Color()},clock:{value:0},cloudAmount:{value:.5},
@@ -33,7 +34,7 @@ export function createVolume(renderer,world,sun,clouds){
     uniform highp sampler2DShadow shadowDepth;
     uniform mat4 toWorld,lightMatrix;
     uniform vec3 sunDir,sunColor,scatterColor,lamps[5];
-    uniform float clock,density,lampPower,cloudAmount,golden,mistLow;
+    uniform float clock,density,lampPower,cloudAmount,golden,mistLow,storybook,storyFog;
     void main(){
       vec2 ndc=screenUv*2.-1.;
       vec3 origin=(toWorld*vec4(ndc,-1.,1.)).xyz;
@@ -72,6 +73,7 @@ export function createVolume(renderer,world,sun,clouds){
           float rho=density*edge*mix(.20,1.15,smoothstep(.24,.70,bank))*(1.-.73*pool)
             *exp(-.38*max(0.,p.y-1.3))*smoothstep(-.7,.65,p.y)
             *(1.+mistLow*2.4*exp(-2.2*max(0.,p.y-.85)));  // dawn mist pools in the low ground
+          rho*=mix(1.,mix(.25,1.,storyFog),storybook);
           float opacity=1.-exp(-rho*ds);
           vec3 shadowCoord=(lightMatrix*vec4(p,1.)).xyz;
           float lit=texture(shadowDepth,vec3(shadowCoord.xy,shadowCoord.z-.00045));
@@ -132,12 +134,13 @@ export function createVolume(renderer,world,sun,clouds){
       shadowTint:{value:new T.Vector3(1,1,1)},highlightTint:{value:new T.Vector3(1,1,1)},saturation:{value:1},vignette:{value:.2},
       bloomMap:{value:blooms[0].texture},bloomAmount:{value:0},stars:{value:0},skyTurn:{value:0},clock:{value:0},
       moodTint:{value:new T.Vector3(1,1,1)},moodSaturation:{value:1},moodContrast:{value:1},moodBloom:{value:1},
-      pastel:{value:0},nightLevel:{value:0},
+      storybook,paintedClouds:{value:paintedClouds},nightLevel:{value:0},clearSky:{value:1},
       glassRect:{value:new T.Vector4()},viewport:{value:new T.Vector2()},contact:{value:aoTarget.texture},sceneColor:{value:frame.texture},depthMap:{value:frame.depthTexture},volume:{value:fog.texture},fogSize:{value:new T.Vector2()},contactSize:{value:new T.Vector2()}},
     vertexShader:fullscreenVertex,fragmentShader:`
     varying vec2 screenUv;uniform sampler2D sceneColor,depthMap,volume,contact,bloomMap;uniform vec2 fogSize,contactSize;
     uniform float bloomAmount,stars,skyTurn,clock,moodSaturation,moodContrast,moodBloom;uniform vec3 moodTint;
-    uniform float pastel,nightLevel;
+    uniform sampler2D paintedClouds;
+    uniform float storybook,nightLevel,clearSky;
     float starHash(vec2 p){vec3 q=fract(p.xyx*vec3(.1031,.1030,.0973));q+=dot(q,q.yzx+33.33);return fract((q.x+q.y)*q.z);}
     uniform vec4 glassRect;uniform vec2 viewport,sunScreen;
     uniform vec3 bgTop,bgBottom,glowColor,shadowTint,highlightTint;uniform float glowAmount,saturation,vignette;
@@ -175,7 +178,7 @@ export function createVolume(renderer,world,sun,clouds){
       #else
         contactTotal=total;
       #endif
-      float contactLight=z>=1.?1.:mix(mix(.68,.83,pastel),1.,clamp(visibility/max(contactTotal,.00001),0.,1.));
+      float contactLight=z>=1.?1.:mix(mix(.68,.77,storybook),1.,clamp(visibility/max(contactTotal,.00001),0.,1.));
       vec3 base=texture2D(sceneColor,lensUv).rgb;
       if(z>=1.){
         // Behind the island: a vertical sky gradient with the low sun's glow toward its side.
@@ -197,7 +200,7 @@ export function createVolume(renderer,world,sun,clouds){
         }
       }
       vec3 color=base*contactLight*v.a+v.rgb;
-      color+=texture2D(bloomMap,lensUv).rgb*bloomAmount*moodBloom*mix(1.,1.24,pastel);
+      color+=texture2D(bloomMap,lensUv).rgb*bloomAmount*moodBloom*mix(1.,.52,storybook*(1.-nightLevel));
       // Grade: split-tone shadows / highlights, a touch of saturation, soft vignette.
       float lum=dot(color,vec3(.2126,.7152,.0722));
       color*=mix(shadowTint,highlightTint,smoothstep(.02,.45,lum));
@@ -205,23 +208,29 @@ export function createVolume(renderer,world,sun,clouds){
       color=max(vec3(0.),mix(vec3(lum),color,saturation*moodSaturation))*moodTint;
       color=.18*pow(color/.18,vec3(moodContrast));  // weather contrast, pivoting on mid grey
       vec2 edge=(screenUv-.5)*vec2(viewport.x/viewport.y,1.);
-      color*=1.-vignette*mix(1.,.45,pastel)*smoothstep(.25,1.05,length(edge));
+      color*=1.-vignette*mix(1.,.32,storybook)*smoothstep(.25,1.05,length(edge));
       gl_FragColor=vec4(color,1.);
       #include <tonemapping_fragment>
       #include <colorspace_fragment>
-      if(pastel>.5){
-        // Lift shadows toward lavender and highlights toward cream in display space.
-        vec3 displayColor=clamp(gl_FragColor.rgb,0.,1.);
-        float lightness=dot(displayColor,vec3(.2126,.7152,.0722));
-        vec3 muted=mix(vec3(lightness),displayColor,.88);
-        vec3 paper=mix(vec3(.69,.58,.76),vec3(1.,.94,.82),smoothstep(.08,.66,lightness));
-        paper=mix(paper,vec3(.40,.37,.51),nightLevel*.8);
-        vec3 graded=mix(muted,paper,mix(.32,.12,nightLevel));
+      if(storybook>.5){
         if(z>=1.){
-          vec3 skyPastel=mix(vec3(.98,.86,.77),vec3(.72,.81,.94),smoothstep(0.,1.,lensUv.y));
-          graded=mix(graded,skyPastel,.30*(1.-nightLevel));
+          float daylight=(1.-nightLevel)*clearSky;
+          vec3 skyPaper=mix(vec3(.81,.87,.90),vec3(.55,.68,.77),smoothstep(0.,1.,lensUv.y));
+          // Keep the shape of the painted clouds when switching to a portrait viewport.
+          vec2 cloudUv=vec2(lensUv.x,1.-(1.-lensUv.y)*clamp(viewport.y/viewport.x*1.5,.72,3.));
+          vec4 cloud=texture2D(paintedClouds,cloudUv);
+          gl_FragColor.rgb=mix(gl_FragColor.rgb,skyPaper,.83*daylight);
+          gl_FragColor.rgb=mix(gl_FragColor.rgb,sRGBTransferOETF(cloud).rgb,cloud.a*daylight);
+        }else{
+          // One-sided depth edges put ink on the near silhouette without a halo.
+          // Keep internal marks much lighter than the outside edge so grass stays clean.
+          vec2 px=1./viewport;
+          float xx=max(texture2D(depthMap,lensUv+vec2(px.x,0.)).r,texture2D(depthMap,lensUv-vec2(px.x,0.)).r);
+          float yy=max(texture2D(depthMap,lensUv+vec2(0.,px.y)).r,texture2D(depthMap,lensUv-vec2(0.,px.y)).r);
+          float behind=max(xx,yy),jump=behind-z;
+          float ink=behind>=1.?.58:.27*smoothstep(.0065,.018,jump);
+          gl_FragColor.rgb=mix(gl_FragColor.rgb,vec3(.070,.104,.113),ink*(1.-nightLevel*.66));
         }
-        gl_FragColor.rgb=graded;
       }
     }`});
   const sunPoint=new T.Vector3(),sunOrigin=new T.Vector3();
@@ -257,9 +266,6 @@ export function createVolume(renderer,world,sun,clouds){
       u.shadowTint.value.copy(shadow);u.highlightTint.value.copy(highlight);u.saturation.value=saturation;u.vignette.value=vignette;
       u.bloomAmount.value=bloom;u.stars.value=stars;bright.uniforms.threshold.value=threshold;
     },
-    setGraphicsStyle(style){
-      composite.uniforms.pastel.value=style==='pastel'?1:0;
-    },
     // Weather mood, eased every frame: rain and snowstorms mute colour, fog flattens contrast,
     // snow cover cools the picture, and damp or misty air spreads light further.
     mood(snow,wet,rain,fog,storm,night){
@@ -268,6 +274,8 @@ export function createVolume(renderer,world,sun,clouds){
       u.moodSaturation.value=1-.15*rain-.1*fog-.14*storm-.04*snow;
       u.moodContrast.value=1+.05*rain-.07*fog-.05*storm;
       u.nightLevel.value=night;
+      u.clearSky.value=1-Math.min(1,rain*.85+fog+storm+uniforms.cloudAmount.value-.63);
+      uniforms.storyFog.value=fog;
       u.moodBloom.value=(1+1.1*fog+.5*wet+.2*storm)*(1-.5*snow);  // lit snow is bright enough already
     },
     render(scene,camera,seconds){

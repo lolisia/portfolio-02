@@ -20,6 +20,7 @@ import {createInterior} from './interior.js';
 import {createFootprints} from './footprints.js';
 import {quality} from './mobile-quality.js';
 import {attachMapControls} from './map-controls.js';
+import {createStorybook,paintClouds} from './storybook.js';
 
 const canvas=document.querySelector('#world');
 const scene=new T.Scene(), renderer=new T.WebGLRenderer({canvas,antialias:false,powerPreference:'high-performance'});
@@ -59,9 +60,11 @@ Object.assign(sun.shadow.camera,{left:-24,right:24,top:24,bottom:-24,near:.1,far
 const nature=await loadNature();
 for(const [name,kind] of gardenKinds())nature.set(name,kind);
 const b=builder(scene,undefined,nature), world=buildWorld(scene,b);b.finish();
+const storybook={value:0};
+const switchStorybook=createStorybook(scene);
 const windowLight=new T.PointLight(0xffaf52,0,7,1.5);windowLight.position.copy(world.cottage.window);scene.add(windowLight);
-const cascade=makeCascade(world);scene.add(cascade);
-const atmosphere=createAtmosphere(scene,world);
+const cascade=makeCascade(world,storybook);scene.add(cascade);
+const atmosphere=createAtmosphere(scene,world,storybook);
 const seasons=createSeasons(scene,world,atmosphere);
 const prints=createFootprints(scene,world,atmosphere);
 const farmLife=createFarmLife(scene,world,prints);
@@ -70,8 +73,8 @@ const unityChan=createUnityChan(scene,world,unityChanLoaded,prints);
 const trackedCharacter=scene.getObjectByName('sd-unity-chan'),followTarget=new T.Vector3(),followDelta=new T.Vector3();
 const homeLife=createInterior(world,surface('glass'),windowLight);
 const setSky=createSky(renderer,scene,world.water);
-const volume=createVolume(renderer,world,sun,atmosphere.cloudMap);
-bindGraphicsStyle(volume.setGraphicsStyle);
+const volume=createVolume(renderer,world,sun,atmosphere.cloudMap,storybook,paintClouds());
+let refreshStyleShadows=false;
 const glowCanvas=document.createElement('canvas');glowCanvas.width=glowCanvas.height=128;
 const glowContext=glowCanvas.getContext('2d');
 const halo=glowContext.createRadialGradient(64,64,0,64,64,64);
@@ -154,7 +157,9 @@ function lighting(){
   const hour=hourShown<0?hourShown+24:hourShown,t=daylight(hour),w=weatherBlend.coverage;
   nightLevel=t.night;
   const moon=t.direction.y<0;
-  sun.position.copy(t.direction).multiplyScalar(moon?-33:33);
+  sun.position.copy(t.direction);
+  if(storybook.value&&!moon)sun.position.setZ(sun.position.z+.70).normalize();
+  sun.position.multiplyScalar(moon?-33:33);
   sun.color.copy(moon?new T.Color(0xa5c3ee):t.color([0xffeed4,0xfff5df,0xffb48c,0xffb887,0xff8b4a]));
   const elevation=Math.abs(t.direction.y);
   sun.intensity=(moon?.34:2.85*(1+1.1*t.golden))*(moon?T.MathUtils.smoothstep(elevation,0,.24):T.MathUtils.smoothstep(elevation,-.02,.34))* (w<1?T.MathUtils.lerp(1,.52,w):T.MathUtils.lerp(.52,.25,w-1));
@@ -201,6 +206,13 @@ function setWind(){
 }
 const advanceTime=createDayClock(time,()=>{hourTarget=Number(time.value)});
 lighting();setWind();wind.oninput=()=>{windTarget=Number(wind.value)};
+bindGraphicsStyle(style=>{
+  const enabled=style==='storybook';
+  storybook.value=Number(enabled);
+  switchStorybook(enabled);
+  refreshStyleShadows=true;
+  lighting();
+});
 function glide(dt){
   let dh=hourTarget-hourShown;
   if(dh<-12&&document.querySelector('#autoTime').checked){hourShown-=24;dh+=24}  // auto clock wraps forward through midnight
@@ -242,7 +254,7 @@ window.addEventListener('resize',resize);resize();
 // petals, fireflies, Unity-chan) changes light counts or adds materials, which makes three.js
 // compile programs mid-game. Draw one hidden frame with all of it switched on instead.
 function warmUp(){
-  const hidden=[];scene.traverse(o=>{if(!o.visible){hidden.push(o);o.visible=true}});
+  const hidden=[];scene.traverse(o=>{if(!o.visible&&!o.userData.styleVariant){hidden.push(o);o.visible=true}});
   const saved=lanterns.map(({spot})=>spot.intensity);
   for(const {spot} of lanterns){spot.intensity=1;spot.shadow.needsUpdate=true}
   renderer.shadowMap.needsUpdate=true;sun.shadow.needsUpdate=true;
@@ -271,13 +283,14 @@ renderer.setAnimationLoop(ms=>{
   // Shadows: the sun's map refreshes every other frame (swaying canopies stay smooth at 30 Hz).
   // A lantern's map refreshes every frame while a walker is inside its pool of light, so the
   // walker's shadow keeps up; otherwise it only sees a slight swing and the lamps take turns.
-  frameIndex++;const sunTurn=frameIndex%2===0;let lampTurn=false;
+  frameIndex++;const sunTurn=refreshStyleShadows||frameIndex%2===0;let lampTurn=false;
   sun.shadow.needsUpdate=sunTurn;
   if(nightLevel>.01)lanterns.forEach(({spot,pivot},i)=>{
     const p=pivot.position;
-    if(world.colliders.bodies.some(b=>b.active&&(b.x-p.x)**2+(b.z-p.z)**2<30)||(sunTurn&&(frameIndex/2)%lanterns.length===i)){spot.shadow.needsUpdate=true;lampTurn=true}
+    if(refreshStyleShadows||world.colliders.bodies.some(b=>b.active&&(b.x-p.x)**2+(b.z-p.z)**2<30)||(sunTurn&&(frameIndex/2)%lanterns.length===i)){spot.shadow.needsUpdate=true;lampTurn=true}
   });
   renderer.shadowMap.needsUpdate=sunTurn||lampTurn;
+  refreshStyleShadows=false;
   glide(elapsedFrame);trample(dt);
   const changingWeather=weatherBlend.active;weatherBlend.update(Math.min(.1,elapsedFrame));
   if(changingWeather)lighting();

@@ -24,16 +24,17 @@ export function bindGraphicsStyle(apply){
   };
   let style='original';
   try{
-    if(localStorage.getItem(key)==='pastel')style='pastel';
+    const saved=localStorage.getItem(key);
+    if(saved==='storybook'||saved==='pastel')style='storybook';
   }catch{
     // The setting still works in the current session when storage is unavailable.
   }
   options.querySelector(`input[value="${style}"]`).checked=true;
   showStyle(style);
   options.addEventListener('change',event=>{
-    style=event.target.value;
-    showStyle(style);
-    try{localStorage.setItem(key,style)}catch{}
+    const selection=event.target.value;
+    showStyle(selection);
+    try{localStorage.setItem(key,selection)}catch{}
   });
 }
 

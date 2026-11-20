@@ -132,6 +132,7 @@ export function shadeWater(shader,water){
     float shallow=exp(-7.5*depth);
     diffuseColor.rgb=mix(vec3(.003,.020,.038),vec3(.07,.146,.132),shallow);
     diffuseColor.a=mix(.85,.36,shallow);
+    if(storybook>.5)diffuseColor.a=mix(diffuseColor.a,mix(.97,.67,shallow),storyDay);
     if(pondIce>0.){
       vec2 cell=floor(q*1.3),local=fract(q*1.3);
       float nearest=10.,second=10.;
@@ -162,6 +163,15 @@ export function shadeWater(shader,water){
     float fresnel=.022+.978*pow(1.-max(0.,dot(waterNormal,eye)),5.);
     vec3 body=outgoingLight-reflectedLight.directSpecular-reflectedLight.indirectSpecular;
     outgoingLight=mix(body,reflected,fresnel*(1.-pondIce*.8))+reflectedLight.directSpecular*mix(.60,.3,pondIce);
+    if(storybook>.5){
+      vec2 drift=q*vec2(.78,5.7)+vec2(elapsed*-.2,elapsed*.33);
+      float marks=pondNoise(drift).x;
+      float ripples=smoothstep(.27,.36,marks)*smoothstep(.05,.33,pondNoise(drift*.37+4.3).x);
+      vec3 painted=mix(vec3(.020,.111,.176),vec3(.055,.31,.34),shallow);
+      painted=mix(painted,reflected,.11+.11*fresnel);
+      painted=mix(painted,vec3(.30,.56,.55),ripples*.55);
+      outgoingLight=mix(outgoingLight,painted,storyDay*(1.-pondIce)*.92);
+    }
     #include <opaque_fragment>`);
 }
 
