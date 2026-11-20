@@ -134,16 +134,46 @@ export function createVolume(renderer,world,sun,clouds,storybook,paintedClouds){
       shadowTint:{value:new T.Vector3(1,1,1)},highlightTint:{value:new T.Vector3(1,1,1)},saturation:{value:1},vignette:{value:.2},
       bloomMap:{value:blooms[0].texture},bloomAmount:{value:0},stars:{value:0},skyTurn:{value:0},clock:{value:0},
       moodTint:{value:new T.Vector3(1,1,1)},moodSaturation:{value:1},moodContrast:{value:1},moodBloom:{value:1},
-      storybook,paintedClouds:{value:paintedClouds},nightLevel:{value:0},clearSky:{value:1},
+      storybook,paintedClouds:{value:paintedClouds},nightLevel:{value:0},clearSky:{value:1},inkScale:{value:new T.Vector2()},
       glassRect:{value:new T.Vector4()},viewport:{value:new T.Vector2()},contact:{value:aoTarget.texture},sceneColor:{value:frame.texture},depthMap:{value:frame.depthTexture},volume:{value:fog.texture},fogSize:{value:new T.Vector2()},contactSize:{value:new T.Vector2()}},
     vertexShader:fullscreenVertex,fragmentShader:`
     varying vec2 screenUv;uniform sampler2D sceneColor,depthMap,volume,contact,bloomMap;uniform vec2 fogSize,contactSize;
     uniform float bloomAmount,stars,skyTurn,clock,moodSaturation,moodContrast,moodBloom;uniform vec3 moodTint;
     uniform sampler2D paintedClouds;
     uniform float storybook,nightLevel,clearSky;
+    uniform vec2 inkScale; // orthographic depth range and world distance per pixel
     float starHash(vec2 p){vec3 q=fract(p.xyx*vec3(.1031,.1030,.0973));q+=dot(q,q.yzx+33.33);return fract((q.x+q.y)*q.z);}
     uniform vec4 glassRect;uniform vec2 viewport,sunScreen;
     uniform vec3 bgTop,bgBottom,glowColor,shadowTint,highlightTint;uniform float glowAmount,saturation,vignette;
+    float strongest(vec4 taps){return max(max(taps.x,taps.y),max(taps.z,taps.w));}
+    float storyInk(vec2 uv,float depth){
+      vec4 texel=vec4(1./viewport.x,0.,0.,1./viewport.y);
+      vec4 nearDepth=vec4(texture2D(depthMap,uv+texel.xy).r,texture2D(depthMap,uv-texel.xy).r,
+        texture2D(depthMap,uv+texel.zw).r,texture2D(depthMap,uv-texel.zw).r);
+      vec4 farDepth=vec4(texture2D(depthMap,uv+2.*texel.xy).r,texture2D(depthMap,uv-2.*texel.xy).r,
+        texture2D(depthMap,uv+2.*texel.zw).r,texture2D(depthMap,uv-2.*texel.zw).r);
+      vec4 delta=(nearDepth-depth)*inkScale.x,outer=(farDepth-depth)*inkScale.x;
+      // Subtract the slope measured on the foreground side, so an angled flat face stays clean.
+      vec4 slope=max(vec4(0.),-delta.yxwz);
+      vec4 edge=max(vec4(0.),delta-slope*1.25);
+      vec4 shoulder=max(vec4(0.),outer-slope*2.5);
+      float nearEdge=strongest(edge),farEdge=strongest(shoulder);
+      float support=dot(1.-smoothstep(vec4(.07),vec4(.19+2.*inkScale.y),abs(delta)),vec4(.25));
+      float body=smoothstep(.28,.73,support);
+      float skyEdge=step(1.,strongest(nearDepth));
+      float skyShoulder=step(1.,strongest(farDepth));
+      float stroke=max(skyEdge*.96,smoothstep(.075+inkScale.y,.46+3.*inkScale.y,nearEdge)*mix(.30,.88,body));
+      float broad=max(skyShoulder*.62,smoothstep(.26+inkScale.y,.85+5.*inkScale.y,farEdge)*.54)*body;
+
+      // The two one-sided depth slopes give surface normals in each cross-section.
+      // Suppress creases at depth breaks, where the silhouette already supplies the ink.
+      vec4 gradients=delta/max(inkScale.y,.0001);
+      float foldX=1.-dot(normalize(vec2(1.,gradients.x)),normalize(vec2(1.,-gradients.y)));
+      float foldY=1.-dot(normalize(vec2(1.,gradients.z)),normalize(vec2(1.,-gradients.w)));
+      float crease=(1.-smoothstep(.13,.29,strongest(abs(delta))))*body
+        *smoothstep(.055,.45,max(foldX,foldY))*.49;
+      return max(max(stroke,broad),crease);
+    }
     void main(){
       vec2 pixel=screenUv*viewport,local=pixel-glassRect.xy;
       float radius=min(19.,glassRect.w);
@@ -222,14 +252,11 @@ export function createVolume(renderer,world,sun,clouds,storybook,paintedClouds){
           gl_FragColor.rgb=mix(gl_FragColor.rgb,skyPaper,.83*daylight);
           gl_FragColor.rgb=mix(gl_FragColor.rgb,sRGBTransferOETF(cloud).rgb,cloud.a*daylight);
         }else{
-          // One-sided depth edges put ink on the near silhouette without a halo.
-          // Keep internal marks much lighter than the outside edge so grass stays clean.
-          vec2 px=1./viewport;
-          float xx=max(texture2D(depthMap,lensUv+vec2(px.x,0.)).r,texture2D(depthMap,lensUv-vec2(px.x,0.)).r);
-          float yy=max(texture2D(depthMap,lensUv+vec2(0.,px.y)).r,texture2D(depthMap,lensUv-vec2(0.,px.y)).r);
-          float behind=max(xx,yy),jump=behind-z;
-          float ink=behind>=1.?.58:.27*smoothstep(.0065,.018,jump);
-          gl_FragColor.rgb=mix(gl_FragColor.rgb,vec3(.070,.104,.113),ink*(1.-nightLevel*.66));
+          vec3 pigment=gl_FragColor.rgb;
+          float warm=smoothstep(.015,.21,pigment.r-pigment.b)*(1.-smoothstep(.015,.12,pigment.g-pigment.r));
+          vec3 inkColor=mix(vec3(.024,.058,.052),vec3(.087,.042,.025),warm);
+          float ink=storyInk(lensUv,z)*(1.-nightLevel*.49)*mix(.43,1.,v.a);
+          gl_FragColor.rgb=mix(pigment,min(pigment,inkColor),ink);
         }
       }
     }`});
@@ -309,6 +336,7 @@ export function createVolume(renderer,world,sun,clouds,storybook,paintedClouds){
       }
       renderer.autoClear=true;
       composite.uniforms.clock.value=seconds;
+      composite.uniforms.inkScale.value.set(camera.far-camera.near,(camera.top-camera.bottom)/(camera.zoom*frame.height));
       camera.getWorldDirection(sunOrigin);composite.uniforms.skyTurn.value=Math.atan2(sunOrigin.x,sunOrigin.z)/(2*Math.PI)*336;
       quad.material=composite;renderer.setRenderTarget(null);renderer.render(screen,ortho);
     }
