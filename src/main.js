@@ -21,6 +21,7 @@ import {createFootprints} from './footprints.js';
 import {quality} from './mobile-quality.js';
 import {attachMapControls} from './map-controls.js';
 import {createStorybook,paintClouds} from './storybook.js';
+import {createActorArt} from './actor-art.js';
 
 const canvas=document.querySelector('#world');
 const scene=new T.Scene(), renderer=new T.WebGLRenderer({canvas,antialias:false,powerPreference:'high-performance'});
@@ -62,14 +63,15 @@ for(const [name,kind] of gardenKinds())nature.set(name,kind);
 const b=builder(scene,undefined,nature), world=buildWorld(scene,b);b.finish();
 const storybook={value:0};
 const switchStorybook=createStorybook(scene);
+const actorArt=createActorArt(storybook);
 const windowLight=new T.PointLight(0xffaf52,0,7,1.5);windowLight.position.copy(world.cottage.window);scene.add(windowLight);
 const cascade=makeCascade(world,storybook);scene.add(cascade);
 const atmosphere=createAtmosphere(scene,world,storybook);
 const seasons=createSeasons(scene,world,atmosphere);
 const prints=createFootprints(scene,world,atmosphere);
-const farmLife=createFarmLife(scene,world,prints);
+const farmLife=createFarmLife(scene,world,prints,actorArt);
 let unityChanLoaded;const unityChanReady=new Promise(r=>unityChanLoaded=r);
-const unityChan=createUnityChan(scene,world,unityChanLoaded,prints);
+const unityChan=createUnityChan(scene,world,unityChanLoaded,prints,actorArt);
 const trackedCharacter=scene.getObjectByName('sd-unity-chan'),followTarget=new T.Vector3(),followDelta=new T.Vector3();
 const homeLife=createInterior(world,surface('glass'),windowLight);
 const setSky=createSky(renderer,scene,world.water);
@@ -117,7 +119,7 @@ function particles(count,material,initializer,lines=false){
   const mesh=lines?new T.LineSegments(geometry,material):new T.Points(geometry,material);scene.add(mesh);return mesh;
 }
 const rand=b.rand;
-const rain=createRain(scene,world),wildlife=createWildlife(scene,world);
+const rain=createRain(scene,world),wildlife=createWildlife(scene,world,actorArt);
 // Moths and midges whirl around each lit lamp on mild nights.
 const MOTHS=16,mothCount=MOTHS*lanterns.length;
 const moths=particles(mothCount,new T.PointsMaterial({color:0xfff4e4,size:2.6,transparent:true,depthWrite:false,blending:T.AdditiveBlending,toneMapped:false}),(a,i)=>{a[i]=0;a[i+1]=-99;a[i+2]=0});
@@ -210,6 +212,7 @@ bindGraphicsStyle(style=>{
   const enabled=style==='storybook';
   storybook.value=Number(enabled);
   switchStorybook(enabled);
+  actorArt.select(enabled);
   refreshStyleShadows=true;
   lighting();
 });

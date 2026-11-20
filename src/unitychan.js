@@ -52,7 +52,7 @@ function findSpots(world,paths){
   return {beds,shore};
 }
 
-export function createUnityChan(scene,world,onReady=()=>{},prints=null){
+export function createUnityChan(scene,world,onReady,prints,art){
   const paths=createFarmPaths(world),spots=findSpots(world,paths);
   const {door,apron,threshold,doorLeaf}=world.cottage;
   const root=new T.Group();root.name='sd-unity-chan';root.visible=false;scene.add(root);
@@ -80,8 +80,9 @@ export function createUnityChan(scene,world,onReady=()=>{},prints=null){
       const list=(Array.isArray(o.material)?o.material:[o.material]).map(m=>{
         if(!cache.has(m.name)){
           if(m.map)m.map.colorSpace=T.SRGBColorSpace;
-          cache.set(m.name,new T.MeshToonMaterial({name:m.name,map:m.map,gradientMap:ramp,alphaTest:.5,
-            side:/hair|nol/.test(m.name)?T.DoubleSide:T.FrontSide}));
+          const toon=new T.MeshToonMaterial({name:m.name,map:m.map,gradientMap:ramp,alphaTest:.5,
+            side:/hair|nol/.test(m.name)?T.DoubleSide:T.FrontSide});
+          cache.set(m.name,art.shade(toon,/face|eye/.test(m.name.toLowerCase())?.18:.50));
         }
         return cache.get(m.name);
       });

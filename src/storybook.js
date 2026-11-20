@@ -61,15 +61,60 @@ function pineTrunk(){
   return trunk;
 }
 
+function paintedGrass(variant,turf){
+  const positions=[],colors=[],indices=[];
+  const pigment=new T.Color();
+  const shades=[0x7b9666,0xb0c481,0xe5d88c].map(hex=>new T.Color(hex));
+  for(let i=0;i<(turf?6:5);i++){
+    const angle=i*2.399963+variant*.74,dx=Math.cos(angle),dz=Math.sin(angle);
+    const reach=.050+.019*i,height=(turf?.25:.30)*(1+.34*Math.sin(i*2.1+variant));
+    const root=reach*.45,width=.038+.017*Math.sin(i*3+variant)**2;
+    const base=positions.length/3;
+    for(let row=0;row<4;row++){
+      const t=[0,.44,.79,1][row],span=width*[.48,1,.59,.025][row];
+      const bend=root+reach*t*t*1.44;
+      for(const side of [-1,0,1]){
+        const ridge=side===0?.025*Math.sin(t*Math.PI):0;
+        positions.push(dx*(bend+ridge)-dz*span*side,height*t,dz*(bend+ridge)+dx*span*side);
+        pigment.copy(shades[0]).lerp(shades[1],Math.min(1,t*1.4)).lerp(shades[2],t*t*.65);
+        pigment.multiplyScalar(side===-1?.72:side===0?1:.88);
+        colors.push(pigment.r,pigment.g,pigment.b);
+      }
+      if(row>0){
+        const a=base+(row-1)*3,b=a+3;
+        indices.push(a,b,a+1,a+1,b,b+1,a+1,b+1,a+2,a+2,b+1,b+2);
+      }
+    }
+  }
+  const geometry=new T.BufferGeometry();
+  geometry.setAttribute('position',new T.Float32BufferAttribute(positions,3));
+  geometry.setAttribute('color',new T.Float32BufferAttribute(colors,3));
+  geometry.setIndex(indices);geometry.computeVertexNormals();
+  return geometry;
+}
+
+function paintedBoulder(){
+  const geometry=new T.DodecahedronGeometry(.53);
+  const points=geometry.attributes.position;
+  for(let i=0;i<points.count;i++){
+    const x=points.getX(i),y=points.getY(i),z=points.getZ(i);
+    const warp=1+.16*Math.sin(x*16+z*12)*Math.cos(y*15-z*8);
+    points.setXYZ(i,x*warp+.16*y,Math.max(-.34,Math.min(.40,y*warp)),z*warp);
+  }
+  geometry.computeVertexNormals();
+  return geometry;
+}
+
 export function createStorybook(scene){
   const swaps=[];
   const palette={
     oakALeaves:['story-oak',0xb4cf49,()=>oakCrown(1)],
     oakBLeaves:['story-oak',0xa1bc43,()=>oakCrown(1.12)],
     pineANeedles:['story-pine',0x367e69,pineCrown],
-    pineABark:['bark',0x745133,pineTrunk]
+    pineABark:['bark',0x745133,pineTrunk],
+    boulder:['story-boulder',null,paintedBoulder]
   };
-  const matrix=new T.Matrix4(),color=new T.Color();
+  const matrix=new T.Matrix4(),color=new T.Color(),rockFootprints=[];
   for(const [name,[material,tint,createGeometry]] of Object.entries(palette)){
     const original=scene.getObjectByName(name);
     if(!original)continue;
@@ -78,9 +123,16 @@ export function createStorybook(scene){
     const alternate=new T.InstancedMesh(geometry,surface(material),original.count);
     for(let i=0;i<original.count;i++){
       original.getMatrixAt(i,matrix);original.getColorAt(i,color);
+      if(name==='boulder'){
+        const m=matrix.elements;
+        rockFootprints.push([m[12],m[13],m[14],.49*Math.hypot(m[0],m[2])+.06]);
+      }
       alternate.setMatrixAt(i,matrix);
-      const lightness=T.MathUtils.clamp(color.g*.6+.73,.85,1.06);
-      alternate.setColorAt(i,color.setHex(tint).multiplyScalar(lightness));
+      if(tint!==null){
+        const lightness=T.MathUtils.clamp(color.g*.6+.73,.85,1.06);
+        color.setHex(tint).multiplyScalar(lightness);
+      }
+      alternate.setColorAt(i,color);
     }
     alternate.name='storybook-'+name;
     alternate.castShadow=original.castShadow;alternate.receiveShadow=true;
@@ -88,12 +140,17 @@ export function createStorybook(scene){
     original.userData.styleVariant=true;
     scene.add(alternate);swaps.push([original,alternate]);
   }
-  for(let i=0;i<3;i++){
-    const original=scene.getObjectByName('turf'+i);
+  for(const kind of ['turf','grass'])for(let i=0;i<3;i++){
+    const original=scene.getObjectByName(kind+i);
     if(!original)continue;
-    const geometry=original.geometry.clone(),indices=[];
+    const turf=kind==='turf',geometry=paintedGrass(i,turf),indices=[];
     // Spread the retained tufts over the entire island while keeping their wind roots.
-    for(let j=0;j<original.count;j++)if(((Math.imul(j+17,0x9e3779b1)>>>0)%11)<3)indices.push(j);
+    for(let j=0;j<original.count;j++){
+      if(turf&&((Math.imul(j+17,0x9e3779b1)>>>0)%11)>=3)continue;
+      original.getMatrixAt(j,matrix);
+      const m=matrix.elements,x=m[12],y=m[13],z=m[14];
+      if(!rockFootprints.some(([rx,ry,rz,r])=>Math.abs(ry-y)<.55&&(x-rx)**2+(z-rz)**2<r*r))indices.push(j);
+    }
     const alternate=new T.InstancedMesh(geometry,original.material,indices.length);
     const bend=original.geometry.getAttribute('bendRoot'),plant=original.geometry.getAttribute('plantMask');
     geometry.setAttribute('bendRoot',new T.InstancedBufferAttribute(new Float32Array(indices.flatMap(j=>Array.from(bend.array.subarray(j*4,j*4+4)))),4));
@@ -102,7 +159,7 @@ export function createStorybook(scene){
       original.getMatrixAt(index,matrix);original.getColorAt(index,color);
       alternate.setMatrixAt(j,matrix);alternate.setColorAt(j,color);
     });
-    alternate.name='storybook-'+original.name;alternate.receiveShadow=true;
+    alternate.name='storybook-'+original.name;alternate.castShadow=original.castShadow;alternate.receiveShadow=true;
     alternate.visible=false;alternate.userData.styleVariant=true;
     original.userData.styleVariant=true;
     scene.add(alternate);swaps.push([original,alternate]);

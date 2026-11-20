@@ -3,7 +3,7 @@ import {createFarmPaths} from './farm-paths.js';
 import {createChimneySmoke} from './smoke.js';
 
 const windHeading=Math.atan2(1,.36);
-export function createFarmLife(scene,world,prints=null){
+export function createFarmLife(scene,world,prints,art){
   const metal=new T.MeshStandardMaterial({color:0x504d40,metalness:.65,roughness:.46});
   const brass=new T.MeshStandardMaterial({color:0xb49a62,metalness:.65,roughness:.42});
   function mesh(group,geometry,material,x,y,z){
@@ -48,7 +48,7 @@ export function createFarmLife(scene,world,prints=null){
 
   const sphere=new T.SphereGeometry(1,12,8),legGeo=new T.CylinderGeometry(.018,.014,.19,5);
   const mats=new Map();
-  function mat(color){if(!mats.has(color))mats.set(color,new T.MeshStandardMaterial({color,roughness:.87}));return mats.get(color)}
+  function mat(color){if(!mats.has(color))mats.set(color,art.shade(new T.MeshStandardMaterial({color,roughness:.87})));return mats.get(color)}
   function egg(group,color,x,y,z,w,h,d){const m=mesh(group,sphere,mat(color),x,y,z);m.scale.set(w,h,d);return m}
   function chicken(chick,index){
     const group=new T.Group();group.name=chick?'chick-'+index:'hen-'+index;
@@ -58,7 +58,15 @@ export function createFarmLife(scene,world,prints=null){
     const head=new T.Group();head.position.set(0,.46,.18);group.add(head);
     egg(head,feather,0,.03,.025,.12,.135,.13);
     egg(head,0xc5994b,0,-.005,.16,.055,.035,.09);
-    for(const side of [-1,1])egg(head,0x211f18,side*.104,.065,.095,.018,.019,.018);
+    for(const side of [-1,1]){
+      egg(head,0x211f18,side*.104,.065,.095,.018,.019,.018);
+      art.detail(egg(head,0xfff1cc,side*.116,.072,.104,.006,.007,.006));
+      for(let i=0;i<3;i++){
+        const featherTip=art.detail(egg(group,chick?0xf0cc75:index?0xc58f55:0xf1e0b8,
+          side*(.19-i*.008),.322-i*.031,-.043-i*.046,.037,.035,.112));
+        featherTip.rotation.x=-.42;
+      }
+    }
     if(!chick){
       for(let i=0;i<3;i++)egg(head,0xa64d39,0,.165+i*.008,-.035+i*.045,.038,.057,.034);
       egg(head,0xa64d39,0,-.085,.085,.042,.066,.035);

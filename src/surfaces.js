@@ -177,6 +177,8 @@ uniform vec4 trample[${TRAMPLE_SLOTS}];
   scene.traverse(o=>{if(o.material?.isMeshStandardMaterial&&!o.material.userData.clock)materials.add(o.material)});  // the foam disc keeps its own shader
   for(const mat of materials){
     const isWater=mat===water.material;
+    const actorCompile=mat.userData.actorArt?mat.onBeforeCompile:null;
+    const actorKey=mat.userData.actorArt?mat.customProgramCacheKey():'';
     mat.onBeforeCompile=shader=>{
       if(bendingMaterials.has(mat))sway(shader,mat.name==='grass');
       else shader.vertexShader='uniform float elapsed,wet,breeze;\n'+shader.vertexShader;
@@ -345,7 +347,7 @@ uniform vec4 trample[${TRAMPLE_SLOTS}];
       }
       if(isWater)shadeWater(shader,water);
       if(mat.name==='cascade')shadeCascade(shader,water);
-      if(!isWater&&mat.name!=='cascade'&&mat.name!=='glass'&&mat.name!=='lampglass'&&!mat.transparent){
+      if(!actorCompile&&!isWater&&mat.name!=='cascade'&&mat.name!=='glass'&&mat.name!=='lampglass'&&!mat.transparent){
         // Read the shadowed sun at the first directional light. Small smoothstep
         // ranges soften band boundaries during camera movement without washing them out.
         const direct='RE_Direct( directLight, geometryPosition, geometryNormal, geometryViewDir, geometryClearcoatNormal, material, reflectedLight );';
@@ -378,13 +380,20 @@ uniform vec4 trample[${TRAMPLE_SLOTS}];
             float grain=texture2D(cloudMap,landPosition.xz*1.4+landPosition.y*.051).r;
             vec3 barkPaint=mix(vec3(.052,.028,.018),vec3(.33,.146,.062),smoothstep(.07,.65,paintSun+grain*.18));
             painted=mix(painted,barkPaint*(.73+.48*grain),.69*(1.-coverSnow));
+            `:mat.name==='story-boulder'?`
+            float grain=texture2D(cloudMap,landPosition.xz*.74+landPosition.y*vec2(.17,.43)).r;
+            float heightMask=smoothstep(.40,.71,inverseTransformDirection(nonPerturbedNormal,viewMatrix).y);
+            float moss=heightMask*smoothstep(.39,.61,grain)*step(${WATER}+.06,landPosition.y)*(1.-coverSnow);
+            vec3 mossPaint=mix(vec3(.095,.142,.044),vec3(.31,.38,.094),paintSun);
+            painted=mix(painted*vec3(.76,.86,.96),mossPaint,moss*.85);
             `:''}
             outgoingLight=mix(outgoingLight,painted+totalEmissiveRadiance,storyDay*.89);
           }
           #include <opaque_fragment>`);
       }
+      if(actorCompile)actorCompile.call(mat,shader);
     };
-    mat.customProgramCacheKey=()=>isWater?'pond':mat.name;
+    mat.customProgramCacheKey=()=>isWater?'pond':mat.name+actorKey;
   }
   return {cloudMap,breeze,snowDepth,winterBare,foliageTint,trample,wet,update(seconds){clock.value=seconds;wind.value.set(seconds*.0019,seconds*.0008)},
     // Surfaces soak within a few seconds of rain and take about half a minute to dry again.

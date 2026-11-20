@@ -1,33 +1,43 @@
 import * as T from 'three';
 
-function ellipsoid(group,color,x,y,z,w,h,d){
-  const mesh=new T.Mesh(new T.SphereGeometry(1,10,7),new T.MeshStandardMaterial({color,roughness:.8}));
+function coloredEllipsoid(art,group,color,x,y,z,w,h,d){
+  const mesh=new T.Mesh(new T.SphereGeometry(1,10,7),art.shade(new T.MeshStandardMaterial({color,roughness:.8})));
   mesh.scale.set(w,h,d);mesh.position.set(x,y,z);mesh.castShadow=true;group.add(mesh);return mesh;
 }
-function birdModel(){
+function birdModel(ellipsoid,art){
   const bird=new T.Group();
+  bird.name='wild-bird';
   ellipsoid(bird,0x80624a,0,.11,0,.12,.115,.21);
   ellipsoid(bird,0x55504b,0,.22,.13,.101,.106,.11);
   ellipsoid(bird,0xe5c19a,0,.14,.13,.092,.083,.095);
   ellipsoid(bird,0xc19658,0,.2,.235,.044,.028,.067);
-  for(const side of [-1,1])ellipsoid(bird,0x211e1c,side*.083,.241,.172,.015,.015,.015);
+  for(const side of [-1,1]){
+    ellipsoid(bird,0x211e1c,side*.083,.241,.172,.015,.015,.015);
+    art.detail(ellipsoid(bird,0xffebcb,side*.095,.246,.177,.005,.005,.005));
+    art.detail(ellipsoid(bird,0xead1a1,side*.073,.204,.192,.032,.028,.043));
+  }
   ellipsoid(bird,0x4c453e,0,.12,-.217,.063,.043,.158);
   const wings=[-1,1].map(side=>{
     const wing=new T.Group();wing.position.set(side*.069,.15,-.013);
     ellipsoid(wing,0x68584a,side*.15,0,-.03,.205,.031,.103);
     ellipsoid(wing,0x453e38,side*.295,0,-.094,.124,.021,.055);
+    for(let i=0;i<3;i++){
+      const plume=art.detail(ellipsoid(wing,0xad8058,side*(.11+i*.074),.022,-.013-i*.018,.072,.013,.023));
+      plume.rotation.y=side*.28;
+    }
     bird.add(wing);return wing;
   });
   // Thin legs: tucked in flight, reaching forward for the touchdown, standing on the perch.
   const legs=[-1,1].map(side=>{
     const leg=new T.Group();leg.position.set(side*.04,.07,.01);
-    const shank=new T.Mesh(new T.CylinderGeometry(.008,.008,.07,4),new T.MeshStandardMaterial({color:0x8a6a45,roughness:.8}));
+    const shank=new T.Mesh(new T.CylinderGeometry(.008,.008,.07,4),art.shade(new T.MeshStandardMaterial({color:0x8a6a45,roughness:.8})));
     shank.position.y=-.035;leg.add(shank);bird.add(leg);return leg;
   });
   bird.scale.setScalar(1.35);return {bird,wings,legs};
 }
-export function createWildlife(scene,world){
-  const {bird,wings,legs}=birdModel();
+export function createWildlife(scene,world,art){
+  const ellipsoid=coloredEllipsoid.bind(null,art);
+  const {bird,wings,legs}=birdModel(ellipsoid,art);
   scene.add(bird);bird.visible=false;
   // A school of ten swims the pond below the surface; now and then one of them leaps.
   const {height,waterY}=world,deep=(x,z)=>waterY-height(x,z);
@@ -35,10 +45,15 @@ export function createWildlife(scene,world){
   const palettes=[[0x62796b,0xadb18b,0x806b52],[0x8a6f4c,0xd2b27c,0x9b6b3d],[0xe2dccb,0xf2eee2,0xd8783c],[0xb06a3a,0xe7c08a,0xa65a2f]];
   const school=Array.from({length:10},(_,i)=>{
     const group=new T.Group(),[back,belly,fin]=palettes[i%palettes.length];
+    group.name='pond-fish-'+i;
     ellipsoid(group,back,0,0,0,.092,.12,.34);
     ellipsoid(group,belly,0,-.055,.07,.073,.065,.21);
     const tail=ellipsoid(group,fin,0,0,-.36,.028,.14,.14);
     ellipsoid(group,fin,0,.11,-.05,.025,.055,.11);
+    for(const side of [-1,1]){
+      const finTip=art.detail(ellipsoid(group,fin,side*.075,-.028,.015,.06,.018,.097));
+      finTip.rotation.y=side*.58;
+    }
     for(const s of [-1,1])ellipsoid(group,0x27281d,s*.074,.024,.208,.016,.016,.016);
     group.scale.setScalar(.62+.3*((i*37)%10)/10);scene.add(group);
     let x,z;do{x=7.5+Math.random()*5;z=3.5+Math.random()*5.5}while(!inPond(x,z));
