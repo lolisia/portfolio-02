@@ -147,8 +147,16 @@ export function createUnityChan(scene,world,onReady,prints,art){
   function startNext(){
     if(job||!jobs.length||!['idle','walking'].includes(s.state))return;
     job=jobs.shift();
-    // The nearest approach to the work spot.
-    job.spot=job.spots.reduce((best,p)=>Math.hypot(p.x-s.x,p.z-s.z)<Math.hypot(best.x-s.x,best.z-s.z)?p:best);
+    // The work spot she can walk to soonest (by route, not as the crow flies: the nearest spot
+    // can lie on the far side of a neighbouring bed or fence).
+    let best=null,bestCost=Infinity;
+    for(const p of job.spots){
+      const route=place.route(s,p);let cost=0,from=s;
+      if(route.length)for(const q of route){cost+=Math.hypot(q.x-from.x,q.z-from.z);from=q}
+      else cost=1e6+Math.hypot(p.x-s.x,p.z-s.z);
+      if(cost<bestCost){bestCost=cost;best=p}
+    }
+    job.spot=best;
     head(job.spot);
   }
   function arrive(){
@@ -179,8 +187,12 @@ export function createUnityChan(scene,world,onReady,prints,art){
     const key=x+','+z;if(bedSpots.has(key))return bedSpots.get(key);
     const list=[];
     for(const [u,v] of [[1,0],[-1,0],[0,1],[0,-1],[.5,1],[-.5,1],[.5,-1],[-.5,-1],[1,.5],[1,-.5],[-1,.5],[-1,-.5]]){
-      const px=x+u*(w/2+(Math.abs(u)===1?.3:0)),pz=z+v*(d/2+(Math.abs(v)===1?.3:0));
-      if(world.walkable(px,pz))list.push({x:px,z:pz,face:Math.atan2(x-px,z-pz)});
+      // Step back until the spot is clear: a bed's collider can be wider than its soil (the
+      // flower beds' plank edging), which leaves the first stand-off inside the clearance.
+      for(const gap of [.3,.38,.46]){
+        const px=x+u*(w/2+(Math.abs(u)===1?gap:0)),pz=z+v*(d/2+(Math.abs(v)===1?gap:0));
+        if(world.walkable(px,pz)){list.push({x:px,z:pz,face:Math.atan2(x-px,z-pz)});break}
+      }
     }
     if(!list.length)list.push({x,z:z+d/2+.3,face:Math.PI});
     bedSpots.set(key,list);return list;
