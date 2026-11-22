@@ -164,7 +164,9 @@ export function createFarm(scene,world,assets,camera,canvas){
       assign(plot,'plant',crop,()=>{
         if(state.plots[index]||state.coins<crop.cost){ui.refresh(state);return}
         state.coins-=crop.cost;state.plots[index]={crop:id,planted:Date.now()};
-        plot.growth=0;plot.harvest=0;show(plot,id);save();ui.refresh(state);
+        // Draw the seedling before the set is shown: its instances still hold the full-grown
+        // build-time matrices, which would flash for a frame until the next update.
+        plot.growth=0;plot.drawn=0;plot.harvest=0;draw(plot.sets.get(id),0);show(plot,id);save();ui.refresh(state);
       });
       return true;
     },
