@@ -102,7 +102,7 @@ export function createFarmUI({crops,levels,levelOf,plant,clear,cancel,wallet}){
         const locked=level<f.level,poor=current.coins<f.cost;
         return `<button type="button" class="seed" data-fruit="${f.id}" ${locked||poor?'disabled':''} ${locked?'data-locked':''}>
           <span class="seed-icon">${f.icon}</span>
-          <span class="seed-name">${f.name}나무<small>${locked?'🔒 Lv.'+f.level+' 해금':'⏱ 열매 '+duration(f.seconds)}</small></span>
+          <span class="seed-name">${f.tree}<small>${locked?'🔒 Lv.'+f.level+' 해금':'⏱ 열매 '+duration(f.seconds)}</small></span>
           <span class="seed-price"><span class="${poor&&!locked?'short':''}">🪙 ${f.cost}</span><small>열매 개당 ${f.sell}</small></span>
         </button>`;
       }).join('');
@@ -116,15 +116,15 @@ export function createFarmUI({crops,levels,levelOf,plant,clear,cancel,wallet}){
     // A fruit tree whose fruit is still ripening: time left, the harvest, and an option to fell it.
     openTreeInfo(key,at,{fruit,left,growth,count},onFell){
       spots[key]=at;
-      open(key,header(fruit.icon+' '+fruit.name+'나무',key,'과일나무')+`
-        <div class="farm-info"><div class="farm-info-row"><span>열매가 익기까지</span><b class="farm-left">${clock(left)}</b></div>
+      open(key,header(fruit.icon+' '+fruit.tree,key,fruit.pine?'솔방울':'과일나무')+`
+        <div class="farm-info"><div class="farm-info-row"><span>${fruit.pine?'솔방울이':'열매가'} 익기까지</span><b class="farm-left">${clock(left)}</b></div>
         <span class="farm-bar"><i style="width:${growth*100}%"></i></span>
         <div class="farm-info-row"><span>예상 수확</span><b>${fruit.icon} ${count}개 · 🪙 ${count*fruit.sell} · ${fruit.xp} XP</b></div>
         <button type="button" class="farm-clear">나무 베기</button></div>`,'tree-info');
       const button=popup.querySelector('.farm-clear');
       button.addEventListener('click',()=>{
         if(button.dataset.confirm){close();onFell()}
-        else{button.dataset.confirm='1';button.textContent='과일나무가 그루터기만 남아요. 정말 벨까요?'}
+        else{button.dataset.confirm='1';button.textContent=fruit.tree+'가 그루터기만 남아요. 정말 벨까요?'}
       });
     },
     // Keep a tree popup on its tree as the view moves; info refreshes the countdown, and a

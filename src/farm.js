@@ -147,7 +147,7 @@ export function createFarm(scene,world,assets,camera,canvas){
     state.coins+=coins;state.xp+=xp;save();ui.refresh(state);
     const after=levelOf(state.xp);
     if(after>before)ui.levelUp(after,[...CROPS.filter(c=>c.level>before&&c.level<=after),
-      ...FRUITS.filter(f=>f.level>before&&f.level<=after).map(f=>({icon:f.icon,name:f.name+'나무'}))]);
+      ...FRUITS.filter(f=>f.level>before&&f.level<=after).map(f=>({icon:f.icon,name:f.tree}))]);
   }
   // Queue a job at a bed for Unity-chan; the plot shows it as pending until she is done.
   function assign(plot,type,crop,done){
@@ -236,8 +236,10 @@ export function createFarm(scene,world,assets,camera,canvas){
       if(fruit&&state.coins<fruit.cost){ui.toast('🪙 코인이 모자라 묘목을 심지 못했어요');return}
       if(fruit){state.coins-=fruit.cost;ui.refresh(state)}
       forestry.plant(tree);saveTree(tree,{planted:tree.plantedAt});
-      if(fruit)orchard.plant(tree,fruit.id,tree.plantedAt+SAPLING_SECONDS*1000);
-      const at=anchorOf(tree.x,tree.y+.6,tree.z);ui.rewardAt(at.x,at.y,'🌱 '+(fruit?fruit.name+'나무 ':'')+'묘목 심기',0,1,true);earn(0,1);
+      // The new tree sets its first fruit (or cones) once it has grown.
+      const kind=fruit??orchard.info(tree)?.fruit;
+      if(kind)orchard.plant(tree,kind.id,tree.plantedAt+SAPLING_SECONDS*1000);
+      const at=anchorOf(tree.x,tree.y+.6,tree.z);ui.rewardAt(at.x,at.y,'🌱 '+(kind?kind.tree+' ':'')+'묘목 심기',0,1,true);earn(0,1);
     }},fruit?{fruit}:null);
   }
   forestry_onGrown=tree=>saveTree(tree,null);
@@ -292,12 +294,12 @@ export function createFarm(scene,world,assets,camera,canvas){
     const spots=forestry.trunkSpots(tree);
     if(tree.state==='fallen'){chopLog(tree);return}
     if(tree.state==='growing'){
-      const name=fruity?orchard.info(tree).fruit.name+'나무 ':'';
+      const name=fruity?orchard.info(tree).fruit.tree+' ':'';
       ui.toast((tree.pine?'🌲':'🌳')+' '+name+'묘목이 자라는 중 · '+clock(forestry.left(tree)));return;
     }
     if(!spots.length){ui.toast('🚧 이 나무에는 다가갈 수 없어요');return}
     if(tree.state==='bare'||tree.state==='stump'){
-      if(fruity){pickFruit(tree);return}
+      if(fruity&&!tree.pine){pickFruit(tree);return}
       if(tree.state==='bare'){plantSapling(tree);return}
       stage(tree,'stump',{spots,steps:[{clip:'Chopping',time:2,fade:.2}],onHit:swing(tree,false),done(){forestry.uproot(tree);plantSapling(tree)}});
       return;

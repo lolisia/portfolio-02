@@ -2,11 +2,12 @@ import * as T from 'three';
 import {mergeGeometries} from 'three/addons/utils/BufferGeometryUtils.js';
 import {builder} from './modules.js';
 
-// Fruit trees. Every broadleaf tree on the island bears fruit (pines stay timber): the fruit hangs
+// Fruit trees. Every broadleaf tree on the island bears fruit and every pine bears cones: it hangs
 // on the outside of the crown, swells and colours over its ripening time (saved as a timestamp,
 // so it keeps ripening while the page is closed), and when ripe Unity-chan smacks the trunk, the
 // tree sways, the fruit drops and bounces on the grass and she gathers it up. A stump can be
-// replanted with any fruit unlocked so far; the island starts with apple trees.
+// replanted with any fruit unlocked so far; the island starts with apple trees. Pines only ever
+// grow back as pines, so their cones are not in the sapling picker.
 // seconds: ripening time; cost: sapling price; sell: coins per fruit; xp: per harvest;
 // level: player level that unlocks it.
 export const FRUITS=[
@@ -15,8 +16,11 @@ export const FRUITS=[
   {id:'peach',name:'복숭아',icon:'🍑',seconds:3600,cost:70,sell:16,xp:20,level:3,mesh:'fruitPeach',young:'#b5cc6a',ripe:'#fbb084'},
   {id:'orange',name:'오렌지',icon:'🍊',seconds:7200,cost:120,sell:28,xp:32,level:4,mesh:'fruitOrange',young:'#7fae48',ripe:'#f28a1e'},
   {id:'lemon',name:'레몬',icon:'🍋',seconds:14400,cost:200,sell:50,xp:50,level:5,mesh:'fruitLemon',young:'#9cc25a',ripe:'#f4dc3c'}
-];
-export const fruitById=new Map(FRUITS.map(f=>[f.id,f]));
+].map(f=>({...f,tree:f.name+'나무'}));
+export const PINECONE={id:'pinecone',name:'솔방울',tree:'소나무',icon:'🌰',seconds:900,cost:0,sell:3,xp:4,level:1,
+  mesh:'fruitPinecone',young:'#7f9a4c',ripe:'#8d5c33',pine:true};
+const ALL=[...FRUITS,PINECONE];
+export const fruitById=new Map(ALL.map(f=>[f.id,f]));
 export const DEFAULT_FRUIT='apple';
 const ease=t=>t*t*(3-2*t);
 const clamp01=t=>Math.min(1,Math.max(0,t));
@@ -61,6 +65,15 @@ export function fruitKinds(){
   set('fruitLemon',[piece(shape(new T.SphereGeometry(.075,12,9),v=>{
     const u=Math.abs(v.y)/.075,nub=Math.max(0,u-.75)*4;v.y*=1.3+.25*nub*nub;v.x*=1-.25*nub;v.z*=1-.25*nub;
   })),stalk(.11,.03)]);
+  // Pine cone: a tapered ovoid hanging tip-down, ringed with rows of scales.
+  {
+    const rows=18,pts=[];
+    for(let i=0;i<=rows;i++){
+      const t=i/rows,y=-.1+t*.19,r=.05*Math.pow(Math.sin(Math.PI*Math.pow(t,.75)),.75)*(i%2?.8:1);
+      pts.push(new T.Vector2(Math.max(i===0||i===rows?0:.004,r),y));
+    }
+    set('fruitPinecone',[piece(new T.LatheGeometry(pts,9)),stalk(.085,.03)]);
+  }
   return kinds;
 }
 
@@ -95,8 +108,9 @@ export function createOrchard(scene,world,assets,forestry,entries,save){
   for(const [name,kind] of fruitKinds())assets.set(name,kind);
   const group=new T.Group();group.name='orchard';
   const b=builder(group,8807,assets);
-  const trees=forestry.trees.filter(t=>!t.pine).map(tree=>{
-    const leaves=tree.parts.find(p=>p.mesh.name===tree.kind+'Leaves'),geometry=assets.get(tree.kind+'Leaves')?.geometry;
+  const trees=forestry.trees.map(tree=>{
+    const crown=tree.kind+(tree.pine?'Needles':'Leaves');
+    const leaves=tree.parts.find(p=>p.mesh.name===crown),geometry=assets.get(crown)?.geometry;
     if(!leaves||!geometry)return null;
     const local=slotsFor(geometry,Math.round(5+4*tree.s),3301+tree.index*97);
     const slots=local.map(p=>p.applyMatrix4(leaves.base));
@@ -105,7 +119,7 @@ export function createOrchard(scene,world,assets,forestry,entries,save){
   // One batch per fruit kind holding a copy for every slot of every tree; only the tree's own
   // fruit is ever shown.
   let total=0;for(const o of trees){o.offset=total;total+=o.slots.length}
-  for(const fruit of FRUITS)for(const o of trees){
+  for(const fruit of ALL)for(const o of trees){
     const {tree}=o;
     o.slots.forEach((p,i)=>{
       const k=.9+((i*37+tree.index*11)%10)/50;
@@ -113,7 +127,7 @@ export function createOrchard(scene,world,assets,forestry,entries,save){
     });
   }
   b.finish();scene.add(group);
-  const meshes=new Map(FRUITS.map(f=>{
+  const meshes=new Map(ALL.map(f=>{
     const mesh=group.getObjectByName(f.mesh);
     const base=Array.from({length:mesh.count},(_,i)=>{const m=new T.Matrix4();mesh.getMatrixAt(i,m);return m});
     return [f.id,{mesh,base}];
@@ -125,7 +139,9 @@ export function createOrchard(scene,world,assets,forestry,entries,save){
 
   const entry=tree=>{
     let e=entries[tree.index];
-    if(!e||!fruitById.has(e.id)||!Number.isFinite(e.since))e=entries[tree.index]={id:DEFAULT_FRUIT,since:0};
+    // A pine bears cones, a broadleaf tree fruit; anything else in the save is reset.
+    if(!e||!fruitById.has(e.id)||!!fruitById.get(e.id).pine!==!!tree.pine||!Number.isFinite(e.since))
+      e=entries[tree.index]={id:tree.pine?PINECONE.id:DEFAULT_FRUIT,since:0};
     return e;
   };
   // Ripeness 0..1: nothing grows on a sapling, and fruit set after planting waits for the tree.
