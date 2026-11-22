@@ -23,7 +23,10 @@ export function createForestry(scene,world,assets){
     b.place(0,0,0,k,t.angle,()=>{b.part('stumpBark',0,-.04,0,1,1,1,'#7a5a3a');b.part('stumpTop',0,-.04,0,1,1,1,'#d1b07a')});
     b.finish();stump.position.set(t.x,t.y,t.z);scene.add(stump);
     return {...t,index,pine,perch,stump,parts:[],state:'standing',tilt:0,size:1,dir:new T.Vector3(0,0,1),
-      timer:0,wobble:0,wobbleTime:0,plantedAt:0,uproot:0,onLanded:null};
+      timer:0,wobble:0,wobbleTime:0,wobbleAmp:.045,wobbleRate:34,wobbleLength:.55,plantedAt:0,uproot:0,onLanded:null,
+      // The tree's current pose (world space) and a counter bumped each time it changes, so the
+      // fruit hanging in it (orchard.js) can follow.
+      pose:new T.Matrix4(),rev:0};
   });
   const m=new T.Matrix4(),p=new T.Vector3();
   for(const mesh of meshes)for(let i=0;i<mesh.count;i++){
@@ -39,6 +42,7 @@ export function createForestry(scene,world,assets){
       .multiply(turn.makeRotationAxis(axis,tilt))
       .multiply(m.makeScale(tree.size,tree.size,tree.size))
       .multiply(turn.makeTranslation(-root.x,-root.y,-root.z));
+    tree.pose.copy(pose);tree.rev++;
     for(const part of tree.parts){
       if(tree.size<=1e-3)m.makeScale(0,0,0);else m.multiplyMatrices(pose,part.base);
       part.mesh.setMatrixAt(part.i,m);dirty.add(part.mesh);
@@ -104,7 +108,13 @@ export function createForestry(scene,world,assets){
     // An axe blow: a standing tree shudders away from the blade, a log jumps a little.
     hit(tree,from){
       if(tree.state==='standing'){tree.dir.set(tree.x-from.x,0,tree.z-from.z).normalize()}
-      tree.wobble=1;tree.wobbleTime=0;
+      tree.wobble=1;tree.wobbleTime=0;tree.wobbleAmp=.045;tree.wobbleRate=34;tree.wobbleLength=.55;
+    },
+    // Shaken for its fruit: a slower, wider sway away from her that takes a while to settle.
+    shake(tree,from){
+      if(tree.state!=='standing')return;
+      tree.dir.set(tree.x-from.x,0,tree.z-from.z).normalize();
+      tree.wobble=1;tree.wobbleTime=0;tree.wobbleAmp=.075;tree.wobbleRate=15;tree.wobbleLength=1.3;
     },
     fell(tree,onLanded){
       tree.state='falling';tree.timer=0;tree.onLanded=onLanded;tree.wobble=0;
@@ -119,8 +129,8 @@ export function createForestry(scene,world,assets){
         // Shudder after a blow: a quick damped sway about the base (or a hop for a log).
         let shake=0;
         if(t.wobble>0){
-          t.wobbleTime+=dt;t.wobble=Math.max(0,1-t.wobbleTime/.55);
-          shake=Math.sin(t.wobbleTime*34)*t.wobble*t.wobble*(t.state==='standing'?.045:.025);
+          t.wobbleTime+=dt;t.wobble=Math.max(0,1-t.wobbleTime/t.wobbleLength);
+          shake=Math.sin(t.wobbleTime*t.wobbleRate)*t.wobble*t.wobble*(t.state==='standing'?t.wobbleAmp:.025);
           if(t.state==='standing'||t.state==='fallen')draw(t,t.tilt+shake);
         }
         if(t.state==='falling'){

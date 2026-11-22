@@ -24,7 +24,8 @@ export function createFarmUI({crops,levels,levelOf,plant,clear,cancel,wallet}){
   const popup=el('div','farm-popup');popup.hidden=true;popup.setAttribute('role','dialog');
   layer.append(popup);
   document.querySelector('main').append(layer,hud);
-  const notes=new Map(),tags=[],spots=[],picking={kind:'veg'};let openType='',openIndex=-1,state=null,api;
+  // openIndex is a bed index, or a string key ('tree3') for a popup about something else.
+  const notes=new Map(),tags=[],spots=[],picking={kind:'veg'};let openType='',openIndex=-1,repaint=null,state=null,api;
   const coins=hud.querySelector('output');let shownCoins=null;
   const woodOut=hud.querySelector('.farm-wood output');let woodShown=0,woodHeld=false;
   function showWood(value,bump=value>woodShown){
@@ -41,27 +42,27 @@ export function createFarmUI({crops,levels,levelOf,plant,clear,cancel,wallet}){
     return tags[index];
   }
   function position(){
-    if(openIndex<0||!spots[openIndex])return;
+    if(openIndex===-1||!spots[openIndex])return;
     const {x,y}=spots[openIndex],w=popup.offsetWidth,h=popup.offsetHeight,pad=10;
     const left=Math.min(innerWidth-w-pad,Math.max(pad,x-w/2));
     let top=y-h-26;if(top<pad)top=Math.min(innerHeight-h-pad,y+30);
     popup.style.left=Math.round(left)+'px';popup.style.top=Math.round(top)+'px';
   }
   function open(index,html,type){
-    openIndex=index;openType=type;popup.innerHTML=html;popup.hidden=false;popup.classList.remove('show');
+    openIndex=index;openType=type;repaint=null;popup.innerHTML=html;popup.hidden=false;popup.classList.remove('show');
     void popup.offsetWidth;popup.classList.add('show');position();
     popup.querySelector('.farm-close')?.addEventListener('click',close);
     tags.forEach((t,i)=>t?.tag.classList.toggle('selected',i===index));
   }
   function close(){
-    if(openIndex<0)return;openIndex=-1;openType='';popup.hidden=true;popup.innerHTML='';
+    if(openIndex===-1)return;openIndex=-1;openType='';repaint=null;popup.hidden=true;popup.innerHTML='';
     tags.forEach(t=>t?.tag.classList.remove('selected'));
   }
   addEventListener('keydown',e=>{if(e.key==='Escape')close()});
-  const header=(title,index)=>`<header><strong>${title}</strong><span class="farm-plot-no">${index<4?index+1+'번 밭':index-3+'번 꽃밭'}</span><button type="button" class="farm-close" aria-label="닫기">✕</button></header>`;
+  const header=(title,index,label)=>`<header><strong>${title}</strong><span class="farm-plot-no">${label??(index<4?index+1+'번 밭':index-3+'번 꽃밭')}</span><button type="button" class="farm-close" aria-label="닫기">✕</button></header>`;
 
   api={
-    onTag:null,close,isOpen:()=>openIndex>=0,
+    onTag:null,close,isOpen:()=>openIndex!==-1,openKey:()=>openIndex,
     // opts.woodDelay: the wood counter waits for the flying firewood (collect) to arrive.
     refresh(next,opts={}){
       state=next;
@@ -73,7 +74,7 @@ export function createFarmUI({crops,levels,levelOf,plant,clear,cancel,wallet}){
       shownCoins=state.coins;coins.textContent=state.coins.toLocaleString('ko-KR');
       if(opts.woodDelay)woodHeld=true;
       if(!woodHeld)showWood(state.wood);
-      if(openIndex>=0&&popup.querySelector('.seed-list'))api.openPicker(openIndex,picking.kind,wallet(),true);
+      if(openIndex!==-1)repaint?.();
     },
     openPicker(index,kind,current,refresh=false){
       picking.kind=kind;
@@ -91,6 +92,51 @@ export function createFarmUI({crops,levels,levelOf,plant,clear,cancel,wallet}){
       if(scroll)popup.querySelector('.seed-list').scrollTop=scroll;
       popup.querySelectorAll('.seed').forEach(b=>b.addEventListener('click',()=>{if(plant(index,b.dataset.crop))close()}));
       if(!refresh)popup.querySelector('.seed:not([disabled])')?.focus({preventScroll:true});
+      repaint=()=>api.openPicker(openIndex,picking.kind,wallet(),true);
+    },
+    // Fruit sapling picker for a tree (key 'tree<n>', at its screen point); onPick(id) -> planted?
+    openTreePicker(key,at,fruits,onPick,refresh=false){
+      spots[key]=at;
+      const current=wallet(),level=levelOf(current.xp);
+      const items=fruits.map(f=>{
+        const locked=level<f.level,poor=current.coins<f.cost;
+        return `<button type="button" class="seed" data-fruit="${f.id}" ${locked||poor?'disabled':''} ${locked?'data-locked':''}>
+          <span class="seed-icon">${f.icon}</span>
+          <span class="seed-name">${f.name}나무<small>${locked?'🔒 Lv.'+f.level+' 해금':'⏱ 열매 '+duration(f.seconds)}</small></span>
+          <span class="seed-price"><span class="${poor&&!locked?'short':''}">🪙 ${f.cost}</span><small>열매 개당 ${f.sell}</small></span>
+        </button>`;
+      }).join('');
+      const scroll=refresh?popup.querySelector('.seed-list')?.scrollTop:0;
+      open(key,header('과일나무 심기',key,'묘목 고르기')+`<div class="seed-list">${items}</div>`,'tree-picker');
+      if(scroll)popup.querySelector('.seed-list').scrollTop=scroll;
+      popup.querySelectorAll('.seed').forEach(b=>b.addEventListener('click',()=>{if(onPick(b.dataset.fruit))close()}));
+      if(!refresh)popup.querySelector('.seed:not([disabled])')?.focus({preventScroll:true});
+      repaint=()=>api.openTreePicker(key,spots[key],fruits,onPick,true);
+    },
+    // A fruit tree whose fruit is still ripening: time left, the harvest, and an option to fell it.
+    openTreeInfo(key,at,{fruit,left,growth,count},onFell){
+      spots[key]=at;
+      open(key,header(fruit.icon+' '+fruit.name+'나무',key,'과일나무')+`
+        <div class="farm-info"><div class="farm-info-row"><span>열매가 익기까지</span><b class="farm-left">${clock(left)}</b></div>
+        <span class="farm-bar"><i style="width:${growth*100}%"></i></span>
+        <div class="farm-info-row"><span>예상 수확</span><b>${fruit.icon} ${count}개 · 🪙 ${count*fruit.sell} · ${fruit.xp} XP</b></div>
+        <button type="button" class="farm-clear">나무 베기</button></div>`,'tree-info');
+      const button=popup.querySelector('.farm-clear');
+      button.addEventListener('click',()=>{
+        if(button.dataset.confirm){close();onFell()}
+        else{button.dataset.confirm='1';button.textContent='과일나무가 그루터기만 남아요. 정말 벨까요?'}
+      });
+    },
+    // Keep a tree popup on its tree as the view moves; info refreshes the countdown, and a
+    // ripening card closes once the fruit is ripe.
+    track(key,x,y,info){
+      if(openIndex!==key)return;
+      spots[key]={x,y};position();
+      if(info&&openType==='tree-info'){
+        if(info.growth>=1){close();return}
+        const left=popup.querySelector('.farm-left'),bar=popup.querySelector('.farm-bar i');
+        if(left){left.textContent=clock(info.left);bar.style.width=(info.growth*100).toFixed(1)+'%'}
+      }
     },
     openInfo(index,info){
       open(index,header(info.crop.icon+' '+info.crop.name,index)+`
@@ -184,7 +230,7 @@ export function createFarmUI({crops,levels,levelOf,plant,clear,cancel,wallet}){
       layer.append(float);float.addEventListener('animationend',()=>float.remove());
     },
     levelUp(level,unlocked){
-      const toast=el('div','farm-toast',`<strong>레벨 업! Lv.${level}</strong>${unlocked.length?'<span>'+unlocked.map(c=>c.icon+' '+c.name).join(', ')+' 씨앗 해금</span>':''}`);
+      const toast=el('div','farm-toast',`<strong>레벨 업! Lv.${level}</strong>${unlocked.length?'<span>'+unlocked.map(c=>c.icon+' '+c.name).join(', ')+' 해금</span>':''}`);
       toast.setAttribute('role','status');
       layer.append(toast);toast.addEventListener('animationend',()=>toast.remove());
     }
