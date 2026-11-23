@@ -26,9 +26,13 @@ export function bindGraphicsStyle(apply){
   try{
     const saved=localStorage.getItem(key);
     if(saved==='storybook'||saved==='pastel')style='storybook';
+    else if(saved==='living')style='living';
   }catch{
     // The setting still works in the current session when storage is unavailable.
   }
+  // ?style=living|storybook checks a look without touching the saved setting.
+  const requested=new URLSearchParams(location.search).get('style');
+  if(['original','storybook','living'].includes(requested))style=requested;
   options.querySelector(`input[value="${style}"]`).checked=true;
   showStyle(style);
   options.addEventListener('change',event=>{

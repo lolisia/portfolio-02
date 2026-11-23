@@ -26,6 +26,7 @@ import {createStorybook,paintClouds} from './storybook.js';
 import {createActorArt} from './actor-art.js';
 import {createShedding} from './shed.js';
 import {createRoom} from './room.js';
+import {createLivingEnvironment} from './living.js';
 
 const canvas=document.querySelector('#world');
 const scene=new T.Scene(), renderer=new T.WebGLRenderer({canvas,antialias:false,powerPreference:'high-performance'});
@@ -92,6 +93,9 @@ const trackedCharacter=scene.getObjectByName('sd-unity-chan'),followTarget=new T
 const homeLife=createInterior(world,surface('glass'),windowLight);
 const setSky=createSky(renderer,scene,world.water);
 const volume=createVolume(renderer,world,sun,atmosphere.cloudMap,storybook,paintClouds());
+const living=createLivingEnvironment({scene,world,atmosphere});
+// ?debug=1 exposes the live scene for local inspection (draw calls, style state, objects).
+if(new URLSearchParams(location.search).has('debug'))window.__farmDebug={scene,renderer,camera,world,atmosphere,living};
 let refreshStyleShadows=false;
 const glowCanvas=document.createElement('canvas');glowCanvas.width=glowCanvas.height=128;
 const glowContext=glowCanvas.getContext('2d');
@@ -224,7 +228,7 @@ function lighting(){
     highlight:tint(t.dawn?new T.Vector3(.1,.02,-.06):new T.Vector3(.17,-.01,-.17),new T.Vector3(-.04,0,.06)),
     saturation:1+.16*golden,vignette:.2+.1*t.night,
     // Bloom: a restrained glare by day, wide warm halos once the lamps are the brightest thing left.
-    bloom:.05+.06*golden+.11*t.night,threshold:T.MathUtils.lerp(1.25,.55,t.night),stars:t.night*clear*clear*(1-t.golden)});
+    bloom:.05+.06*golden+.11*t.night+.05*living.state.value*t.night,threshold:T.MathUtils.lerp(1.25,.55,t.night)-.12*living.state.value*t.night,stars:t.night*clear*clear*(1-t.golden)});
   document.body.style.backgroundColor=backdrop.getStyle();
   clearTimeout(skyTimer);
   const updateProbe=()=>{setSky(t,w,sun);lastProbe=performance.now()};
@@ -250,10 +254,11 @@ function setWind(){
 const advanceTime=createDayClock(time,()=>{hourTarget=Number(time.value)});
 lighting();setWind();wind.oninput=()=>{windTarget=Number(wind.value)};
 bindGraphicsStyle(style=>{
-  const enabled=style==='storybook';
-  storybook.value=Number(enabled);
-  switchStorybook(enabled);
-  actorArt.select(enabled);
+  const storybookStyle=style==='storybook';
+  storybook.value=Number(storybookStyle);
+  switchStorybook(storybookStyle);
+  living.setEnabled(style==='living');
+  actorArt.select(storybookStyle);
   refreshStyleShadows=true;
   lighting();
 });
@@ -340,6 +345,9 @@ renderer.setAnimationLoop(ms=>{
   if(changingWeather)lighting();
   scene.background.lerp(backdrop,1-Math.exp(-3.8*Math.min(.5,elapsedFrame)));
   atmosphere.update(ms/1000);atmosphere.soak(weatherBlend.rain,Math.min(elapsedFrame,.5));
+  // While the living style fades in/out its bloom contribution changes with it, so keep the
+  // grade in step; once settled this costs nothing.
+  if(living.update(dt,ms/1000,windShown,nightLevel,seasonIndex,weatherIndex))lighting();
   volume.mood(atmosphere.snowDepth.value,atmosphere.wet.value,weatherBlend.rain,T.MathUtils.clamp((weatherBlend.density-1)/2.8,0,1),weatherBlend.storm,nightLevel);
   rain(dt,ms/1000,windShown,weatherBlend.rain,nightLevel);
   seasons(seasonIndex,weatherIndex,Math.min(elapsedFrame,.15),Math.min(elapsedFrame,4),ms/1000,windShown,weatherBlend);

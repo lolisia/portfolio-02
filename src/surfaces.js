@@ -118,6 +118,9 @@ export function surface(name){
 export function createAtmosphere(scene,world,storybook){
   const water=world.water;
   const clock={value:0},cloudAmount={value:.72},wind={value:new T.Vector2()},wet={value:0},breeze={value:.3};
+  // Shared living-environment wind field: the living graphics style blends it in for every
+  // instanced plant, and the petal/dust systems in living.js read the same two values.
+  const living={value:0},windDir={value:new T.Vector2(1,.36).normalize()},windPower={value:0};
   const clouds=texture(256,(u,v)=>{const n=255*(.60*coarse(u,v)+.25*coarse(2*u,2*v)+.12*coarse(4*u,4*v)+.03*fine(u,v));return [n,n,n]});
   const cloudMap={value:clouds};
   const snowDepth={value:0},winterBare={value:0},foliageTint={value:new T.Vector3(1,1,1)};
@@ -129,10 +132,21 @@ export function createAtmosphere(scene,world,storybook){
       vec3 wp=(instanceMatrix*vec4(position,1.)).xyz;
       float h=max(0.,wp.y-bendRoot.y);
       float phase=dot(bendRoot.xz,vec2(.39,.23));
+      float rank=fract(dot(bendRoot.xz,vec2(16.321,28.735)));
+      float livePhase=phase+rank*.37;
+      // The base style keeps its slow gust. The living style adds the three-band wind field
+      // (broad air, medium branch motion, quick leaf flutter) on a slowly turning direction.
       float gust=sin(elapsed*1.37-phase)+.42*sin(elapsed*2.31-phase*.71);
-      float bend=bendRoot.w*(bendRoot.w>.1?h:h*h)*gust*breeze;
+      float signal=.64*sin(elapsed*.73+livePhase*.28+rank*.55)
+        +.26*sin(elapsed*1.67+livePhase*.91)
+        +.10*sin(elapsed*3.85+livePhase*1.91);
+      float weight=bendRoot.w*(bendRoot.w>.1?h:h*h);
+      float gustBend=gust*breeze*weight;
+      float liveBend=signal*windPower*weight*1.35;
+      vec2 side=vec2(-windDir.y,windDir.x);
+      float flutter=sin(elapsed*(2.2+rank*1.9)+livePhase*3.1)*windPower*weight*.22;
       mat4 swaying=instanceMatrix;
-      swaying[3].xz+=vec2(bend,bend*.36);
+      swaying[3].xz+=vec2(gustBend,gustBend*.36)*(1.-living)+(windDir*liveBend+side*flutter)*living;
       #ifdef TRAMPLE
         // Walkers part the turf around them and leave a slowly recovering trail.
         vec2 parted=vec2(0.);float pressed=0.;
@@ -152,13 +166,13 @@ export function createAtmosphere(scene,world,storybook){
       #define instanceMatrix swaying
     #endif`;
   function sway(shader,turf=false){
-    Object.assign(shader.uniforms,{elapsed:clock,breeze,wet,winterBare});
+    Object.assign(shader.uniforms,{elapsed:clock,breeze,wet,winterBare,living,windDir,windPower});
     if(turf){shader.uniforms.trample=trample;shader.vertexShader=`#define TRAMPLE ${TRAMPLE_SLOTS}
 uniform vec4 trample[${TRAMPLE_SLOTS}];
 `+shader.vertexShader}
     shader.vertexShader="attribute float plantMask; varying float seasonalPlant; varying float plantRank;\n"+shader.vertexShader.replace("#include <uv_vertex>","#include <uv_vertex>\nseasonalPlant=plantMask;plantRank=fract(dot(instanceMatrix[3].xyz,vec3(16.321,28.735,9.135)));");
     shader.fragmentShader="uniform float winterBare; varying float seasonalPlant; varying float plantRank;\n"+shader.fragmentShader.replace("#include <alphatest_fragment>","#include <alphatest_fragment>\nif(seasonalPlant>.5 && plantRank<winterBare)discard;");
-    shader.vertexShader='uniform float elapsed,wet,breeze;\n#ifdef USE_INSTANCING\nattribute vec4 bendRoot;\n#endif\n'+shader.vertexShader.replace('#include <begin_vertex>',windVertex+'\n#include <begin_vertex>');
+    shader.vertexShader='uniform float elapsed,wet,breeze,living,windPower;\nuniform vec2 windDir;\n#ifdef USE_INSTANCING\nattribute vec4 bendRoot;\n#endif\n'+shader.vertexShader.replace('#include <begin_vertex>',windVertex+'\n#include <begin_vertex>');
   }
   const shadowDepth=new T.MeshDepthMaterial({depthPacking:T.RGBADepthPacking});
   shadowDepth.onBeforeCompile=sway;
@@ -201,7 +215,7 @@ uniform vec4 trample[${TRAMPLE_SLOTS}];
           }
           #endif`);
       }
-      Object.assign(shader.uniforms,{cloudMap,cloudAmount,wind,elapsed:clock,breeze,wet,snowDepth,foliageTint,rainNow,storybook,storyDay});
+      Object.assign(shader.uniforms,{cloudMap,cloudAmount,wind,elapsed:clock,breeze,wet,snowDepth,foliageTint,rainNow,storybook,storyDay,living,windDir,windPower});
       shader.vertexShader='varying vec3 landPosition;\n'+shader.vertexShader.replace('#include <project_vertex>',`
         vec4 land=vec4(transformed,1.);
         #ifdef USE_INSTANCING
@@ -209,7 +223,7 @@ uniform vec4 trample[${TRAMPLE_SLOTS}];
         #endif
         landPosition=(modelMatrix*land).xyz;
         #include <project_vertex>`);
-      shader.fragmentShader='varying vec3 landPosition; uniform sampler2D cloudMap; uniform float cloudAmount,elapsed,wet,breeze,rainNow,storybook,storyDay; uniform vec2 wind;\n'+shader.fragmentShader;
+      shader.fragmentShader='varying vec3 landPosition; uniform sampler2D cloudMap; uniform float cloudAmount,elapsed,wet,breeze,rainNow,storybook,storyDay,living; uniform vec2 wind;\n'+shader.fragmentShader;
       shader.fragmentShader=shader.fragmentShader.replace('#include <lights_fragment_begin>',T.ShaderChunk.lights_fragment_begin.replace('getDirectionalLightInfo( directionalLight, directLight );',`
         getDirectionalLightInfo( directionalLight, directLight );
         #if UNROLLED_LOOP_INDEX == 0
@@ -343,7 +357,7 @@ uniform vec4 trample[${TRAMPLE_SLOTS}];
           float passing=housePerson.z*(1.-smoothstep(.22,.62,distance(landPosition.xz,housePerson.xy)))*step(landPosition.y,housePerson.w);
           // where the TV is the brightest thing in the room, its cold light displaces the lamp's
           float screen=tvReach*min(1.,length(houseTv));
-          totalEmissiveRadiance=totalEmissiveRadiance*(1.-passing)*(1.-.45*screen)+houseTv*tvReach*1.4*(1.-.6*passing);`);
+          totalEmissiveRadiance=totalEmissiveRadiance*(1.-passing)*(1.-.45*screen)*(1.+.42*living)+houseTv*tvReach*1.4*(1.-.6*passing);`);
       }
       if(isWater)shadeWater(shader,water);
       if(mat.name==='cascade')shadeCascade(shader,water);
@@ -395,7 +409,7 @@ uniform vec4 trample[${TRAMPLE_SLOTS}];
     };
     mat.customProgramCacheKey=()=>isWater?'pond':mat.name+actorKey;
   }
-  return {cloudMap,breeze,snowDepth,winterBare,foliageTint,trample,wet,update(seconds){clock.value=seconds;wind.value.set(seconds*.0019,seconds*.0008)},
+  return {cloudMap,breeze,snowDepth,winterBare,foliageTint,trample,wet,living,windDir,windPower,update(seconds){clock.value=seconds;wind.value.set(seconds*.0019,seconds*.0008)},
     // Surfaces soak within a few seconds of rain and take about half a minute to dry again.
     soak(rain,dt){
       rainNow.value=rain;

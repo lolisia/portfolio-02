@@ -68,6 +68,11 @@ fieldset.control legend{background:none;padding:0;margin:0 0 8px}
 #panel[data-graphics-style="storybook"] :is(.options label:hover span,#reset:hover){background:#57775a18}
 #panel[data-graphics-style="storybook"] .auto input{accent-color:var(--ink)}
 #panel[data-graphics-style="storybook"] .slider .thumb{border-color:var(--ink);background:#fff2dc}
+#panel[data-graphics-style="living"]{--ink:#3d2f24;--line:#7d56332f;color:var(--ink);background:#fff5e5e6;border-color:#ffe8c8;text-shadow:none}
+#panel[data-graphics-style="living"] .options input:checked+span{background:#c9793a26;border-color:#c9793a8c}
+#panel[data-graphics-style="living"] :is(.options label:hover span,#reset:hover){background:#c9793a16}
+#panel[data-graphics-style="living"] .auto input{accent-color:var(--ink)}
+#panel[data-graphics-style="living"] .slider .thumb{border-color:var(--ink);background:#fff5e5}
 /* ---- Farm game ---- */
 #panel{z-index:3}
 .farm-layer{position:fixed;inset:0;pointer-events:none;z-index:2;--card:#fff7e9f5;--card-ink:#3b3024;--leaf:#5e8f3c;--gold:#f2b632}
