@@ -74,9 +74,10 @@ export function createPixelArt(renderer){
         float threshold=(4.*bayerPair(mod(pattern,2.))+bayerPair(floor(pattern/2.))+.5)/16.;
         vec3 color=gl_FragColor.rgb;
         float luma=dot(color,vec3(.2126,.7152,.0722));
-        float stepped=floor(luma*24.+threshold)/24.;
-        // Step the luminance and retain the scene's hue relationships.
-        float strength=gl_FragColor.a*.65*smoothstep(.03,.14,luma)*(1.-smoothstep(.83,1.,luma));
+        const float levels=10.;
+        float stepped=floor(luma*levels+threshold)/levels;
+        // Let the ordered pattern carry the midtones, fading into black and bright lights.
+        float strength=gl_FragColor.a*smoothstep(.015,.09,luma)*(1.-smoothstep(.86,.99,luma));
         gl_FragColor=vec4(clamp(color+(stepped-luma)*strength,0.,1.),1.);
       }
     `
