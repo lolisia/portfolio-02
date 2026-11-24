@@ -26,11 +26,13 @@ import {createStorybook,paintClouds} from './storybook.js';
 import {createActorArt} from './actor-art.js';
 import {createShedding} from './shed.js';
 import {createRoom} from './room.js';
+import {createPixelArt} from './pixel-art.js';
 
 const canvas=document.querySelector('#world');
 const scene=new T.Scene(), renderer=new T.WebGLRenderer({canvas,antialias:false,powerPreference:'high-performance'});
 renderer.toneMapping=T.ACESFilmicToneMapping;renderer.toneMappingExposure=1.14;
 renderer.shadowMap.enabled=true;renderer.shadowMap.type=T.PCFShadowMap;
+const pixelArt=createPixelArt(renderer);
 const camera=new T.OrthographicCamera(-22,22,15,-15,.1,180);
 const controls=new OrbitControls(camera,canvas);controls.enableDamping=true;controls.zoomToCursor=true;
 controls.minPolarAngle=.35;controls.maxPolarAngle=1.18;controls.minZoom=.7;controls.maxZoom=10;
@@ -81,7 +83,7 @@ const unityChan=createUnityChan(scene,world,unityChanLoaded,prints,actorArt);far
 // The cottage interior, drawn instead of the island while she is inside (room.js).
 // The sky as the island shows it, kept for the cottage windows.
 const skyLook={top:new T.Color(),bottom:new T.Color(),glow:new T.Color(),stars:0,sunY:1,hour:12};
-const room=createRoom({renderer,world,character:unityChan,canvas,controls,hooks:{
+const room=createRoom({renderer,renderOutput:pixelArt.render,world,character:unityChan,canvas,controls,hooks:{
   indoor:flag=>farm.setIndoor(flag),earn:(...a)=>farm.earn(...a),spendWood:(...a)=>farm.spendWood(...a),toast:t=>farm.toast(t),
   isNight:()=>{const h=hourShown<0?hourShown+24:hourShown;return h>=19||h<5},
   // Sleeping through the night: morning at 7:00, the scene relit at once behind the fade.
@@ -91,7 +93,7 @@ farm.bindRoom(room);
 const trackedCharacter=scene.getObjectByName('sd-unity-chan'),followTarget=new T.Vector3(),followDelta=new T.Vector3();
 const homeLife=createInterior(world,surface('glass'),windowLight);
 const setSky=createSky(renderer,scene,world.water);
-const volume=createVolume(renderer,world,sun,atmosphere.cloudMap,storybook,paintClouds());
+const volume=createVolume(renderer,world,sun,atmosphere.cloudMap,storybook,paintClouds(),pixelArt);
 let refreshStyleShadows=false;
 const glowCanvas=document.createElement('canvas');glowCanvas.width=glowCanvas.height=128;
 const glowContext=glowCanvas.getContext('2d');
@@ -124,8 +126,9 @@ function flickerLamps(dt,seconds){
     }
     const hum=1+.025*Math.sin(seconds*47+l.pivot.position.x)*Math.sin(seconds*3.1);
     const level=l.level*hum;
-    l.spot.intensity=34*nightLevel*level;
-    l.glow.visible=nightLevel>.01;l.glow.material.opacity=nightLevel*.78*level;
+    const pixel=pixelArt.enabled.value;
+    l.spot.intensity=(pixel?19:34)*nightLevel*level;
+    l.glow.visible=nightLevel>.01;l.glow.material.opacity=nightLevel*(pixel?.46:.78)*level;
     l.glass.emissiveIntensity=.025+nightLevel*2.6*level;
   }
 }
@@ -205,7 +208,9 @@ function lighting(){
   const elevation=Math.abs(t.direction.y);
   sun.intensity=(moon?.34:2.85*(1+1.1*t.golden))*(moon?T.MathUtils.smoothstep(elevation,0,.24):T.MathUtils.smoothstep(elevation,-.02,.34))* (w<1?T.MathUtils.lerp(1,.52,w):T.MathUtils.lerp(.52,.25,w-1));
   sky.color.copy(t.color([0xe8f3fc,0xf3fbff,0xbab3ea,0x97aed6,0x8e88d4]));
-  sky.intensity=t.value([.54,.62,.5,.10,.48])*(1-w*.09);
+  const pixelNight=t.night*pixelArt.enabled.value;
+  sky.intensity=(t.value([.54,.62,.5,.10,.48])+.29*pixelNight)*(1-w*.09);
+  sky.color.lerp(new T.Color(0x9ebaf0),.55*pixelNight);
   backdrop.copy(t.color([0xacbfca,0x93b9d4,0xd8aaa6,0x17263f,0xd48b6c]));
   const overcast=w<1?w*.64:T.MathUtils.lerp(.64,.88,w-1);
   const dimming=w<1?T.MathUtils.lerp(1,.92,w):T.MathUtils.lerp(.92,.68,w-1);
@@ -224,7 +229,7 @@ function lighting(){
     highlight:tint(t.dawn?new T.Vector3(.1,.02,-.06):new T.Vector3(.17,-.01,-.17),new T.Vector3(-.04,0,.06)),
     saturation:1+.16*golden,vignette:.2+.1*t.night,
     // Bloom: a restrained glare by day, wide warm halos once the lamps are the brightest thing left.
-    bloom:.05+.06*golden+.11*t.night,threshold:T.MathUtils.lerp(1.25,.55,t.night),stars:t.night*clear*clear*(1-t.golden)});
+    bloom:(.05+.06*golden+.11*t.night)*(1-.52*pixelNight),threshold:T.MathUtils.lerp(1.25,.55,t.night),stars:t.night*clear*clear*(1-t.golden)});
   document.body.style.backgroundColor=backdrop.getStyle();
   clearTimeout(skyTimer);
   const updateProbe=()=>{setSky(t,w,sun);lastProbe=performance.now()};
@@ -250,6 +255,7 @@ function setWind(){
 const advanceTime=createDayClock(time,()=>{hourTarget=Number(time.value)});
 lighting();setWind();wind.oninput=()=>{windTarget=Number(wind.value)};
 bindGraphicsStyle(style=>{
+  pixelArt.select(style==='pixel');
   const enabled=style==='storybook';
   storybook.value=Number(enabled);
   switchStorybook(enabled);

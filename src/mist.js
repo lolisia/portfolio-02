@@ -9,7 +9,7 @@ const fullscreenVertex=`
     gl_Position=vec4(position.xy,0.,1.);
   }`;
 
-export function createVolume(renderer,world,sun,clouds,storybook,paintedClouds){
+export function createVolume(renderer,world,sun,clouds,storybook,paintedClouds,pixelArt){
   const frame=new T.WebGLRenderTarget(1,1,{type:T.HalfFloatType});
   frame.depthTexture=new T.DepthTexture(1,1,T.UnsignedIntType);
   const fog=new T.WebGLRenderTarget(1,1,{type:T.HalfFloatType,depthBuffer:false});
@@ -134,13 +134,13 @@ export function createVolume(renderer,world,sun,clouds,storybook,paintedClouds){
       shadowTint:{value:new T.Vector3(1,1,1)},highlightTint:{value:new T.Vector3(1,1,1)},saturation:{value:1},vignette:{value:.2},
       bloomMap:{value:blooms[0].texture},bloomAmount:{value:0},stars:{value:0},skyTurn:{value:0},clock:{value:0},
       moodTint:{value:new T.Vector3(1,1,1)},moodSaturation:{value:1},moodContrast:{value:1},moodBloom:{value:1},
-      storybook,paintedClouds:{value:paintedClouds},nightLevel:{value:0},clearSky:{value:1},inkScale:{value:new T.Vector2()},
+      storybook,pixelStyle:pixelArt.enabled,paintedClouds:{value:paintedClouds},nightLevel:{value:0},clearSky:{value:1},inkScale:{value:new T.Vector2()},
       glassRect:{value:new T.Vector4()},viewport:{value:new T.Vector2()},contact:{value:aoTarget.texture},sceneColor:{value:frame.texture},depthMap:{value:frame.depthTexture},volume:{value:fog.texture},fogSize:{value:new T.Vector2()},contactSize:{value:new T.Vector2()}},
     vertexShader:fullscreenVertex,fragmentShader:`
     varying vec2 screenUv;uniform sampler2D sceneColor,depthMap,volume,contact,bloomMap;uniform vec2 fogSize,contactSize;
     uniform float bloomAmount,stars,skyTurn,clock,moodSaturation,moodContrast,moodBloom;uniform vec3 moodTint;
     uniform sampler2D paintedClouds;
-    uniform float storybook,nightLevel,clearSky;
+    uniform float storybook,pixelStyle,nightLevel,clearSky;
     uniform vec2 inkScale; // orthographic depth range and world distance per pixel
     float starHash(vec2 p){vec3 q=fract(p.xyx*vec3(.1031,.1030,.0973));q+=dot(q,q.yzx+33.33);return fract((q.x+q.y)*q.z);}
     uniform vec4 glassRect;uniform vec2 viewport,sunScreen;
@@ -239,7 +239,8 @@ export function createVolume(renderer,world,sun,clouds,storybook,paintedClouds){
       color=.18*pow(color/.18,vec3(moodContrast));  // weather contrast, pivoting on mid grey
       vec2 edge=(screenUv-.5)*vec2(viewport.x/viewport.y,1.);
       color*=1.-vignette*mix(1.,.32,storybook)*smoothstep(.25,1.05,length(edge));
-      gl_FragColor=vec4(color,1.);
+      // The pixel pass uses alpha to keep dithering off the flat sky.
+      gl_FragColor=vec4(color,1.-pixelStyle*step(1.,z));
       #include <tonemapping_fragment>
       #include <colorspace_fragment>
       if(storybook>.5){
@@ -338,7 +339,7 @@ export function createVolume(renderer,world,sun,clouds,storybook,paintedClouds){
       composite.uniforms.clock.value=seconds;
       composite.uniforms.inkScale.value.set(camera.far-camera.near,(camera.top-camera.bottom)/(camera.zoom*frame.height));
       camera.getWorldDirection(sunOrigin);composite.uniforms.skyTurn.value=Math.atan2(sunOrigin.x,sunOrigin.z)/(2*Math.PI)*336;
-      quad.material=composite;renderer.setRenderTarget(null);renderer.render(screen,ortho);
+      quad.material=composite;pixelArt.render(screen,ortho);
     }
   };
 }

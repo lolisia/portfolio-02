@@ -149,7 +149,7 @@ void main(){
   #include <colorspace_fragment>
 }`;
 
-export function createRoom({renderer,world,character,canvas,controls,hooks}){
+export function createRoom({renderer,renderOutput,world,character,canvas,controls,hooks}){
   const scene=new T.Scene();scene.background=new T.Color(0x1c1815);
   const camera=new T.OrthographicCamera(-5,5,3,-3,.1,80);
   const target=new T.Vector3(.1,.95,.6);camera.position.copy(target).add(new T.Vector3(6.4,6.6,8.6));camera.lookAt(target);
@@ -669,7 +669,7 @@ export function createRoom({renderer,world,character,canvas,controls,hooks}){
         status.children[0].textContent=busy.piece.userData.icon;status.children[1].textContent=busy.text;
       }else status.hidden=true;
       renderer.shadowMap.needsUpdate=true;
-      renderer.render(scene,camera);
+      renderOutput(scene,camera);
     }
   };
 }

@@ -18,6 +18,7 @@ export {drawHorizon,drawWind,drawWeather} from './motion.js';
 export function bindGraphicsStyle(apply){
   const options=document.querySelector('#graphicsStyle');
   const key='forest-farm.graphics-style';
+  const styles=Array.from(options.querySelectorAll('input'),input=>input.value);
   const showStyle=style=>{
     options.closest('#panel').dataset.graphicsStyle=style;
     apply(style);
@@ -25,13 +26,14 @@ export function bindGraphicsStyle(apply){
   let style='original';
   try{
     const saved=localStorage.getItem(key);
-    if(saved==='storybook'||saved==='pastel')style='storybook';
+    if(styles.includes(saved))style=saved;
+    else if(saved==='pastel')style='storybook';
   }catch{
     // The setting still works in the current session when storage is unavailable.
   }
-  // Preview either style without touching the saved setting.
+  // Preview a style without touching the saved setting.
   const requested=new URLSearchParams(location.search).get('style');
-  if(requested==='original'||requested==='storybook')style=requested;
+  if(styles.includes(requested))style=requested;
   options.querySelector(`input[value="${style}"]`).checked=true;
   showStyle(style);
   options.addEventListener('change',event=>{
