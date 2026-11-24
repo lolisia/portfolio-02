@@ -1,5 +1,46 @@
 import * as T from 'three';
 
+// Group lighting by surface before fog and bloom are composited. The same ramp
+// works on animated meshes, whose material and shadow inputs still update normally.
+export function shadePixelSurface(shader,pixelStyle,foliage=false){
+  shader.uniforms.pixelStyle=pixelStyle;
+  shader.fragmentShader='uniform float pixelStyle;\n'+shader.fragmentShader
+    .replace('#include <normal_fragment_maps>',`
+      #include <normal_fragment_maps>
+      if(pixelStyle>.5)normal=normalize(mix(normal,nonPerturbedNormal,.74));`)
+    .replace('#include <opaque_fragment>',`
+      if(pixelStyle>.5){
+        const vec3 pixelWeights=vec3(.2126,.7152,.0722);
+        vec3 pixelBase=diffuseColor.rgb;
+        vec3 pixelDiffuse=reflectedLight.directDiffuse+reflectedLight.indirectDiffuse;
+        float pixelValue=dot(pixelDiffuse,pixelWeights);
+        #ifdef STANDARD
+          float pixelMetalness=metalnessFactor;
+        #else
+          float pixelMetalness=0.;
+        #endif
+        float pixelLight=pixelValue/max(dot(pixelBase,pixelWeights)*(1.-pixelMetalness),.012);
+        vec3 lightTint=clamp(pixelDiffuse/max(pixelBase,.012)/max(.08,pixelLight),.44,1.65);
+        float pixelRamp=.14+.18*smoothstep(.16,.23,pixelLight)
+          +.29*smoothstep(.37,.45,pixelLight)+.44*smoothstep(.68,.79,pixelLight)
+          +.58*smoothstep(1.16,1.38,pixelLight);
+        ${foliage?`
+          // Group green pigments into larger teal, fern and yellow-green patches.
+          float green=smoothstep(.006,.04,pixelBase.g-max(pixelBase.r,pixelBase.b));
+          float pigment=dot(pixelBase,pixelWeights);
+          vec3 leaf=mix(vec3(.040,.145,.114),vec3(.104,.262,.129),smoothstep(.105,.173,pigment));
+          leaf=mix(leaf,vec3(.32,.445,.132),smoothstep(.235,.365,pigment));
+          pixelBase=mix(pixelBase,leaf,.78*green);
+        `:''}
+        vec3 pixelTint=mix(vec3(.69,.89,1.22),vec3(1.11,1.02,.83),smoothstep(.24,.95,pixelLight));
+        vec3 paint=pixelBase*pixelRamp*pixelTint*mix(vec3(1.),lightTint,.43);
+        paint*=1.-pixelMetalness;
+        paint+=(reflectedLight.directSpecular+reflectedLight.indirectSpecular)*mix(.18,.79,pixelMetalness);
+        outgoingLight=mix(outgoingLight,paint+totalEmissiveRadiance,.90);
+      }
+      #include <opaque_fragment>`);
+}
+
 export function createPixelArt(renderer){
   const cellSize=2;
   const size=new T.Vector2();

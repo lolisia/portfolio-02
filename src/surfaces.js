@@ -3,6 +3,7 @@ import {leafSpray} from './foliage.js';
 import {shadeWater} from './water.js';
 import {shadeCascade} from './cascade.js';
 import {quality} from './mobile-quality.js';
+import {shadePixelSurface} from './pixel-art.js';
 
 export function field(size,seed,rows=size){
   const values=new Float32Array(size*rows);
@@ -115,7 +116,7 @@ export function surface(name){
   cache.set(name,mat);return mat;
 }
 
-export function createAtmosphere(scene,world,storybook){
+export function createAtmosphere(scene,world,storybook,pixelStyle){
   const water=world.water;
   const clock={value:0},cloudAmount={value:.72},wind={value:new T.Vector2()},wet={value:0},breeze={value:.3};
   const clouds=texture(256,(u,v)=>{const n=255*(.60*coarse(u,v)+.25*coarse(2*u,2*v)+.12*coarse(4*u,4*v)+.03*fine(u,v));return [n,n,n]});
@@ -177,6 +178,7 @@ uniform vec4 trample[${TRAMPLE_SLOTS}];
   scene.traverse(o=>{if(o.material?.isMeshStandardMaterial&&!o.material.userData.clock)materials.add(o.material)});  // the foam disc keeps its own shader
   for(const mat of materials){
     const isWater=mat===water.material;
+    const shadeSolid=!isWater&&!mat.transparent&&!['cascade','glass','lampglass'].includes(mat.name);
     const actorCompile=mat.userData.actorArt?mat.onBeforeCompile:null;
     const actorKey=mat.userData.actorArt?mat.customProgramCacheKey():'';
     mat.onBeforeCompile=shader=>{
@@ -347,7 +349,7 @@ uniform vec4 trample[${TRAMPLE_SLOTS}];
       }
       if(isWater)shadeWater(shader,water);
       if(mat.name==='cascade')shadeCascade(shader,water);
-      if(!actorCompile&&!isWater&&mat.name!=='cascade'&&mat.name!=='glass'&&mat.name!=='lampglass'&&!mat.transparent){
+      if(!actorCompile&&shadeSolid){
         // Read the shadowed sun at the first directional light. Small smoothstep
         // ranges soften band boundaries during camera movement without washing them out.
         const direct='RE_Direct( directLight, geometryPosition, geometryNormal, geometryViewDir, geometryClearcoatNormal, material, reflectedLight );';
@@ -392,6 +394,9 @@ uniform vec4 trample[${TRAMPLE_SLOTS}];
           #include <opaque_fragment>`);
       }
       if(actorCompile)actorCompile.call(mat,shader);
+      else if(shadeSolid){
+        shadePixelSurface(shader,pixelStyle,['spray','leaf','cone','needle','terrain','grass','cabbage'].includes(mat.name));
+      }
     };
     mat.customProgramCacheKey=()=>isWater?'pond':mat.name+actorKey;
   }

@@ -1,4 +1,5 @@
 import * as T from 'three';
+import {shadePixelSurface} from './pixel-art.js';
 import {RoundedBoxGeometry} from 'three/addons/geometries/RoundedBoxGeometry.js';
 import {createColliders} from './colliders.js';
 import {createGridPaths} from './pathgrid.js';
@@ -149,7 +150,7 @@ void main(){
   #include <colorspace_fragment>
 }`;
 
-export function createRoom({renderer,renderOutput,world,character,canvas,controls,hooks}){
+export function createRoom({renderer,pixelArt,world,character,canvas,controls,hooks}){
   const scene=new T.Scene();scene.background=new T.Color(0x1c1815);
   const camera=new T.OrthographicCamera(-5,5,3,-3,.1,80);
   const target=new T.Vector3(.1,.95,.6);camera.position.copy(target).add(new T.Vector3(6.4,6.6,8.6));camera.lookAt(target);
@@ -466,6 +467,12 @@ export function createRoom({renderer,renderOutput,world,character,canvas,control
   pendant('lamp','거실 전등',-2.35,.55,1.38);
   pendant('lamp2','부엌 전등',2.35,1.15,1.95);
   for(const g of usable)g.traverse(o=>{if(o.isMesh&&o.material.isMeshStandardMaterial&&!o.material.userData.glow)o.material=o.material.clone()});
+  scene.traverse(o=>{
+    const mat=o.material;
+    if(mat?.isMeshStandardMaterial&&!mat.transparent&&!mat.transmission){
+      mat.onBeforeCompile=shader=>shadePixelSurface(shader,pixelArt.enabled);
+    }
+  });
 
   // ---------- Base light: daylight from the open side, a soft sky fill ----------
   const hemi=new T.HemisphereLight(0xe6eef6,0x6a4c36,.6);scene.add(hemi);
@@ -669,7 +676,7 @@ export function createRoom({renderer,renderOutput,world,character,canvas,control
         status.children[0].textContent=busy.piece.userData.icon;status.children[1].textContent=busy.text;
       }else status.hidden=true;
       renderer.shadowMap.needsUpdate=true;
-      renderOutput(scene,camera);
+      pixelArt.render(scene,camera);
     }
   };
 }

@@ -71,10 +71,10 @@ const b=builder(scene,undefined,nature), world=buildWorld(scene,b);b.finish();
 const farm=createFarm(scene,world,nature,camera,canvas);
 const storybook={value:0};
 const switchStorybook=createStorybook(scene);
-const actorArt=createActorArt(storybook);
+const actorArt=createActorArt(storybook,pixelArt.enabled);
 const windowLight=new T.PointLight(0xffaf52,0,7,1.5);windowLight.position.copy(world.cottage.window);scene.add(windowLight);
 const cascade=makeCascade(world,storybook);scene.add(cascade);
-const atmosphere=createAtmosphere(scene,world,storybook);
+const atmosphere=createAtmosphere(scene,world,storybook,pixelArt.enabled);
 const seasons=createSeasons(scene,world,atmosphere);
 const prints=createFootprints(scene,world,atmosphere);
 const farmLife=createFarmLife(scene,world,prints,actorArt);farmLife.onLay=farm.layEgg;
@@ -83,7 +83,7 @@ const unityChan=createUnityChan(scene,world,unityChanLoaded,prints,actorArt);far
 // The cottage interior, drawn instead of the island while she is inside (room.js).
 // The sky as the island shows it, kept for the cottage windows.
 const skyLook={top:new T.Color(),bottom:new T.Color(),glow:new T.Color(),stars:0,sunY:1,hour:12};
-const room=createRoom({renderer,renderOutput:pixelArt.render,world,character:unityChan,canvas,controls,hooks:{
+const room=createRoom({renderer,pixelArt,world,character:unityChan,canvas,controls,hooks:{
   indoor:flag=>farm.setIndoor(flag),earn:(...a)=>farm.earn(...a),spendWood:(...a)=>farm.spendWood(...a),toast:t=>farm.toast(t),
   isNight:()=>{const h=hourShown<0?hourShown+24:hourShown;return h>=19||h<5},
   // Sleeping through the night: morning at 7:00, the scene relit at once behind the fade.
